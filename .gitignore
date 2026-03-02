@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+*.egg-info/
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+
+# Local vendored runtime deps
+.vendor/
+
+# Web frontend generated files
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Local reference repo clone (not part of Presto source)
+Track2Do/
+
+# Editors / IDE
+.idea/
+.vscode/
+
+# Logs and temp
+*.log
+logs/
+tmp/

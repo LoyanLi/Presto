@@ -1,0 +1,49 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+const electronAPI = {
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+  },
+  backend: {
+    getStatus: (): Promise<{ running: boolean; pid: number | null; baseUrl: string }> =>
+      ipcRenderer.invoke('backend:get-status'),
+    restart: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backend:restart'),
+  },
+  window: {
+    toggleAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-always-on-top'),
+    getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:get-always-on-top'),
+    setAlwaysOnTop: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('window:set-always-on-top', enabled),
+  },
+  shell: {
+    openPath: (targetPath: string): Promise<string> => ipcRenderer.invoke('shell:open-path', targetPath),
+  },
+  showOpenDialog: (options: {
+    properties: string[]
+    title?: string
+    defaultPath?: string
+    filters?: Array<{ name: string; extensions: string[] }>
+  }): Promise<{ canceled: boolean; filePaths: string[] }> => ipcRenderer.invoke('dialog:open', options),
+  http: {
+    get: (url: string): Promise<any> => ipcRenderer.invoke('http:get', url),
+    post: (url: string, data?: unknown): Promise<any> => ipcRenderer.invoke('http:post', url, data),
+    put: (url: string, data?: unknown): Promise<any> => ipcRenderer.invoke('http:put', url, data),
+    delete: (url: string): Promise<any> => ipcRenderer.invoke('http:delete', url),
+  },
+  fs: {
+    readFile: (targetPath: string): Promise<string | null> => ipcRenderer.invoke('fs:read-file', targetPath),
+    writeFile: (targetPath: string, content: string): Promise<boolean> =>
+      ipcRenderer.invoke('fs:write-file', targetPath, content),
+    ensureDir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:ensure-dir', targetPath),
+    getHomePath: (): Promise<string> => ipcRenderer.invoke('fs:get-home-path'),
+    exists: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', targetPath),
+    stat: (targetPath: string): Promise<{ isFile: boolean; isDirectory: boolean } | null> =>
+      ipcRenderer.invoke('fs:stat', targetPath),
+    readdir: (targetPath: string): Promise<string[]> => ipcRenderer.invoke('fs:readdir', targetPath),
+    mkdir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:mkdir', targetPath),
+    unlink: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:unlink', targetPath),
+    rmdir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:rmdir', targetPath),
+    deleteFile: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:delete-file', targetPath),
+  },
+}
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI)
