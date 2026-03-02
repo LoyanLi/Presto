@@ -13,19 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from presto.app.ai_rename_service import AiRenameService
-from presto.app.export_orchestrator import ExportOrchestrator
 from presto.app.orchestrator import ImportOrchestrator
 from presto.config.store import ConfigStore
 from presto.domain.errors import PrestoError
 from presto.infra.ai_naming_client import AiNamingClient
-from presto.infra.export_preset_store import ExportPresetStore
-from presto.infra.export_snapshot_store import ExportSnapshotStore
 from presto.infra.keychain_store import KeychainStore
 from presto.infra.protools_ui_automation import ProToolsUiAutomation
 from presto.infra.ptsl_gateway import ProToolsGateway
 from presto.util.logging_setup import setup_logging
 from presto.web_api.routes_common import router as common_router
-from presto.web_api.routes_export_compat import router as export_router
 from presto.web_api.routes_import import router as import_router
 from presto.web_api.task_registry import TaskRegistry
 
@@ -40,7 +36,6 @@ class ServiceContainer:
     keychain_store: KeychainStore
     ai_rename_service: AiRenameService
     import_orchestrator: ImportOrchestrator
-    export_orchestrator: ExportOrchestrator
     task_registry: TaskRegistry
     logger: logging.Logger
 
@@ -72,15 +67,6 @@ def build_services(app_support_dir: Path | None = None) -> ServiceContainer:
         logger=logger,
     )
 
-    snapshot_store = ExportSnapshotStore()
-    preset_store = ExportPresetStore()
-    export_orchestrator = ExportOrchestrator(
-        gateway=gateway,
-        snapshot_store=snapshot_store,
-        preset_store=preset_store,
-        logger=logger,
-    )
-
     return ServiceContainer(
         config_store=config_store,
         gateway=gateway,
@@ -88,7 +74,6 @@ def build_services(app_support_dir: Path | None = None) -> ServiceContainer:
         keychain_store=keychain_store,
         ai_rename_service=ai_rename_service,
         import_orchestrator=import_orchestrator,
-        export_orchestrator=export_orchestrator,
         task_registry=TaskRegistry(),
         logger=logger,
     )
@@ -163,7 +148,6 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
             svc.logger.exception("Failed to close PTSL gateway on API shutdown")
 
     app.include_router(common_router, prefix="/api/v1", tags=["common"])
-    app.include_router(export_router, prefix="/api/v1", tags=["export"])
     app.include_router(import_router, prefix="/api/v1", tags=["import"])
 
     return app
