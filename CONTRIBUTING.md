@@ -11,19 +11,13 @@ Thanks for contributing.
 
 ## Setup
 
-1. Install Python deps:
+1. Install all deps:
 
 ```bash
-python3 -m pip install -r requirements.txt
+./packaging/install_deps.sh
 ```
 
-2. Install frontend deps:
-
-```bash
-npm --prefix web install
-```
-
-3. Start app in development mode:
+2. Start app in development mode:
 
 ```bash
 npm --prefix web run dev

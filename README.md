@@ -1,15 +1,9 @@
 # Presto
 
-Presto is a macOS Pro Tools assistant for import/export automation.
+Presto is a macOS Pro Tools assistant.
 
-Core workflows:
-
-- `Import`: folder scan, optional AI naming, category color mapping, Strip Silence assisted flow.
-- `Export`: 3-step snapshot-based export workflow.
-
-Current app entries:
-
-- `Web/Electron` (only frontend)
+Current active backend is **Track2Do backend** (`track2do_backend/`).
+It now serves both export routes and merged import routes (`/api/v1/import/*`).
 
 ## Requirements
 
@@ -20,19 +14,13 @@ Current app entries:
 
 ## Quick Start
 
-1. Install Python dependencies:
+1. Install dependencies:
 
 ```bash
-python3 -m pip install -r requirements.txt
+./packaging/install_deps.sh
 ```
 
-2. Install web dependencies:
-
-```bash
-npm --prefix web install
-```
-
-3. Start desktop app (recommended):
+2. Start desktop app:
 
 ```bash
 npm --prefix web run dev
@@ -42,7 +30,7 @@ This starts:
 
 - Vite renderer
 - Electron shell
-- Local Python API (`presto.main_api`) spawned by Electron
+- Local Python API (`track2do_backend/main.py`) spawned by Electron
 
 ## Development Commands
 
@@ -53,36 +41,22 @@ npm --prefix web run typecheck
 # Build frontend
 npm --prefix web run build
 
-# Run API only (for debugging)
-python3 -m presto.main_api --host 127.0.0.1 --port 8000
+# Run Track2Do backend only (for debugging)
+HOST=127.0.0.1 PORT=8000 DEBUG=false python3 track2do_backend/main.py
 ```
 
 ## Project Structure
 
-- `presto/`: Python core logic (domain, orchestrators, infra, web_api)
+- `track2do_backend/`: active Python backend (export + merged import APIs)
 - `web/`: Electron + React + Vite frontend
-- `tests/`: Python tests
-- `packaging/`: packaging scripts
+- `presto/`: legacy non-export modules still kept in repo
+- `packaging/`: install/build scripts
 
-## Data Paths
+## Runtime Data (Default)
 
-- App config: `~/Library/Application Support/Presto/config.json`
-- Logs: `~/Library/Application Support/Presto/logs/`
-- Export snapshots: `<SessionDir>/snapshots/snapshots.json`
-- Export presets: `~/Documents/Tracktodo/presets.json`
-- AI key: macOS Keychain
-
-## Permissions
-
-For UI automation to work:
-
-- Grant macOS Accessibility permission to your host app/terminal.
-- Keep Pro Tools frontmost and in English UI.
-
-## Troubleshooting
-
-1. Automation menu/control not found
-- Verify Pro Tools language and version first.
+- `logs/app.log`
+- `output/`
+- `temp/`
 
 ## Contributing
 

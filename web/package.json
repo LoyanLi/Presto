@@ -9,7 +9,8 @@
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron electron/main.mjs\"",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "package:mac": "npm run build && electron-builder --mac dir -c.mac.identity=null"
   },
   "dependencies": {
     "axios": "^1.11.0",
@@ -26,11 +27,43 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
     "electron": "^37.4.0",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.6",
     "typescript": "^5.9.2",
     "vite": "^7.1.3",
     "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.loyan.presto",
+    "productName": "Presto",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json",
+      "package-lock.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../track2do_backend",
+        "to": "track2do_backend"
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "requirements.txt"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.music",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
   }
 }

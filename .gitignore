@@ -1,36 +1,94 @@
-# macOS
+# =========================
+# OS generated files
+# =========================
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
 
-# Python
+# =========================
+# Editor / IDE
+# =========================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# =========================
+# Python artifacts
+# =========================
 __pycache__/
 *.py[cod]
+*.so
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
 .coverage
+.coverage.*
+htmlcov/
+.eggs/
+*.egg
 *.egg-info/
+pip-wheel-metadata/
 .venv/
 venv/
+env/
+ENV/
+.python-version
+.ipynb_checkpoints/
 
-# Build artifacts
-build/
-dist/
-
-# Local vendored runtime deps
-.vendor/
-
-# Web frontend generated files
+# =========================
+# Node / Electron artifacts
+# =========================
+node_modules/
 web/node_modules/
 web/dist/
 web/.vite/
+web/release/
+web/coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Local reference repo clone (not part of Presto source)
-Track2Do/
+# =========================
+# Build outputs
+# =========================
+build/
+dist/
 
-# Editors / IDE
-.idea/
-.vscode/
-
-# Logs and temp
+# =========================
+# Runtime output / logs
+# =========================
 *.log
 logs/
 tmp/
+temp/
+output/
+.presto/
+track2do_backend/logs/
+track2do_backend/output/
+track2do_backend/temp/
+track2do_backend/test_output/
+
+# =========================
+# Environment files (keep templates)
+# =========================
+.env
+.env.*
+!.env.example
+!track2do_backend/.env.example
+
+# =========================
+# Local vendored / reference dirs
+# =========================
+vendor/
+.vendor/
+Track2Do/
