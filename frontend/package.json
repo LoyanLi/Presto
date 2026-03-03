@@ -1,0 +1,81 @@
+{
+  "name": "presto-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web/Electron UI for Presto",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron electron/main.mjs\"",
+    "build": "vite build --base ./",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "sync:icon": "bash ../packaging/prepare_icon.sh",
+    "package:mac:prepare": "npm run sync:icon && npm run build",
+    "package:mac:dir:arm64": "electron-builder --mac dir --arm64 -c.mac.identity=null",
+    "package:mac:dir:x64": "electron-builder --mac dir --x64 -c.mac.identity=null",
+    "package:mac:installer:arm64": "electron-builder --mac dmg --arm64 -c.mac.identity=null",
+    "package:mac:installer:x64": "electron-builder --mac dmg --x64 -c.mac.identity=null",
+    "package:mac": "npm run package:mac:prepare && npm run package:mac:dir:arm64 && npm run package:mac:dir:x64",
+    "package:mac:installer": "npm run package:mac:prepare && npm run package:mac:installer:arm64 && npm run package:mac:installer:x64"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "lucide-react": "^0.543.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^5.0.2",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^37.4.0",
+    "electron-builder": "^26.8.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.loyan.presto",
+    "productName": "Presto",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json",
+      "package-lock.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/export",
+        "to": "export"
+      },
+      {
+        "from": "../backend/import",
+        "to": "import"
+      },
+      {
+        "from": "../backend/requirements.txt",
+        "to": "requirements.txt"
+      }
+    ],
+    "mac": {
+      "icon": "build/App.icon",
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.music",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  }
+}

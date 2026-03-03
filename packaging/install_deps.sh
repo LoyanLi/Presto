@@ -10,9 +10,9 @@ fi
 
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
-npm --prefix web install
+python3 -m pip install -r backend/requirements.txt
+npm --prefix frontend install
 
 echo "Dependency installation complete."
 echo "Activate venv: source .venv/bin/activate"
-echo "Run app: npm --prefix web run dev"
+echo "Run app: npm --prefix frontend run dev"

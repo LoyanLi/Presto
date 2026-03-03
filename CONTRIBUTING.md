@@ -14,7 +14,7 @@ This guide focuses on practical contribution workflow, quality gates, and compat
 
 ```bash
 ./packaging/install_deps.sh
-npm --prefix web run dev
+npm --prefix frontend run dev
 ```
 
 Recommended shell setup:
@@ -25,10 +25,10 @@ source .venv/bin/activate
 
 ## 3. Project Areas
 
-- `web/`: Electron + React UI and client API modules
-- `track2do_backend/`: export/session FastAPI backend
-- `presto/`: import/config FastAPI backend and domain logic
-- `tests/`: Python unit/integration tests
+- `frontend/`: Electron + React UI and client API modules
+- `backend/export/`: export/session FastAPI backend
+- `backend/import/presto/`: import/config FastAPI backend and domain logic
+- `backend/tests/`: Python unit/integration tests
 
 ## 4. Compatibility Rules
 
@@ -55,20 +55,20 @@ Examples:
 Run at least:
 
 ```bash
-npm --prefix web run typecheck
-pytest -q tests/test_ai_rename_service.py tests/test_config_store.py
+npm --prefix frontend run typecheck
+pytest -q backend/tests/test_ai_rename_service.py backend/tests/test_config_store.py
 ```
 
 When touching orchestration/import flow, also run:
 
 ```bash
-pytest -q tests/test_orchestrator_integration.py
+pytest -q backend/tests/test_orchestrator_integration.py
 ```
 
 When touching Electron runtime routing, also verify:
 
 ```bash
-node --check web/electron/main.mjs
+node --check frontend/electron/main.mjs
 ```
 
 ## 7. Pull Request Checklist
