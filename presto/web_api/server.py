@@ -21,8 +21,7 @@ from presto.infra.keychain_store import KeychainStore
 from presto.infra.protools_ui_automation import ProToolsUiAutomation
 from presto.infra.ptsl_gateway import ProToolsGateway
 from presto.util.logging_setup import setup_logging
-from presto.web_api.routes_common import router as common_router
-from presto.web_api.routes_import import router as import_router
+from presto.web_api.api_entries import register_api_entries
 from presto.web_api.task_registry import TaskRegistry
 
 
@@ -147,7 +146,6 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         except Exception:
             svc.logger.exception("Failed to close PTSL gateway on API shutdown")
 
-    app.include_router(common_router, prefix="/api/v1", tags=["common"])
-    app.include_router(import_router, prefix="/api/v1", tags=["import"])
+    register_api_entries(app, prefix="/api/v1")
 
     return app

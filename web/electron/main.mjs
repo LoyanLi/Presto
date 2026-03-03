@@ -26,14 +26,26 @@ const RETRYABLE_FETCH_CODES = new Set([
   'UND_ERR_HEADERS_TIMEOUT',
   'UND_ERR_BODY_TIMEOUT',
 ])
-const IMPORT_BACKEND_PREFIXES = ['/api/v1/import/']
-const IMPORT_BACKEND_EXACT_PATHS = new Set([
-  '/api/v1/system/health',
-  '/api/v1/config',
-  '/api/v1/ai/key/status',
-  '/api/v1/ai/key',
-  '/api/v1/session/save',
-])
+const BACKEND_ROUTE_RULES = [
+  {
+    frontendEntry: 'importApi',
+    targetPort: IMPORT_API_PORT,
+    pathPrefixes: ['/api/v1/import/'],
+    exactPaths: new Set([
+      '/api/v1/system/health',
+      '/api/v1/config',
+      '/api/v1/ai/key/status',
+      '/api/v1/ai/key',
+      '/api/v1/session/save',
+    ]),
+  },
+  {
+    frontendEntry: 'exportApi',
+    targetPort: API_PORT,
+    pathPrefixes: ['/api/v1/export/', '/api/v1/session/', '/api/v1/connection/', '/api/v1/transport/', '/api/v1/files/'],
+    exactPaths: new Set(['/api/v1/tracks']),
+  },
+]
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -106,11 +118,16 @@ function parseJsonResponse(body, url) {
   }
 }
 
-function shouldRouteToImportBackend(pathname) {
-  if (IMPORT_BACKEND_EXACT_PATHS.has(pathname)) {
-    return true
+function matchBackendRoute(pathname) {
+  for (const rule of BACKEND_ROUTE_RULES) {
+    if (rule.exactPaths.has(pathname)) {
+      return rule
+    }
+    if (rule.pathPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+      return rule
+    }
   }
-  return IMPORT_BACKEND_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  return null
 }
 
 function resolveRequestUrl(rawUrl) {
@@ -120,11 +137,15 @@ function resolveRequestUrl(rawUrl) {
     if (port !== API_PORT) {
       return rawUrl
     }
-    if (!shouldRouteToImportBackend(parsed.pathname)) {
+    const matchedRoute = matchBackendRoute(parsed.pathname)
+    if (!matchedRoute) {
+      return rawUrl
+    }
+    if (matchedRoute.targetPort === API_PORT) {
       return rawUrl
     }
     parsed.hostname = API_HOST
-    parsed.port = String(IMPORT_API_PORT)
+    parsed.port = String(matchedRoute.targetPort)
     return parsed.toString()
   } catch {
     return rawUrl
