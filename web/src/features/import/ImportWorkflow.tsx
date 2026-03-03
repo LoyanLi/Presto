@@ -34,8 +34,21 @@ type DisplayProposalRow = {
   error_message: string | null
 }
 
+type AnalyzeCacheProposalRow = Partial<RenameProposal> & {
+  relative_path?: string
+}
+
+type AnalyzeCachePayload = {
+  version?: number
+  generated_at?: string
+  folder?: string
+  total?: number
+  proposals?: AnalyzeCacheProposalRow[]
+}
+
 const DEFAULT_BANNER = 'Ready'
 const AUDIO_EXT_REGEX = /\.(wav|aif|aiff)$/i
+const ANALYZE_CACHE_FILENAME = '.presto_ai_analyze.json'
 
 function basenameOf(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/')
@@ -46,6 +59,25 @@ function basenameOf(filePath: string): string {
 function stemOf(filePath: string): string {
   const base = basenameOf(filePath)
   return base.replace(AUDIO_EXT_REGEX, '')
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function isPathInsideFolder(filePath: string, folderPath: string): boolean {
+  const normalizedFile = normalizePath(filePath)
+  const normalizedFolder = normalizePath(folderPath)
+  return normalizedFile === normalizedFolder || normalizedFile.startsWith(`${normalizedFolder}/`)
+}
+
+function relativePathFromFolder(filePath: string, folderPath: string): string {
+  const normalizedFile = normalizePath(filePath)
+  const normalizedFolder = normalizePath(folderPath)
+  if (normalizedFile.startsWith(`${normalizedFolder}/`)) {
+    return normalizedFile.slice(normalizedFolder.length + 1)
+  }
+  return basenameOf(filePath)
 }
 
 function slotToHex(slot: number): string {
@@ -153,6 +185,23 @@ function normalizeAnalyzeOutput(raw: unknown): RenameProposal[] {
     .filter((item): item is RenameProposal => Boolean(item))
 }
 
+function normalizeCachedProposal(filePath: string, row: AnalyzeCacheProposalRow, fallbackCategoryId: string): RenameProposal {
+  const status: ProposalStatus = row.status === 'ready' || row.status === 'failed' || row.status === 'skipped' ? row.status : 'ready'
+  const originalStem = typeof row.original_stem === 'string' && row.original_stem.trim() ? row.original_stem : stemOf(filePath)
+  const aiName = typeof row.ai_name === 'string' && row.ai_name.trim() ? row.ai_name : originalStem
+  const finalName = typeof row.final_name === 'string' && row.final_name.trim() ? row.final_name : aiName
+
+  return {
+    file_path: filePath,
+    category_id: typeof row.category_id === 'string' && row.category_id.trim() ? row.category_id : fallbackCategoryId,
+    original_stem: originalStem,
+    ai_name: aiName,
+    final_name: finalName,
+    status,
+    error_message: typeof row.error_message === 'string' ? row.error_message : null,
+  }
+}
+
 function joinPath(dir: string, entry: string): string {
   if (!dir) return entry
   return dir.endsWith('/') ? `${dir}${entry}` : `${dir}/${entry}`
@@ -161,6 +210,7 @@ function joinPath(dir: string, entry: string): string {
 export function ImportWorkflow(props: { openAiSignal?: number; openCategorySignal?: number; onBackHome?: () => void }) {
   const [config, setConfig] = useState<AppConfigDto | null>(null)
   const [files, setFiles] = useState<LocalFile[]>([])
+  const [sourceFolders, setSourceFolders] = useState<string[]>([])
   const [proposals, setProposals] = useState<RenameProposal[]>([])
   const [resolvedItems, setResolvedItems] = useState<ResolvedImportItem[]>([])
   const [step, setStep] = useState(1)
@@ -184,6 +234,8 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
   const [ptConnected, setPtConnected] = useState(false)
 
   const pollTimerRef = useRef<number | null>(null)
+  const cachePersistTimerRef = useRef<number | null>(null)
+  const pendingCacheRowsRef = useRef<RenameProposal[] | null>(null)
 
   const readyRows = useMemo(() => proposals.filter((item) => item.status === 'ready'), [proposals])
   const failedRows = useMemo(() => proposals.filter((item) => item.status === 'failed'), [proposals])
@@ -297,6 +349,25 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     return rows
   }, [displayRows, sortMode, categoryOrderMap, categoryNameMap])
 
+  const displayOrderMap = useMemo(() => {
+    const order = new Map<string, number>()
+    sortedRows.forEach((row, index) => {
+      order.set(row.file_path, index)
+    })
+    return order
+  }, [sortedRows])
+
+  const orderByDisplayOrder = <T extends { file_path: string }>(rows: T[]): T[] => {
+    return [...rows].sort((a, b) => {
+      const orderA = displayOrderMap.get(a.file_path) ?? Number.MAX_SAFE_INTEGER
+      const orderB = displayOrderMap.get(b.file_path) ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      return basenameOf(a.file_path).localeCompare(basenameOf(b.file_path), undefined, { sensitivity: 'base' })
+    })
+  }
+
   const canNext = useMemo(() => {
     if (step === 1) {
       if (files.length === 0) {
@@ -331,6 +402,14 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     return () => {
       if (pollTimerRef.current != null) {
         window.clearTimeout(pollTimerRef.current)
+      }
+      if (cachePersistTimerRef.current != null) {
+        window.clearTimeout(cachePersistTimerRef.current)
+        cachePersistTimerRef.current = null
+      }
+      if (pendingCacheRowsRef.current && pendingCacheRowsRef.current.length > 0) {
+        void persistAnalyzeResultCache(pendingCacheRowsRef.current)
+        pendingCacheRowsRef.current = null
       }
       void window.electronAPI?.window.setAlwaysOnTop(false)
     }
@@ -373,6 +452,28 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     setLogs((prev) => [...prev, `${new Date().toISOString()} ${text}`])
   }
 
+  const schedulePersistAnalyzeResultCache = (rows: RenameProposal[]): void => {
+    if (sourceFolders.length === 0 || rows.length === 0) {
+      return
+    }
+
+    const snapshot = rows.map((row) => ({ ...row }))
+    pendingCacheRowsRef.current = snapshot
+
+    if (cachePersistTimerRef.current != null) {
+      window.clearTimeout(cachePersistTimerRef.current)
+    }
+
+    cachePersistTimerRef.current = window.setTimeout(() => {
+      const pending = pendingCacheRowsRef.current
+      pendingCacheRowsRef.current = null
+      cachePersistTimerRef.current = null
+      if (pending && pending.length > 0) {
+        void persistAnalyzeResultCache(pending)
+      }
+    }, 400)
+  }
+
   const appendFiles = (paths: string[]): void => {
     const fallbackCategoryId = config?.categories[0]?.id || 'other'
     const accepted = paths.filter((filePath) => AUDIO_EXT_REGEX.test(filePath))
@@ -407,7 +508,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     const found: string[] = []
 
     while (queue.length > 0) {
-      const currentDir = queue.pop()
+      const currentDir = queue.shift()
       if (!currentDir || visitedDirs.has(currentDir)) {
         continue
       }
@@ -419,6 +520,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
       } catch {
         continue
       }
+      entries.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
 
       for (const entry of entries) {
         const fullPath = joinPath(currentDir, entry)
@@ -451,15 +553,45 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
       return
     }
 
+    setSourceFolders((prev) => {
+      const next = [...prev]
+      for (const folder of result.filePaths) {
+        if (!next.includes(folder)) {
+          next.push(folder)
+        }
+      }
+      return next
+    })
+
     setBusy(true)
     try {
       const allAudioFiles: string[] = []
+      const folderAudioFilesMap = new Map<string, string[]>()
       for (const dirPath of result.filePaths) {
         const found = await collectAudioFilesRecursively(dirPath)
         allAudioFiles.push(...found)
+        folderAudioFilesMap.set(dirPath, found)
       }
       appendFiles(allAudioFiles)
-      setBanner(`Scanned ${result.filePaths.length} folder(s), found ${allAudioFiles.length} audio files.`)
+      const cacheResult = await loadAnalyzeResultCache(result.filePaths, folderAudioFilesMap)
+      if (cacheResult.loadedCount > 0) {
+        setProposals((prev) => {
+          const nextMap = new Map(prev.map((item) => [item.file_path, item]))
+          for (const row of cacheResult.rows) {
+            nextMap.set(row.file_path, row)
+          }
+          return orderByDisplayOrder(Array.from(nextMap.values()))
+        })
+        setResolvedItems([])
+        setStep(1)
+      }
+      const cacheSuffix =
+        cacheResult.loadedCount > 0
+          ? ` Loaded ${cacheResult.loadedCount} cached AI result(s).`
+          : cacheResult.foundCacheFiles > 0
+            ? ' Cache files found, but no matching rows for current files.'
+            : ''
+      setBanner(`Scanned ${result.filePaths.length} folder(s), found ${allAudioFiles.length} audio files.${cacheSuffix}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(`Scan folder failed: ${msg}`)
@@ -470,7 +602,13 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
   }
 
   const clearFiles = (): void => {
+    if (cachePersistTimerRef.current != null) {
+      window.clearTimeout(cachePersistTimerRef.current)
+      cachePersistTimerRef.current = null
+    }
+    pendingCacheRowsRef.current = null
     setFiles([])
+    setSourceFolders([])
     setProposals([])
     setResolvedItems([])
     setStripOpened(false)
@@ -495,12 +633,13 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     setBanner('Running AI analyze...')
 
     try {
-      await importApi.preflight()
       const items = files.map((item) => ({ file_path: item.file_path, category_id: item.category_id }))
       const output = await importApi.analyze(items)
       const normalized = normalizeAnalyzeOutput(output)
-      setProposals(normalized)
-      setBanner(`Analyze done: ready=${normalized.filter((r) => r.status === 'ready').length}`)
+      const ordered = orderByDisplayOrder(normalized)
+      setProposals(ordered)
+      schedulePersistAnalyzeResultCache(ordered)
+      setBanner(`Analyze done: ready=${ordered.filter((r) => r.status === 'ready').length}`)
       appendLog('AI analyze completed.')
       setResolvedItems([])
       setStep(1)
@@ -513,21 +652,155 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     }
   }
 
+  const persistAnalyzeResultCache = async (rows: RenameProposal[]): Promise<void> => {
+    const fsApi = window.electronAPI?.fs
+    if (!fsApi || sourceFolders.length === 0) {
+      return
+    }
+
+    const generatedAt = new Date().toISOString()
+    for (const folder of sourceFolders) {
+      const folderRows = rows.filter((row) => isPathInsideFolder(row.file_path, folder))
+      if (folderRows.length === 0) {
+        continue
+      }
+
+      const cachePath = joinPath(folder, ANALYZE_CACHE_FILENAME)
+      const payload = {
+        version: 1,
+        generated_at: generatedAt,
+        folder,
+        total: folderRows.length,
+        proposals: folderRows.map((row) => ({
+          ...row,
+          relative_path: relativePathFromFolder(row.file_path, folder),
+        })),
+      }
+
+      try {
+        await fsApi.writeFile(cachePath, JSON.stringify(payload, null, 2))
+        appendLog(`AI analysis cache saved: ${cachePath}`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        appendLog(`Failed to save AI analysis cache (${cachePath}): ${msg}`)
+      }
+    }
+  }
+
+  const loadAnalyzeResultCache = async (
+    folders: string[],
+    folderAudioFilesMap: Map<string, string[]>,
+  ): Promise<{ rows: RenameProposal[]; loadedCount: number; foundCacheFiles: number }> => {
+    const fsApi = window.electronAPI?.fs
+    if (!fsApi || folders.length === 0) {
+      return { rows: [], loadedCount: 0, foundCacheFiles: 0 }
+    }
+
+    const fallbackCategoryId = config?.categories[0]?.id || 'other'
+    const merged = new Map<string, RenameProposal>()
+    let foundCacheFiles = 0
+
+    for (const folder of folders) {
+      const cachePath = joinPath(folder, ANALYZE_CACHE_FILENAME)
+      let raw: string | null = null
+      try {
+        raw = await fsApi.readFile(cachePath)
+      } catch {
+        raw = null
+      }
+      if (!raw) {
+        continue
+      }
+      foundCacheFiles += 1
+
+      let payload: AnalyzeCachePayload
+      try {
+        payload = JSON.parse(raw) as AnalyzeCachePayload
+      } catch {
+        appendLog(`Invalid AI analysis cache JSON: ${cachePath}`)
+        continue
+      }
+
+      if (!Array.isArray(payload.proposals) || payload.proposals.length === 0) {
+        continue
+      }
+
+      const folderAudioFiles = folderAudioFilesMap.get(folder) || []
+      const absoluteMap = new Map<string, string>()
+      const relativeMap = new Map<string, string>()
+      for (const filePath of folderAudioFiles) {
+        absoluteMap.set(normalizePath(filePath), filePath)
+        relativeMap.set(normalizePath(relativePathFromFolder(filePath, folder)), filePath)
+      }
+
+      let folderLoaded = 0
+      for (const row of payload.proposals) {
+        if (!row || typeof row !== 'object') {
+          continue
+        }
+
+        let resolvedPath: string | null = null
+        if (typeof row.file_path === 'string' && row.file_path.trim()) {
+          const normalizedAbsolute = normalizePath(row.file_path)
+          resolvedPath = absoluteMap.get(normalizedAbsolute) || null
+        }
+
+        if (!resolvedPath && typeof row.relative_path === 'string' && row.relative_path.trim()) {
+          const normalizedRelative = normalizePath(row.relative_path)
+          resolvedPath = relativeMap.get(normalizedRelative) || null
+        }
+
+        if (!resolvedPath) {
+          continue
+        }
+
+        merged.set(resolvedPath, normalizeCachedProposal(resolvedPath, row, fallbackCategoryId))
+        folderLoaded += 1
+      }
+      appendLog(`Loaded AI analysis cache: ${cachePath} (${folderLoaded}/${payload.proposals.length})`)
+    }
+
+    const rows = Array.from(merged.values())
+    return { rows, loadedCount: rows.length, foundCacheFiles }
+  }
+
   const updateProposal = (filePath: string, patch: Partial<RenameProposal>): void => {
     if (patch.category_id) {
       setFiles((prev) => prev.map((row) => (row.file_path === filePath ? { ...row, category_id: patch.category_id || row.category_id } : row)))
     }
-    setProposals((prev) => prev.map((row) => (row.file_path === filePath ? { ...row, ...patch } : row)))
+    setProposals((prev) => {
+      const next = prev.map((row) => (row.file_path === filePath ? { ...row, ...patch } : row))
+      schedulePersistAnalyzeResultCache(next)
+      return next
+    })
     setResolvedItems([])
   }
 
   const finalizeStep2 = async (sourceProposals: RenameProposal[] = proposals): Promise<ResolvedImportItem[]> => {
-    const manualNameByPath = Object.fromEntries(sourceProposals.map((item) => [item.file_path, item.final_name]))
-    const result = await importApi.finalize(sourceProposals, manualNameByPath)
-    setProposals(result.proposals)
-    setResolvedItems(result.resolved_items)
+    const orderedSource = orderByDisplayOrder(sourceProposals)
+    const manualNameByPath = Object.fromEntries(orderedSource.map((item) => [item.file_path, item.final_name]))
+    const result = await importApi.finalize(orderedSource, manualNameByPath)
+
+    const orderedProposals = orderByDisplayOrder(result.proposals)
+    const proposalOrder = new Map<string, number>()
+    orderedProposals.forEach((item, index) => {
+      proposalOrder.set(item.file_path, index)
+    })
+
+    const orderedResolved = [...result.resolved_items].sort((a, b) => {
+      const orderA = proposalOrder.get(a.file_path) ?? Number.MAX_SAFE_INTEGER
+      const orderB = proposalOrder.get(b.file_path) ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      return basenameOf(a.file_path).localeCompare(basenameOf(b.file_path), undefined, { sensitivity: 'base' })
+    })
+
+    setProposals(orderedProposals)
+    schedulePersistAnalyzeResultCache(orderedProposals)
+    setResolvedItems(orderedResolved)
     appendLog('Finalize naming completed.')
-    return result.resolved_items
+    return orderedResolved
   }
 
   const openStrip = async (): Promise<void> => {
@@ -742,7 +1015,11 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                       Add Folder
                     </button>
                     <button
-                      onClick={() => void runAnalyze()}
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        void runAnalyze()
+                      }}
                       className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                       disabled={busy || files.length === 0}
                     >
@@ -936,7 +1213,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                 <div className="text-sm text-gray-600">Run import, color, and strip automation for all ready items.</div>
               </WorkflowCard>
 
-              {runState ? (
+              {runState && !terminalStatus(runState.status) ? (
                 <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-blue-800">Import Running...</span>

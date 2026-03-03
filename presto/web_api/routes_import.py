@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from presto.domain.errors import PrestoError
 from presto.domain.models import ImportItem, RenameProposal, ResolvedImportItem
-from presto.web_api.routes_common import get_services
+from presto.web_api.dependencies import get_services
 from presto.web_api.schemas import (
     BaseResponse,
     ImportAnalyzeRequest,
@@ -151,11 +151,25 @@ def import_run_start(payload: ImportRunRequest, request: Request):
 
     def _run() -> None:
         services.task_registry.update(task_id, status="running", started_at=datetime.now())
+
+        def _update_progress(current_index: int, total: int, current_name: str) -> None:
+            safe_total = max(total, 1)
+            progress = min(100.0, max(0.0, (current_index / safe_total) * 100.0))
+            services.task_registry.update(
+                task_id,
+                status="running",
+                progress=progress,
+                current_index=current_index,
+                total=total,
+                current_name=current_name or "",
+            )
+
         try:
             report = services.import_orchestrator.run_resolved(
                 resolved_items,
                 category_map,
                 cfg.silence_profile,
+                progress_callback=_update_progress,
             )
             services.task_registry.update(
                 task_id,
@@ -163,6 +177,7 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 progress=100.0,
                 current_index=report.total,
                 total=report.total,
+                current_name="",
                 result={
                     "total": report.total,
                     "success_count": report.success_count,
@@ -175,6 +190,7 @@ def import_run_start(payload: ImportRunRequest, request: Request):
             services.task_registry.update(
                 task_id,
                 status="failed",
+                current_name="",
                 error_code=getattr(exc, "code", "UNEXPECTED_ERROR"),
                 error_message=getattr(exc, "message", str(exc)),
                 finished_at=datetime.now(),
@@ -208,4 +224,3 @@ def import_run_status(run_id: str, request: Request):
             "error_message": task.error_message,
         },
     }
-

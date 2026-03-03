@@ -13,18 +13,12 @@ from presto.domain.models import (
     SilenceProfile,
     UiPreferences,
 )
+from presto.web_api.dependencies import get_services
 from presto.web_api.schemas import BaseResponse
 from presto.web_api.schemas import AiKeyUpdateRequest, ConfigUpdateRequest
 
 
 router = APIRouter()
-
-
-def get_services(request: Request):
-    services = getattr(request.app.state, "services", None)
-    if services is None:
-        raise HTTPException(status_code=500, detail="Service container is not initialized.")
-    return services
 
 
 @router.get("/system/health")

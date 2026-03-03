@@ -1,67 +1,119 @@
 # Contributing to Presto
 
-Thanks for contributing.
+Thank you for improving Presto.
+This guide focuses on practical contribution workflow, quality gates, and compatibility expectations.
 
-## Prerequisites
+## 1. Prerequisites
 
 - macOS
 - Python `3.9+`
 - Node.js `18+`
-- Pro Tools `2023.3+` (English UI) for automation/E2E validation
+- Pro Tools `2023.3+` for end-to-end automation validation
 
-## Setup
-
-1. Install all deps:
+## 2. Local Setup
 
 ```bash
 ./packaging/install_deps.sh
-```
-
-2. Start app in development mode:
-
-```bash
 npm --prefix web run dev
 ```
 
-## Project Areas
+Recommended shell setup:
 
-- `presto/`: Python business logic, orchestration, API bridge
-- `web/`: Electron + React UI
-- `tests/`: Python tests
+```bash
+source .venv/bin/activate
+```
 
-## Coding Guidelines
+## 3. Project Areas
 
-- Keep changes minimal and scoped.
-- Do not commit generated folders (`web/node_modules`, `web/dist`).
-- Keep Web and Python behavior aligned with existing workflows.
-- Prefer explicit error codes/messages for automation failures.
+- `web/`: Electron + React UI and client API modules
+- `track2do_backend/`: export/session FastAPI backend
+- `presto/`: import/config FastAPI backend and domain logic
+- `tests/`: Python unit/integration tests
 
-## Testing Checklist
+## 4. Compatibility Rules
 
-Before submitting:
+When making changes, preserve these contracts unless the change explicitly includes migration work:
+
+- Keep `/api/v1/*` route contracts backward compatible
+- Keep Electron route mapping aligned with frontend API entries
+- Keep import/export workflow behavior stable by default
+- Keep generated artifacts and local runtime files out of git
+
+## 5. Branch and Commit Conventions
+
+- Use short, scoped commits
+- Prefer conventional prefixes: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
+
+Examples:
+
+- `fix(import): keep analyze order consistent with display order`
+- `refactor(api): register backend routes by frontend entry`
+- `docs: add architecture and contribution guidelines`
+
+## 6. Development Checklist
+
+Run at least:
 
 ```bash
 npm --prefix web run typecheck
-npm --prefix web run build
+pytest -q tests/test_ai_rename_service.py tests/test_config_store.py
 ```
 
-Also run relevant Python tests when touching backend logic.
+When touching orchestration/import flow, also run:
 
-## Commit Style
+```bash
+pytest -q tests/test_orchestrator_integration.py
+```
 
-Use concise, scoped commit messages, e.g.:
+When touching Electron runtime routing, also verify:
 
-- `feat(import): support recursive folder scan`
-- `fix(ui): prevent analyze render crash`
-- `docs: update setup and license`
+```bash
+node --check web/electron/main.mjs
+```
 
-## Pull Request Notes
+## 7. Pull Request Checklist
 
-Include:
+Include in every PR:
 
-- What changed
-- Why it changed
-- How to verify
-- Any known limitations
+- Summary of what changed
+- Why the change is needed
+- How to verify (exact commands)
+- Risks and rollback notes
+- Screenshots or short recording for UI changes
 
-For UI changes, include screenshots or short screen recordings when possible.
+## 8. Coding Expectations
+
+- Keep changes focused and minimal
+- Prefer explicit error codes and actionable error messages
+- Add tests for non-trivial logic changes
+- Update docs when behavior, routes, or architecture changes
+
+## 9. Documentation Requirements
+
+Update related docs when applicable:
+
+- `README.md` for setup, behavior, or command changes
+- `docs/TECHNICAL_ARCHITECTURE.md` for module/flow/interface changes
+- `CONTRIBUTING.md` if workflow expectations change
+
+## 10. Security and Local Data
+
+- Never commit API keys, tokens, or local secrets
+- Do not commit runtime caches/logs/output
+- Validate `.gitignore` coverage when adding new generated files
+
+## 11. Reporting Bugs and Proposing Features
+
+For bug reports, include:
+
+- Reproduction steps
+- Expected vs actual behavior
+- Logs or stack traces
+- Environment details (macOS, Pro Tools version, commit hash)
+
+For feature proposals, include:
+
+- Problem statement
+- Proposed API/UI changes
+- Compatibility impact
+- Test plan
