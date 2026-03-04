@@ -9,6 +9,7 @@ import { SnapshotPanel } from './track2do/components/SnapshotPanel'
 import { TrackList } from './track2do/components/TrackList'
 import { useProToolsConnection } from './track2do/hooks/useProToolsConnection'
 import { useSnapshots } from './track2do/hooks/useSnapshots'
+import { formatBitDepthLabel } from './track2do/utils/bitDepth'
 
 export function Track2DoExportWorkflow(props: { onBackHome?: () => void }) {
   const { isConnected, sessionName, sampleRate, bitDepth, tracks, refreshTracks } = useProToolsConnection()
@@ -70,7 +71,7 @@ export function Track2DoExportWorkflow(props: { onBackHome?: () => void }) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Bit Depth</label>
-                    <div className="text-gray-900">{bitDepth || 'Unknown'}</div>
+                    <div className="text-gray-900">{formatBitDepthLabel(bitDepth)}</div>
                   </div>
                 </div>
                 <button
