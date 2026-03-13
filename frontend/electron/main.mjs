@@ -752,6 +752,30 @@ function createMainWindow() {
     localLog('electron-main', 'error', `renderer failed to load (code=${errorCode}) ${errorDescription} url=${validatedUrl}`)
   })
 
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const mappedLevel = level >= 2 ? 'error' : level === 1 ? 'warn' : 'info'
+    const location = sourceId ? `${sourceId}:${line}` : `line:${line}`
+    localLog('renderer-console', mappedLevel, `${location} ${message}`)
+  })
+
+  win.webContents.on('render-process-gone', (_event, details) => {
+    const reason = details?.reason || 'unknown'
+    const exitCode = typeof details?.exitCode === 'number' ? details.exitCode : 'unknown'
+    const message = `renderer process gone (reason=${reason}, exitCode=${exitCode})`
+    localLog('electron-main', 'error', message)
+    pushWarning(message)
+  })
+
+  win.on('unresponsive', () => {
+    const message = 'renderer became unresponsive'
+    localLog('electron-main', 'warn', message)
+    pushWarning(message)
+  })
+
+  win.on('responsive', () => {
+    localLog('electron-main', 'info', 'renderer recovered responsiveness')
+  })
+
   win.on('closed', () => {
     if (mainWindow === win) {
       mainWindow = null

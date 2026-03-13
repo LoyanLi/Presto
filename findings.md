@@ -78,3 +78,9 @@
   - Shared-port config control
   - Restart action
   - Unified log viewer and one-click log export
+
+## 2026-03-13 Follow-up: Renderer Log Unification
+- Added renderer-side log ingestion into unified runtime log stream:
+  - Captures `webContents` `console-message` and stores in main-process log ring buffer.
+  - Captures renderer lifecycle anomalies (`render-process-gone`, `unresponsive`, `responsive`) as warnings/errors.
+- Result: frontend logs now appear in the same diagnostics panel and exported log bundle.

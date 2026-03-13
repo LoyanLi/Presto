@@ -44,3 +44,11 @@
 - `npm --prefix frontend run typecheck` ✅
 - `node --check frontend/electron/main.mjs` ✅
 - `node --check frontend/electron/preload.cjs` ✅
+
+### Follow-up Patch
+- Implemented renderer log unification in `frontend/electron/main.mjs`:
+  - `webContents.console-message` -> unified runtime logs
+  - `render-process-gone` / `unresponsive` / `responsive` -> diagnostics warnings/logs
+- Verification (re-run):
+  - `node --check frontend/electron/main.mjs` ✅
+  - `npm --prefix frontend run typecheck` ✅
