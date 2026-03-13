@@ -3,8 +3,33 @@ export interface ElectronAPI {
     getVersion: () => Promise<string>
   }
   backend: {
-    getStatus: () => Promise<{ running: boolean; pid: number | null; baseUrl: string }>
-    restart: () => Promise<{ ok: boolean }>
+    getStatus: () => Promise<{
+      running: boolean
+      ready: boolean
+      mode: 'import' | 'export'
+      pid: number | null
+      requestedPort: number
+      port: number
+      status: string
+      heartbeatFailures: number
+      restarts: number
+      lastError: string | null
+      lastExit: {
+        code: number | null
+        signal: string | null
+        timestamp: string
+        mode: 'import' | 'export'
+      } | null
+      warnings: string[]
+      logsCount: number
+      baseUrl: string
+      importBaseUrl: string
+    }>
+    activateMode: (mode: 'import' | 'export') => Promise<{ ok: boolean; status: unknown }>
+    restart: () => Promise<{ ok: boolean; status: unknown }>
+    updatePorts: (config: { port?: number; exportPort?: number; importPort?: number }) => Promise<{ ok: boolean; status: unknown }>
+    getLogs: (limit?: number) => Promise<Array<{ id: number; timestamp: string; source: string; level: string; message: string }>>
+    exportLogs: () => Promise<{ ok: boolean; filePath: string; count: number }>
   }
   window: {
     toggleAlwaysOnTop: () => Promise<boolean>

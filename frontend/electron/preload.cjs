@@ -6,7 +6,11 @@ const electronAPI = {
   },
   backend: {
     getStatus: () => ipcRenderer.invoke('backend:get-status'),
+    activateMode: (mode) => ipcRenderer.invoke('backend:activate-mode', mode),
     restart: () => ipcRenderer.invoke('backend:restart'),
+    updatePorts: (config) => ipcRenderer.invoke('backend:update-ports', config),
+    getLogs: (limit) => ipcRenderer.invoke('backend:get-logs', limit),
+    exportLogs: () => ipcRenderer.invoke('backend:export-logs'),
   },
   window: {
     toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggle-always-on-top'),
