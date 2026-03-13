@@ -5,9 +5,30 @@ const electronAPI = {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
   },
   backend: {
-    getStatus: (): Promise<{ running: boolean; pid: number | null; baseUrl: string }> =>
+    getStatus: (): Promise<{
+      running: boolean
+      ready: boolean
+      mode: 'import' | 'export'
+      pid: number | null
+      requestedPort: number
+      port: number
+      status: string
+      lastError: string | null
+      warnings: string[]
+      logsCount: number
+      baseUrl: string
+      importBaseUrl: string
+    }> =>
       ipcRenderer.invoke('backend:get-status'),
+    activateMode: (mode: 'import' | 'export'): Promise<{ ok: boolean; status: unknown }> =>
+      ipcRenderer.invoke('backend:activate-mode', mode),
     restart: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backend:restart'),
+    updatePorts: (config: { port?: number; exportPort?: number; importPort?: number }): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('backend:update-ports', config),
+    getLogs: (limit?: number): Promise<
+      Array<{ id: number; timestamp: string; source: string; level: string; message: string }>
+    > => ipcRenderer.invoke('backend:get-logs', limit),
+    exportLogs: (): Promise<{ ok: boolean; filePath: string; count: number }> => ipcRenderer.invoke('backend:export-logs'),
   },
   window: {
     toggleAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-always-on-top'),
