@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle, Loader2, XCircle } from 'lucide-react'
 import { WorkflowActionBar } from '../../components/workflow/WorkflowActionBar'
 import { WorkflowCard } from '../../components/workflow/WorkflowCard'
 import { WorkflowStepper } from '../../components/workflow/WorkflowStepper'
@@ -13,7 +13,9 @@ import {
   RenameProposal,
   ResolvedImportItem,
 } from '../../types/import'
+import { useI18n } from '../../i18n'
 import { importApi } from '../../services/api/import'
+import { AiSettingsDialog, CategoryEditorDialog } from '../settings/ConfigDialogs'
 
 type SortMode = 'name' | 'type' | 'category_order'
 
@@ -46,7 +48,13 @@ type AnalyzeCachePayload = {
   proposals?: AnalyzeCacheProposalRow[]
 }
 
-const DEFAULT_BANNER = 'Ready'
+type ImportWorkflowProps = {
+  openAiSignal?: number
+  openCategorySignal?: number
+  onBackHome?: () => void
+  onOpenAiSettings?: () => void
+}
+
 const AUDIO_EXT_REGEX = /\.(wav|aif|aiff)$/i
 const ANALYZE_CACHE_FILENAME = '.presto_ai_analyze.json'
 
@@ -78,43 +86,6 @@ function relativePathFromFolder(filePath: string, folderPath: string): string {
     return normalizedFile.slice(normalizedFolder.length + 1)
   }
   return basenameOf(filePath)
-}
-
-function slotToHex(slot: number): string {
-  const hueDegrees = [
-    242, 252, 262, 272, 284, 298, 314, 332, 0, 10, 22, 40, 58, 76, 94, 108, 120, 136, 152, 168, 186, 202,
-    218, 232,
-  ]
-  const rowLightness = [0.54, 0.37, 0.23]
-  const rowSaturation = [0.72, 0.69, 0.66]
-  const normalized = Math.max(1, Math.min(72, slot))
-  const index = normalized - 1
-  const row = Math.floor(index / 24)
-  const col = index % 24
-
-  const h = (hueDegrees[col] % 360) / 360
-  const s = rowSaturation[row]
-  const l = rowLightness[row]
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _q = l < 0.5 ? l * (1 + s) : l + s - l * s
-  const p = 2 * l - _q
-  const hue2rgb = (p0: number, q0: number, t0: number): number => {
-    let t = t0
-    if (t < 0) t += 1
-    if (t > 1) t -= 1
-    if (t < 1 / 6) return p0 + (q0 - p0) * 6 * t
-    if (t < 1 / 2) return q0
-    if (t < 2 / 3) return p0 + (q0 - p0) * (2 / 3 - t) * 6
-    return p0
-  }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
-  const r = hue2rgb(p, q, h + 1 / 3)
-  const g = hue2rgb(p, q, h)
-  const b = hue2rgb(p, q, h - 1 / 3)
-
-  const toHex = (v: number): string => Math.round(v * 255).toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase()
 }
 
 function rowBackgroundFromCategoryHex(color: string | null | undefined): string {
@@ -207,7 +178,8 @@ function joinPath(dir: string, entry: string): string {
   return dir.endsWith('/') ? `${dir}${entry}` : `${dir}/${entry}`
 }
 
-export function ImportWorkflow(props: { openAiSignal?: number; openCategorySignal?: number; onBackHome?: () => void }) {
+export function ImportWorkflow(props: ImportWorkflowProps) {
+  const { t } = useI18n()
   const [config, setConfig] = useState<AppConfigDto | null>(null)
   const [files, setFiles] = useState<LocalFile[]>([])
   const [sourceFolders, setSourceFolders] = useState<string[]>([])
@@ -221,7 +193,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
 
   const [runId, setRunId] = useState<string | null>(null)
   const [runState, setRunState] = useState<any>(null)
-  const [banner, setBanner] = useState(DEFAULT_BANNER)
+  const [banner, setBanner] = useState(() => t('import.banner.ready'))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -963,13 +935,13 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
     }
   }
 
-  const stepNames = ['Analyze + Manual Edit', 'Strip Setup', 'Run Automation']
+  const stepNames = [t('import.step.analyzeManual'), t('import.step.stripSetup'), t('import.step.runAutomation')]
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
       <WorkflowTitle
-        title="Import Workflow"
-        subtitle="Analyze, edit, strip, and run automation."
+        title={t('import.title')}
+        subtitle={t('import.subtitle')}
         rightSlot={
           <>
             {props.onBackHome ? (
@@ -977,20 +949,28 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                 onClick={props.onBackHome}
                 className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100"
               >
-                Back to Home
+                {t('import.backHome')}
               </button>
             ) : null}
             <button
-              onClick={() => setShowAiSettings(true)}
+              onClick={() => {
+                if (props.onOpenAiSettings) {
+                  props.onOpenAiSettings()
+                  return
+                }
+                setShowAiSettings(true)
+              }}
               className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100"
             >
-              AI Settings
+              {t('import.aiSettings')}
             </button>
             <button
-              onClick={() => setShowCategoryEditor(true)}
+              onClick={() => {
+                setShowCategoryEditor(true)
+              }}
               className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100"
             >
-              Category Editor
+              {t('import.categoryEditor')}
             </button>
           </>
         }
@@ -1004,7 +984,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
           <div className="h-full flex flex-col p-6">
             <div className="flex-1 overflow-auto space-y-4">
               <WorkflowCard
-                title="Step 1: Analyze + Manual Edit"
+                title={t('import.step1.title')}
                 rightSlot={
                   <>
                     <button
@@ -1012,7 +992,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                       className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                       disabled={busy}
                     >
-                      Add Folder
+                      {t('import.step1.addFolder')}
                     </button>
                     <button
                       type="button"
@@ -1023,55 +1003,57 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                       className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                       disabled={busy || files.length === 0}
                     >
-                      Run AI Analyze
+                      {t('import.step1.runAnalyze')}
                     </button>
                     <button
                       onClick={clearFiles}
                       className="px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
                       disabled={busy}
                     >
-                      Clear
+                      {t('import.step1.clear')}
                     </button>
                   </>
                 }
               >
                 <div className="p-3 text-sm text-gray-600">
-                  Select one or more folders. WAV/AIFF files are discovered recursively.
+                  {t('import.step1.selectFolderHint')}
                 </div>
               </WorkflowCard>
 
               <div className="grid grid-cols-4 gap-3">
                 <WorkflowCard>
-                  <div className="text-sm text-gray-600">pending</div>
+                  <div className="text-sm text-gray-600">{t('import.stat.pending')}</div>
                   <div className="text-2xl font-semibold text-amber-600">{pendingRows.length}</div>
                 </WorkflowCard>
                 <WorkflowCard>
-                  <div className="text-sm text-gray-600">ready</div>
+                  <div className="text-sm text-gray-600">{t('import.stat.ready')}</div>
                   <div className="text-2xl font-semibold text-green-600">{readyRows.length}</div>
                 </WorkflowCard>
                 <WorkflowCard>
-                  <div className="text-sm text-gray-600">failed</div>
+                  <div className="text-sm text-gray-600">{t('import.stat.failed')}</div>
                   <div className="text-2xl font-semibold text-red-600">{failedRows.length}</div>
                 </WorkflowCard>
                 <WorkflowCard>
-                  <div className="text-sm text-gray-600">skipped</div>
+                  <div className="text-sm text-gray-600">{t('import.stat.skipped')}</div>
                   <div className="text-2xl font-semibold text-gray-600">{skippedRows.length}</div>
                 </WorkflowCard>
               </div>
               <WorkflowCard
-                title="Project Track Information + Manual Edit"
-                subtitle={`Connection: ${ptConnected ? 'Pro Tools Connected' : 'Pro Tools Not Connected'}`}
+                title={t('import.projectInfo.title')}
+                subtitle={t('import.projectInfo.connection', {
+                  status: ptConnected ? t('import.projectInfo.connected') : t('import.projectInfo.notConnected'),
+                })}
                 rightSlot={
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Sort by</label>
+                    <label className="text-sm text-gray-600">{t('import.projectInfo.sortBy')}</label>
                     <select
                       value={sortMode}
                       onChange={(event) => setSortMode(event.target.value as SortMode)}
                       className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                     >
-                      <option value="category_order">Category (Editor Order)</option>
-                      <option value="name">Name</option>
-                      <option value="type">Type</option>
+                      <option value="category_order">{t('import.sort.categoryOrder')}</option>
+                      <option value="name">{t('import.sort.name')}</option>
+                      <option value="type">{t('import.sort.type')}</option>
                     </select>
                   </div>
                 }
@@ -1081,11 +1063,11 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Track Info</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Name</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.trackInfo')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.category')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.aiName')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.finalName')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.status')}</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1153,9 +1135,9 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                 </div>
                 <div className="p-4 border-t border-gray-200">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="text-sm">Modified: {modifiedCount}</div>
-                    <div className="text-sm">Conflicts: {conflictCount}</div>
-                    <div className="text-sm">Ready: {readyRows.length}</div>
+                    <div className="text-sm">{t('import.summary.modified', { count: modifiedCount })}</div>
+                    <div className="text-sm">{t('import.summary.conflicts', { count: conflictCount })}</div>
+                    <div className="text-sm">{t('import.summary.ready', { count: readyRows.length })}</div>
                   </div>
                 </div>
               </WorkflowCard>
@@ -1167,7 +1149,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
           <div className="h-full flex flex-col p-6">
             <div className="flex-1 overflow-auto space-y-4">
               <WorkflowCard
-                title="Step 2: Strip Setup"
+                title={t('import.step2.title')}
                 rightSlot={
                   <div className="flex items-center gap-2">
                     <button
@@ -1175,20 +1157,23 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                       className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                       disabled={busy}
                     >
-                      Open Strip Silence
+                      {t('import.step2.openStrip')}
                     </button>
                     <button
                       onClick={markStripReady}
                       className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                       disabled={!stripOpened}
                     >
-                      Mark Ready
+                      {t('import.step2.markReady')}
                     </button>
                   </div>
                 }
               >
                 <div className="text-sm text-gray-700">
-                  Status: {stripOpened ? 'window opened' : 'not opened'} / {stripReady ? 'confirmed' : 'not confirmed'}
+                  {t('import.step2.status', {
+                    opened: stripOpened ? t('import.step2.windowOpened') : t('import.step2.windowNotOpened'),
+                    confirmed: stripReady ? t('import.step2.confirmed') : t('import.step2.notConfirmed'),
+                  })}
                 </div>
               </WorkflowCard>
             </div>
@@ -1199,32 +1184,32 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
           <div className="h-full flex flex-col p-6">
             <div className="flex-1 overflow-auto space-y-4">
               <WorkflowCard
-                title="Step 3: Run Automation"
+                title={t('import.step3.title')}
                 rightSlot={
                   <button
                     onClick={() => void startAutomation()}
                     className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                     disabled={busy || (runState && !terminalStatus(runState.status))}
                   >
-                    Start Automation
+                    {t('import.step3.startAutomation')}
                   </button>
                 }
               >
-                <div className="text-sm text-gray-600">Run import, color, and strip automation for all ready items.</div>
+                <div className="text-sm text-gray-600">{t('import.step3.desc')}</div>
               </WorkflowCard>
 
               {runState && !terminalStatus(runState.status) ? (
                 <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-blue-800">Import Running...</span>
+                    <span className="text-sm font-medium text-blue-800">{t('import.step3.running')}</span>
                     <span className="text-sm font-semibold text-blue-600">
-                      {runState.current_index || 0}/{runState.total || 0} items
+                      {t('import.step3.items', { current: runState.current_index || 0, total: runState.total || 0 })}
                     </span>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">Overall Progress</span>
+                      <span className="text-xs text-gray-600">{t('import.step3.overallProgress')}</span>
                       <span className="text-xs font-medium text-blue-600">
                         {Math.round(Number(runState.progress || 0))}%
                       </span>
@@ -1242,21 +1227,19 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                       <div className="flex items-center space-x-2">
                         <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
                         <span className="text-xs text-gray-700">
-                          Current Item: <span className="font-medium">{runState.current_name}</span>
+                          {t('import.step3.currentItem', { name: runState.current_name })}
                         </span>
                       </div>
                     ) : null}
                     <div className="text-xs text-gray-600">
-                      Status: <span className="font-medium">{runState.status || 'idle'}</span>
+                      {t('import.step3.status', { status: runState.status || t('import.step3.idle') })}
                     </div>
                     <div className="mt-2 p-2 bg-white rounded border border-blue-100">
                       <div className="text-xs text-gray-500 space-y-1">
-                        <div>
-                          Run ID: <span className="font-mono">{runId || '-'}</span>
-                        </div>
-                        <div>Total: {runState.result?.total ?? runState.total ?? 0}</div>
-                        <div>Success: {runState.result?.success_count ?? 0}</div>
-                        <div>Failed: {runState.result?.failed_count ?? 0}</div>
+                        <div>{t('import.step3.runId', { id: runId || '-' })}</div>
+                        <div>{t('import.step3.total', { count: runState.result?.total ?? runState.total ?? 0 })}</div>
+                        <div>{t('import.step3.success', { count: runState.result?.success_count ?? 0 })}</div>
+                        <div>{t('import.step3.failed', { count: runState.result?.failed_count ?? 0 })}</div>
                       </div>
                     </div>
                   </div>
@@ -1275,17 +1258,20 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                   <div className="flex items-center space-x-3 mb-4">
                     <CheckCircle className="h-8 w-8 text-green-500" />
                     <div>
-                      <h3 className="text-lg font-semibold text-green-800">Import Completed</h3>
+                      <h3 className="text-lg font-semibold text-green-800">{t('import.step3.completed')}</h3>
                       <p className="text-sm text-green-600 mt-1">
-                        Success <span className="font-bold">{runState.result.success_count || 0}</span> / Failed{' '}
-                        <span className="font-bold">{runState.result.failed_count || 0}</span>
+                        {t('import.step3.completedSummary', {
+                          success: runState.result.success_count || 0,
+                          failed: runState.result.failed_count || 0,
+                        })}
                       </p>
                     </div>
                   </div>
                   {runState.result.failed_count > 0 ? (
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-700">
-                      First failure:{' '}
-                      {runState.result.results?.find((item: any) => item.status === 'failed')?.error_message || 'unknown'}
+                      {t('import.step3.firstFailure', {
+                        message: runState.result.results?.find((item: any) => item.status === 'failed')?.error_message || t('import.step3.unknown'),
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -1297,7 +1283,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
                     onClick={() => void handleSaveSession()}
                     className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
-                    Save Session
+                    {t('import.step3.saveSession')}
                   </button>
                 </WorkflowCard>
               ) : null}
@@ -1313,7 +1299,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
           disabled={busy}
           className="px-4 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
         >
-          {step === 2 ? 'Previous: Analyze + Manual Edit' : 'Previous: Strip Setup'}
+          {step === 2 ? t('import.nav.prevAnalyzeManual') : t('import.nav.prevStrip')}
         </button>
       ) : null}
         {step < 3 ? (
@@ -1322,7 +1308,7 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
             disabled={!canNext || busy}
             className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
           >
-            Next: {stepNames[step]}
+            {t('import.nav.next', { name: stepNames[step] })}
           </button>
         ) : null}
       </WorkflowActionBar>
@@ -1345,226 +1331,6 @@ export function ImportWorkflow(props: { openAiSignal?: number; openCategorySigna
           onSave={(next) => void saveCategories(next)}
         />
       ) : null}
-    </div>
-  )
-}
-
-function AiSettingsDialog(props: {
-  current: AiNamingConfig
-  hasKey: boolean
-  apiKeyInput: string
-  onApiKeyInput: (value: string) => void
-  onCancel: () => void
-  onSave: (config: AiNamingConfig) => void
-}) {
-  const [draft, setDraft] = useState<AiNamingConfig>(props.current)
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg w-[560px] p-6 space-y-4">
-        <h3 className="text-lg font-semibold">AI Settings</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm">
-            <span className="block text-gray-600 mb-1">Enabled</span>
-            <select
-              value={draft.enabled ? 'true' : 'false'}
-              onChange={(event) => setDraft({ ...draft, enabled: event.target.value === 'true' })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-md"
-            >
-              <option value="true">On</option>
-              <option value="false">Off</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="block text-gray-600 mb-1">Timeout (s)</span>
-            <input
-              type="number"
-              min={1}
-              value={draft.timeout_seconds}
-              onChange={(event) => setDraft({ ...draft, timeout_seconds: Math.max(1, Number(event.target.value || 1)) })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-md"
-            />
-          </label>
-          <label className="text-sm col-span-2">
-            <span className="block text-gray-600 mb-1">Base URL</span>
-            <input
-              value={draft.base_url}
-              onChange={(event) => setDraft({ ...draft, base_url: event.target.value })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-md"
-            />
-          </label>
-          <label className="text-sm col-span-2">
-            <span className="block text-gray-600 mb-1">Model</span>
-            <input
-              value={draft.model}
-              onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-md"
-            />
-          </label>
-          <label className="text-sm col-span-2">
-            <span className="block text-gray-600 mb-1">API Key {props.hasKey ? '(stored)' : '(missing)'}</span>
-            <input
-              value={props.apiKeyInput}
-              type="password"
-              onChange={(event) => props.onApiKeyInput(event.target.value)}
-              placeholder="Leave empty to keep existing key"
-              className="w-full px-2 py-1 border border-gray-300 rounded-md"
-            />
-          </label>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={props.onCancel} className="px-3 py-2 bg-gray-200 rounded-md">
-            Cancel
-          </button>
-          <button onClick={() => props.onSave(draft)} className="px-3 py-2 bg-blue-600 text-white rounded-md">
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CategoryEditorDialog(props: {
-  categories: CategoryTemplate[]
-  onCancel: () => void
-  onSave: (categories: CategoryTemplate[]) => void
-}) {
-  const [rows, setRows] = useState<CategoryTemplate[]>(props.categories)
-
-  const updateRowAt = (index: number, patch: Partial<CategoryTemplate>): void => {
-    setRows((prev) =>
-      prev.map((row, rowIndex) => {
-        if (rowIndex !== index) return row
-        const nextSlot = patch.pt_color_slot ?? row.pt_color_slot
-        return {
-          ...row,
-          ...patch,
-          pt_color_slot: nextSlot,
-          preview_hex: slotToHex(nextSlot),
-        }
-      }),
-    )
-  }
-
-  const addRow = (): void => {
-    const index = rows.length + 1
-    const slot = Math.min(72, index)
-    setRows((prev) => [
-      ...prev,
-      {
-        id: `cat_${index}`,
-        name: `Category ${index}`,
-        pt_color_slot: slot,
-        preview_hex: slotToHex(slot),
-      },
-    ])
-  }
-
-  const moveRow = (index: number, direction: -1 | 1): void => {
-    setRows((prev) => {
-      const target = index + direction
-      if (target < 0 || target >= prev.length) {
-        return prev
-      }
-      const next = [...prev]
-      const [item] = next.splice(index, 1)
-      next.splice(target, 0, item)
-      return next
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg w-[760px] p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Category Editor</h3>
-          <button onClick={addRow} className="px-3 py-2 bg-blue-600 text-white rounded-md">
-            Add
-          </button>
-        </div>
-        <div className="max-h-96 overflow-auto border border-gray-200 rounded-lg">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2 text-left">Order</th>
-                <th className="px-3 py-2 text-left">ID</th>
-                <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-left">Color Slot</th>
-                <th className="px-3 py-2 text-left">Preview</th>
-                <th className="px-3 py-2 text-left">Move</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.id}_${index}`} className="border-b border-gray-100">
-                  <td className="px-3 py-2 text-gray-700">{index + 1}</td>
-                  <td className="px-3 py-2">
-                    <input
-                      value={row.id}
-                      onChange={(event) => updateRowAt(index, { id: event.target.value })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      value={row.name}
-                      onChange={(event) => updateRowAt(index, { name: event.target.value })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={72}
-                      value={row.pt_color_slot}
-                      onChange={(event) => updateRowAt(index, { pt_color_slot: Number(event.target.value || 1) })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="inline-flex items-center gap-2">
-                      <span className="inline-block w-6 h-6 rounded border border-gray-300" style={{ backgroundColor: row.preview_hex }} />
-                      <span>{row.preview_hex}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        onClick={() => moveRow(index, -1)}
-                        disabled={index === 0}
-                        title="Move Up"
-                        aria-label="Move Up"
-                        className="p-1.5 bg-gray-200 rounded-md hover:bg-gray-300 disabled:opacity-50"
-                      >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => moveRow(index, 1)}
-                        disabled={index === rows.length - 1}
-                        title="Move Down"
-                        aria-label="Move Down"
-                        className="p-1.5 bg-gray-200 rounded-md hover:bg-gray-300 disabled:opacity-50"
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={props.onCancel} className="px-3 py-2 bg-gray-200 rounded-md">
-            Cancel
-          </button>
-          <button onClick={() => props.onSave(rows)} className="px-3 py-2 bg-blue-600 text-white rounded-md">
-            Save
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

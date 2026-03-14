@@ -39,6 +39,9 @@ class ProToolsUiAutomation:
                 try
                     tell process "{process_name}"
                         set _menuBarName to name of menu bar 1
+                        if not (exists menu bar item "Window" of menu bar 1) then
+                            error "Pro Tools UI must be set to English (Window menu is required)." number 1003
+                        end if
                     end tell
                 on error errMsg
                     error "Accessibility permission is missing: " & errMsg number 1002
@@ -68,12 +71,8 @@ class ProToolsUiAutomation:
 
     def open_strip_silence_window(self) -> None:
         """Open Strip Silence window without executing Strip."""
-
-        self._with_retry(
-            action=self._open_strip_silence_window_once,
-            fallback_code="UI_ACTION_FAILED",
-            fallback_message="Failed to open Strip Silence window.",
-        )
+        # Cmd+U is a toggle shortcut; retrying can close the dialog right after opening.
+        self._open_strip_silence_window_once()
 
     def _apply_track_color_once(self, slot: int, track_name: str) -> None:
         menu_cfg = self.selector_map["menus"]["color_palette"]
@@ -252,19 +251,24 @@ class ProToolsUiAutomation:
                     set frontmost to true
                     delay 0.1
 
-                    try
-                        keystroke "u" using command down
-                    end try
-                    delay 0.25
+                    set windowFound to (exists window "{window_cfg["name"]}")
 
-                    if not (exists window "{window_cfg["name"]}") then
+                    if windowFound is false then
                         try
-                            key code 32 using command down
+                            keystroke "u" using command down
                         end try
-                        delay 0.25
+                        delay 0.1
+
+                        repeat with waitAttempt from 1 to 12
+                            if exists window "{window_cfg["name"]}" then
+                                set windowFound to true
+                                exit repeat
+                            end if
+                            delay 0.1
+                        end repeat
                     end if
 
-                    if not (exists window "{window_cfg["name"]}") then
+                    if windowFound is false then
                         error "Strip Silence window not found after shortcut attempts (Cmd+U)." number 1202
                     end if
                 end tell
