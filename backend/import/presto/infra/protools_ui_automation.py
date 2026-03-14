@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from presto.domain.errors import UiAutomationError
 from presto.domain.models import SilenceProfile
@@ -12,6 +14,15 @@ from presto.domain.models import SilenceProfile
 
 class ProToolsUiAutomation:
     """Run deterministic AppleScript actions against Pro Tools UI."""
+
+    RETRYABLE_ERROR_CODES = frozenset(
+        {
+            "UI_TIMEOUT",
+            "UI_NOT_FRONTMOST",
+            "UI_ELEMENT_NOT_FOUND",
+            "UI_ACTION_FAILED",
+        }
+    )
 
     def __init__(
         self,
@@ -25,6 +36,8 @@ class ProToolsUiAutomation:
         self.retry_count = retry_count
         self.timeout_seconds = timeout_seconds
         self.selector_map = self._load_selector_map(selector_map_path)
+        self.retryable_error_codes = set(self.RETRYABLE_ERROR_CODES)
+        self.logger = logging.getLogger(__name__)
 
     def preflight_accessibility(self) -> None:
         """Verify process visibility and accessibility permissions."""
@@ -57,13 +70,14 @@ class ProToolsUiAutomation:
             lambda: self._apply_track_color_once(slot=slot, track_name=track_name),
             fallback_code="UI_ACTION_FAILED",
             fallback_message=f"Failed to apply track color for '{track_name}'.",
+            step_label="apply_track_color",
         )
 
     def strip_silence(self, track_name: str, profile: SilenceProfile) -> None:
         """Open Strip Silence and execute using current Pro Tools dialog values."""
 
         _ = profile
-        self._with_retry(
+        self._with_retry_legacy(
             lambda: self._strip_silence_once(track_name=track_name),
             fallback_code="UI_ACTION_FAILED",
             fallback_message=f"Failed to run Strip Silence for '{track_name}'.",
@@ -276,7 +290,53 @@ class ProToolsUiAutomation:
         '''
         self._run_script(open_script)
 
-    def _with_retry(self, action, fallback_code: str, fallback_message: str) -> None:
+    def _with_retry(
+        self,
+        action: Callable[[], None],
+        fallback_code: str,
+        fallback_message: str,
+        step_label: str,
+    ) -> None:
+        last_error: UiAutomationError | None = None
+        for attempt in range(1, self.retry_count + 1):
+            try:
+                self._ensure_action_context(step_label)
+                action()
+                return
+            except UiAutomationError as exc:
+                last_error = exc
+                retryable = self._is_retryable(exc)
+                self.logger.warning(
+                    "UI automation step '%s' failed on attempt %s/%s (code=%s, retryable=%s): %s",
+                    step_label,
+                    attempt,
+                    self.retry_count,
+                    exc.code,
+                    retryable,
+                    exc.message,
+                )
+                if not retryable or attempt >= self.retry_count:
+                    raise self._decorate_step_error(
+                        error=exc,
+                        fallback_message=fallback_message,
+                        step_label=step_label,
+                        attempt=attempt,
+                        retryable=retryable,
+                    ) from exc
+
+        if last_error is not None:
+            raise self._decorate_step_error(
+                error=last_error,
+                fallback_message=fallback_message,
+                step_label=step_label,
+                attempt=self.retry_count,
+                retryable=self._is_retryable(last_error),
+            ) from last_error
+        raise UiAutomationError(fallback_code, fallback_message)
+
+    def _with_retry_legacy(self, action: Callable[[], None], fallback_code: str, fallback_message: str) -> None:
+        """Legacy retry loop used by strip-silence path from v0.2 phase3."""
+
         last_error: UiAutomationError | None = None
         for _ in range(self.retry_count):
             try:
@@ -288,6 +348,49 @@ class ProToolsUiAutomation:
         if last_error is not None:
             raise last_error
         raise UiAutomationError(fallback_code, fallback_message)
+
+    def _ensure_action_context(self, step_label: str) -> None:
+        """Best-effort focus/process precheck before each critical UI action."""
+
+        process_name = self.selector_map["pro_tools_process_name"]
+        script = f'''
+            tell application "System Events"
+                if not (exists process "{process_name}") then
+                    error "Pro Tools process is not running." number 1301
+                end if
+                tell process "{process_name}"
+                    set frontmost to true
+                end tell
+            end tell
+        '''
+        try:
+            self._run_script(script)
+        except UiAutomationError as exc:
+            raise UiAutomationError(
+                exc.code,
+                f"Action context check failed for step={step_label}: {exc.message}",
+            ) from exc
+
+    def _is_retryable(self, error: UiAutomationError) -> bool:
+        return error.code in self.retryable_error_codes
+
+    @staticmethod
+    def _decorate_step_error(
+        error: UiAutomationError,
+        fallback_message: str,
+        step_label: str,
+        attempt: int,
+        retryable: bool,
+    ) -> UiAutomationError:
+        retryable_text = "true" if retryable else "false"
+        return UiAutomationError(
+            error.code,
+            (
+                f"{fallback_message} "
+                f"[step={step_label}; attempt={attempt}; retryable={retryable_text}; code={error.code}] "
+                f"{error.message}"
+            ),
+        )
 
     def _run_script(self, script: str) -> str:
         try:

@@ -119,3 +119,51 @@
 - 回归：
   - `cd backend && pytest -q tests/test_screen_drag_mapping.py tests/test_orchestrator_integration.py` -> 8 passed
   - `cd backend && pytest -q tests/test_config_store.py tests/test_orchestrator_integration.py tests/test_screen_drag_mapping.py` -> 11 passed
+
+### Update: Phase 4 设计与实施计划落盘（2026-03-14）
+- 用户确认 Phase 4 目标：
+  - 100-200 轨工程吞吐优化
+  - 目标改善约 40%
+  - PT UI 动作保持串行
+- 已完成：
+  - 新增设计文档 `docs/plans/2026-03-14-phase4-large-session-performance-design.md`
+  - 新增实现计划 `docs/plans/2026-03-14-phase4-large-session-performance.md`
+  - `task_plan.md` 状态切换：Phase 3 -> `complete`，Phase 4 -> `in_progress`
+- 当前状态：
+  - Phase 4 进入“待执行”阶段，下一步可按实现计划逐任务开发。
+
+### Update: Phase 4 开发执行（2026-03-14，Subagent-Driven in-session）
+- 已完成实现：
+  - `backend/import/presto/infra/ptsl_gateway.py`
+    - 新增 `apply_track_color_batch`（批量上色 + 失败回退）。
+  - `backend/import/presto/app/orchestrator.py`
+    - 导入执行改为阶段化流水线：
+      - import+rename
+      - color batch
+      - strip silence
+    - 新增 `stage_progress_callback` 并保持旧 `progress_callback` 兼容。
+  - `backend/import/presto/web_api/task_registry.py`
+    - 任务状态新增 stage 字段。
+  - `backend/import/presto/web_api/routes_import.py`
+    - `/import/run/start` 写入 stage 进度。
+    - `/import/run/{id}` 返回 stage 字段。
+  - `frontend/src/types/import.ts`
+    - 扩展 `ImportRunState` stage 字段。
+  - `frontend/src/features/import/ImportWorkflow.tsx`
+    - Step3 新增阶段进度条与阶段计数展示。
+  - `frontend/src/i18n/index.tsx`
+    - 新增阶段进度相关中英文文案。
+  - `backend/scripts/benchmark_import_phase4.py`
+    - 新增 Phase 4 基准脚本（`--tracks`, `--json`）。
+  - `docs/TECHNICAL_ARCHITECTURE.md`
+    - 补充阶段进度字段与 benchmark 脚本入口说明。
+- 新增测试：
+  - `backend/tests/test_import_routes_status.py`
+  - `backend/tests/test_import_benchmark_smoke.py`
+  - 并扩展：
+    - `backend/tests/test_ptsl_gateway.py`
+    - `backend/tests/test_orchestrator_integration.py`
+- 验证记录：
+  - `cd backend && python3 -m pytest -q tests/test_ptsl_gateway.py tests/test_orchestrator_integration.py tests/test_import_routes_status.py tests/test_pt_runtime_guards.py tests/test_ui_automation_retry.py tests/test_import_benchmark_smoke.py` -> `21 passed`
+  - `npm --prefix frontend run typecheck` -> `pass`
+  - `cd backend && python3 scripts/benchmark_import_phase4.py --tracks 100 --tracks 150 --tracks 200 --json` -> 成功输出 JSON 报告
