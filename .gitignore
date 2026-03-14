@@ -95,7 +95,8 @@ vendor/
 /Track2Do/
 
 # Team-local docs/workspace (keep local, do not track)
-docs/
+docs/*
+!docs/TECHNICAL_ARCHITECTURE.md
 .obsidian/
 
 # =========================
