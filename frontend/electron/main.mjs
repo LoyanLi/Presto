@@ -1,9 +1,19 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
+import http from 'node:http'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { resolveMobileLanHost } from './mobileLanHost.mjs'
+import { mapExportProgressForMobile } from './mobileProgressPayload.mjs'
+import {
+  clearMobileProgressSessions,
+  closeMobileProgressSession,
+  createMobileProgressSession,
+  getMobileProgressSession,
+  validateMobileProgressSession,
+} from './mobileProgressSession.mjs'
 
 let mainWindow = null
 let pythonApi = null
@@ -30,6 +40,10 @@ const BACKEND_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_BACKEND_PORT_S
 
 const MAX_BACKEND_LOG_ENTRIES = Math.max(100, Number(process.env.PT_MAX_BACKEND_LOG_ENTRIES || '2000'))
 const MAX_BACKEND_WARNINGS = 100
+const MOBILE_PROGRESS_DEFAULT_PORT = 18888
+const MOBILE_PROGRESS_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_MOBILE_PROGRESS_PORT_SCAN_RANGE || '30'))
+const MOBILE_PROGRESS_POLL_MS = 1000
+const MOBILE_PROGRESS_HOST = '0.0.0.0'
 
 const RETRYABLE_FETCH_CODES = new Set([
   'ECONNRESET',
@@ -41,6 +55,7 @@ const RETRYABLE_FETCH_CODES = new Set([
   'UND_ERR_HEADERS_TIMEOUT',
   'UND_ERR_BODY_TIMEOUT',
 ])
+const PRESTO_API_ERROR_PREFIX = '__PRESTO_API_ERROR__'
 
 const IMPORT_ROUTE_RULE = {
   pathPrefixes: ['/api/v1/import/'],
@@ -81,6 +96,10 @@ let activeHeartbeatFailures = 0
 let lastError = null
 let lastExit = null
 let restartCount = 0
+
+let mobileProgressServer = null
+let mobileProgressPort = null
+let mobileProgressLanHost = null
 
 function nowIso() {
   return new Date().toISOString()
@@ -185,6 +204,10 @@ function isRetryableFetchError(error) {
 }
 
 function formatFetchError(url, error) {
+  if (error instanceof Error && error.message.startsWith(PRESTO_API_ERROR_PREFIX)) {
+    return error
+  }
+
   if (isAbortError(error)) {
     return new Error(`Request timed out after ${HTTP_TIMEOUT_MS}ms: ${url}`)
   }
@@ -207,6 +230,21 @@ function parseJsonResponse(body, url) {
   } catch {
     throw new Error(`Invalid JSON response from ${url}`)
   }
+}
+
+function parseApiErrorBody(body) {
+  if (!body) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(body)
+    if (parsed && typeof parsed === 'object' && parsed.success === false) {
+      return parsed
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 function isLocalTarget(hostname) {
@@ -248,6 +286,10 @@ function healthPathForMode(mode) {
 }
 
 async function isPortAvailable(port) {
+  return isPortAvailableOnHost(port, API_HOST)
+}
+
+async function isPortAvailableOnHost(port, host) {
   return new Promise((resolve) => {
     const server = net.createServer()
     server.unref()
@@ -260,7 +302,7 @@ async function isPortAvailable(port) {
       server.close(() => resolve(true))
     })
 
-    server.listen({ host: API_HOST, port, exclusive: true })
+    server.listen({ host, port, exclusive: true })
   })
 }
 
@@ -281,6 +323,332 @@ async function pickRuntimePort(preferredPort) {
   }
 
   throw new Error(`No available port found near ${preferredPort}`)
+}
+
+async function pickMobileProgressPort(preferredPort) {
+  if (await isPortAvailableOnHost(preferredPort, MOBILE_PROGRESS_HOST)) {
+    return preferredPort
+  }
+
+  for (let offset = 1; offset <= MOBILE_PROGRESS_PORT_SCAN_RANGE; offset += 1) {
+    const candidate = preferredPort + offset
+    if (candidate > 65535) {
+      continue
+    }
+    if (await isPortAvailableOnHost(candidate, MOBILE_PROGRESS_HOST)) {
+      pushWarning(`Mobile progress preferred port ${preferredPort} unavailable, using ${candidate}`)
+      return candidate
+    }
+  }
+
+  throw new Error(`No available mobile progress port found near ${preferredPort}`)
+}
+
+function setNoCacheHeaders(response) {
+  response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  response.setHeader('Pragma', 'no-cache')
+  response.setHeader('Expires', '0')
+}
+
+function sendJson(response, statusCode, payload) {
+  response.statusCode = statusCode
+  setNoCacheHeaders(response)
+  response.setHeader('Content-Type', 'application/json; charset=utf-8')
+  response.end(JSON.stringify(payload))
+}
+
+function sendHtml(response, statusCode, html) {
+  response.statusCode = statusCode
+  setNoCacheHeaders(response)
+  response.setHeader('Content-Type', 'text/html; charset=utf-8')
+  response.end(html)
+}
+
+function sendNotFound(response) {
+  response.statusCode = 404
+  setNoCacheHeaders(response)
+  response.end('Not Found')
+}
+
+function buildMobileViewUrl(sessionId, token) {
+  if (!mobileProgressPort) {
+    throw new Error('Mobile progress server is not ready')
+  }
+  const host = mobileProgressLanHost || resolveMobileLanHost() || '127.0.0.1'
+  return `http://${host}:${mobileProgressPort}/mobile/view/${encodeURIComponent(sessionId)}/${encodeURIComponent(token)}`
+}
+
+function renderMobileViewerHtml(sessionId, token) {
+  const encodedSessionId = encodeURIComponent(sessionId)
+  const encodedToken = encodeURIComponent(token)
+  const apiPath = `/mobile/api/export-progress/${encodedSessionId}/${encodedToken}`
+  const pollMs = MOBILE_PROGRESS_POLL_MS
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Presto Export Progress</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(160deg, #f4f7fb, #eef4ff);
+        color: #1f2937;
+      }
+      .wrap {
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 20px 16px 28px;
+      }
+      .card {
+        background: #ffffff;
+        border: 1px solid #dbe7ff;
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      }
+      .title {
+        margin: 0 0 6px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .subtitle {
+        margin: 0 0 14px;
+        font-size: 12px;
+        color: #475569;
+      }
+      .row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 10px 0;
+      }
+      .label {
+        color: #64748b;
+        font-size: 12px;
+      }
+      .value {
+        color: #0f172a;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .bar-wrap {
+        margin-top: 10px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+        height: 10px;
+      }
+      .bar {
+        height: 10px;
+        width: 0%;
+        background: linear-gradient(90deg, #2563eb, #1d4ed8);
+        transition: width 250ms ease;
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 11px;
+        color: #64748b;
+      }
+      .error {
+        margin-top: 12px;
+        color: #b91c1c;
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1 class="title">Export Progress (Read-only)</h1>
+        <p class="subtitle">This page is read-only and refreshes automatically.</p>
+        <div class="row"><span class="label">Status</span><span class="value" id="status">Loading...</span></div>
+        <div class="row"><span class="label">Snapshot</span><span class="value" id="snapshot">-</span></div>
+        <div class="row"><span class="label">Current</span><span class="value" id="current">-</span></div>
+        <div class="row"><span class="label">ETA</span><span class="value" id="eta">-</span></div>
+        <div class="row"><span class="label">Estimated Finish</span><span class="value" id="etaTarget">-</span></div>
+        <div class="row"><span class="label">Updated</span><span class="value" id="updated">-</span></div>
+        <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+        <div class="hint">Keep desktop app open and stay on the same Wi-Fi network.</div>
+        <div class="error" id="error" style="display:none;"></div>
+      </section>
+    </main>
+    <script>
+      const statusNode = document.getElementById('status');
+      const snapshotNode = document.getElementById('snapshot');
+      const currentNode = document.getElementById('current');
+      const etaNode = document.getElementById('eta');
+      const etaTargetNode = document.getElementById('etaTarget');
+      const updatedNode = document.getElementById('updated');
+      const barNode = document.getElementById('bar');
+      const errorNode = document.getElementById('error');
+      const endpoint = ${JSON.stringify(apiPath)};
+      const pollInterval = ${pollMs};
+      let stopped = false;
+
+      function setError(message) {
+        errorNode.style.display = 'block';
+        errorNode.textContent = message;
+      }
+
+      function clearError() {
+        errorNode.style.display = 'none';
+        errorNode.textContent = '';
+      }
+
+      function render(payload) {
+        const progress = Number(payload.progress || 0);
+        const etaSeconds = typeof payload.eta_seconds === 'number' ? Math.max(0, payload.eta_seconds) : null;
+        statusNode.textContent = String(payload.status || 'unknown');
+        snapshotNode.textContent = String(Math.max(0, Number(payload.current_snapshot || 0))) + ' / ' + String(Math.max(0, Number(payload.total_snapshots || 0)));
+        currentNode.textContent = payload.current_snapshot_name || '-';
+        etaNode.textContent = etaSeconds == null ? '-' : (etaSeconds + 's');
+        etaTargetNode.textContent = payload.eta_target_at ? new Date(payload.eta_target_at).toLocaleTimeString() : '-';
+        updatedNode.textContent = payload.updated_at ? new Date(payload.updated_at).toLocaleTimeString() : '-';
+        barNode.style.width = Math.max(0, Math.min(100, progress)) + '%';
+      }
+
+      async function poll() {
+        if (stopped) {
+          return;
+        }
+        try {
+          const response = await fetch(endpoint + '?_ts=' + Date.now(), { cache: 'no-store' });
+          if (response.status === 404) {
+            stopped = true;
+            setError('Link expired or closed.');
+            return;
+          }
+          if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+          }
+          const payload = await response.json();
+          clearError();
+          render(payload);
+        } catch (error) {
+          setError('Connection lost. Retrying...');
+        } finally {
+          if (!stopped) {
+            setTimeout(poll, pollInterval);
+          }
+        }
+      }
+
+      poll();
+    </script>
+  </body>
+</html>`
+}
+
+async function handleMobileProgressRequest(request, response) {
+  try {
+    const parsed = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`)
+    const pathName = parsed.pathname
+
+    const viewMatch = pathName.match(/^\/mobile\/view\/([^/]+)\/([^/]+)$/)
+    if (viewMatch) {
+      const sessionId = decodeURIComponent(viewMatch[1] || '')
+      const token = decodeURIComponent(viewMatch[2] || '')
+      const session = validateMobileProgressSession(sessionId, token)
+      if (!session) {
+        sendNotFound(response)
+        return
+      }
+
+      sendHtml(response, 200, renderMobileViewerHtml(session.sessionId, session.token))
+      return
+    }
+
+    const apiMatch = pathName.match(/^\/mobile\/api\/export-progress\/([^/]+)\/([^/]+)$/)
+    if (apiMatch) {
+      const sessionId = decodeURIComponent(apiMatch[1] || '')
+      const token = decodeURIComponent(apiMatch[2] || '')
+      const session = validateMobileProgressSession(sessionId, token)
+      if (!session) {
+        sendNotFound(response)
+        return
+      }
+
+      const statusResponse = await performHttpRequest(
+        `http://${API_HOST}:${API_GATEWAY_PORT}/api/v1/export/status/${encodeURIComponent(session.taskId)}`,
+      )
+      sendJson(response, 200, mapExportProgressForMobile(statusResponse))
+      return
+    }
+
+    sendNotFound(response)
+  } catch (error) {
+    localLog('mobile-progress', 'error', `request failed: ${error instanceof Error ? error.message : String(error)}`)
+    sendJson(response, 500, {
+      status: 'error',
+      progress: 0,
+      current_snapshot: 0,
+      total_snapshots: 0,
+      current_snapshot_name: '',
+      updated_at: nowIso(),
+    })
+  }
+}
+
+async function startMobileProgressServer() {
+  if (mobileProgressServer && mobileProgressPort) {
+    return
+  }
+
+  const preferredPort = normalizePort(process.env.PT_MOBILE_PROGRESS_PORT, MOBILE_PROGRESS_DEFAULT_PORT)
+  const selectedPort = await pickMobileProgressPort(preferredPort)
+  const server = http.createServer((request, response) => {
+    void handleMobileProgressRequest(request, response)
+  })
+
+  await new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening)
+      reject(error)
+    }
+    const onListening = () => {
+      server.off('error', onError)
+      resolve()
+    }
+
+    server.once('error', onError)
+    server.once('listening', onListening)
+    server.listen({ host: MOBILE_PROGRESS_HOST, port: selectedPort })
+  })
+
+  mobileProgressServer = server
+  mobileProgressPort = selectedPort
+  mobileProgressLanHost = resolveMobileLanHost()
+  localLog(
+    'mobile-progress',
+    'info',
+    `mobile server ready on ${MOBILE_PROGRESS_HOST}:${selectedPort} (lan=${mobileProgressLanHost || 'unresolved'})`,
+  )
+}
+
+async function stopMobileProgressServer() {
+  clearMobileProgressSessions()
+  mobileProgressLanHost = null
+
+  if (!mobileProgressServer) {
+    mobileProgressPort = null
+    return
+  }
+
+  const server = mobileProgressServer
+  mobileProgressServer = null
+  mobileProgressPort = null
+
+  await new Promise((resolve) => {
+    server.close(() => resolve())
+  })
 }
 
 function clearHeartbeatMonitor() {
@@ -655,6 +1023,10 @@ async function performHttpRequest(url, init = undefined) {
       const res = await fetch(targetUrl, { ...init, signal: controller.signal })
       const body = await res.text()
       if (!res.ok) {
+        const parsedApiError = parseApiErrorBody(body)
+        if (parsedApiError) {
+          throw new Error(`${PRESTO_API_ERROR_PREFIX}${JSON.stringify(parsedApiError)}`)
+        }
         throw new Error(body || `HTTP ${res.status}`)
       }
       return parseJsonResponse(body, targetUrl)
@@ -890,6 +1262,48 @@ function registerIpcHandlers() {
     return { ok: true, filePath, count: backendLogs.length }
   })
 
+  ipcMain.handle('export-mobile:create-session', async (_event, taskId) => {
+    const normalizedTaskId = typeof taskId === 'string' ? taskId.trim() : ''
+    if (!normalizedTaskId) {
+      return { ok: false, error: 'Task ID is required.' }
+    }
+
+    await startMobileProgressServer()
+    const created = createMobileProgressSession(normalizedTaskId)
+    return {
+      ok: true,
+      sessionId: created.sessionId,
+      url: buildMobileViewUrl(created.sessionId, created.token),
+    }
+  })
+
+  ipcMain.handle('export-mobile:close-session', async (_event, sessionId) => {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : ''
+    if (!normalizedSessionId) {
+      return { ok: false }
+    }
+    return { ok: closeMobileProgressSession(normalizedSessionId) }
+  })
+
+  ipcMain.handle('export-mobile:get-view-url', async (_event, sessionId) => {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : ''
+    if (!normalizedSessionId) {
+      return { ok: false, error: 'Session ID is required.' }
+    }
+
+    const session = getMobileProgressSession(normalizedSessionId)
+    if (!session || !session.active) {
+      return { ok: false, error: 'Session is not active.' }
+    }
+
+    await startMobileProgressServer()
+    return {
+      ok: true,
+      sessionId: session.sessionId,
+      url: buildMobileViewUrl(session.sessionId, session.token),
+    }
+  })
+
   ipcMain.handle('fs:read-file', async (_event, filePath) => {
     try {
       return await fs.readFile(filePath, 'utf-8')
@@ -1006,4 +1420,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   shuttingDown = true
   void stopActiveBackend()
+  void stopMobileProgressServer()
 })

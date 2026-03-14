@@ -28,6 +28,7 @@ export interface AiNamingConfig {
 export interface UiPreferences {
   logs_collapsed_by_default: boolean
   follow_system_theme: boolean
+  developer_mode_enabled: boolean
 }
 
 export interface AppConfigDto {
@@ -78,6 +79,11 @@ export interface ImportRunState {
   current_index: number
   total: number
   current_name: string
+  stage: string
+  stage_current: number
+  stage_total: number
+  stage_progress: number
+  eta_seconds?: number | null
   created_at: string
   started_at: string | null
   finished_at: string | null

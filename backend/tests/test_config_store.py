@@ -24,6 +24,7 @@ class ConfigStoreTests(unittest.TestCase):
             self.assertEqual(config.ai_naming.keychain_service, "Presto.AINaming")
             self.assertTrue(config.ui_preferences.logs_collapsed_by_default)
             self.assertTrue(config.ui_preferences.follow_system_theme)
+            self.assertFalse(config.ui_preferences.developer_mode_enabled)
 
     def test_load_migrates_missing_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -49,6 +50,7 @@ class ConfigStoreTests(unittest.TestCase):
             self.assertEqual(config.ai_naming.model, "gpt-4.1-mini")
             self.assertTrue(config.ui_preferences.logs_collapsed_by_default)
             self.assertTrue(config.ui_preferences.follow_system_theme)
+            self.assertFalse(config.ui_preferences.developer_mode_enabled)
 
     def test_load_migrates_missing_ui_preferences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,6 +74,7 @@ class ConfigStoreTests(unittest.TestCase):
             self.assertFalse(config.ai_naming.enabled)
             self.assertTrue(config.ui_preferences.logs_collapsed_by_default)
             self.assertTrue(config.ui_preferences.follow_system_theme)
+            self.assertFalse(config.ui_preferences.developer_mode_enabled)
 
 
 if __name__ == "__main__":

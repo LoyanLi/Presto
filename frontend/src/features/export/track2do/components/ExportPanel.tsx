@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Loader2, Download, CheckCircle, XCircle, FolderOpen } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Loader2, Download, CheckCircle, XCircle, FolderOpen, Copy, QrCode } from 'lucide-react';
+import QRCode from 'qrcode';
+import { ErrorNotice } from '../../../../components/feedback/ErrorNotice';
+import { makeLocalFriendlyError, normalizeAppError, type FriendlyErrorView } from '../../../../errors/normalizeAppError';
+import { useI18n } from '../../../../i18n';
+import { estimateEtaFromProgress, estimateProgressFromEta, formatEtaLabel, shouldShowExportEta, smoothProgress } from '../../../../utils/progressEta';
 import {
   Snapshot,
   ExportSettings,
@@ -17,6 +22,7 @@ interface ExportPanelProps {
 }
 
 const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
+  const { t } = useI18n();
   const [selectedSnapshots, setSelectedSnapshots] = useState<Snapshot[]>([]);
 
   // Default select all snapshots when snapshots change
@@ -34,9 +40,17 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [error, setError] = useState<FriendlyErrorView | null>(null);
   const [success, setSuccess] = useState(false);
   const [pollTimeoutId, setPollTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [mobileSessionId, setMobileSessionId] = useState('');
+  const [mobileViewUrl, setMobileViewUrl] = useState('');
+  const [mobileQrDataUrl, setMobileQrDataUrl] = useState('');
+  const [mobileBusy, setMobileBusy] = useState(false);
+  const [mobileMessage, setMobileMessage] = useState('');
+  const [mobilePopoverOpen, setMobilePopoverOpen] = useState(false);
+  const [progressSnapshotAtMs, setProgressSnapshotAtMs] = useState<number>(0);
 
   // Handle preset application
   const handleApplyPreset = (preset: ExportPreset) => {
@@ -100,10 +114,21 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   // Reset state
   const resetState = () => {
+    if (mobileSessionId) {
+      void window.electronAPI?.exportMobile?.closeSession(mobileSessionId);
+    }
     setIsExporting(false);
     setExportProgress(null);
+    setRenderProgress(0);
     setError(null);
     setSuccess(false);
+    setMobileSessionId('');
+    setMobileViewUrl('');
+    setMobileQrDataUrl('');
+    setMobileBusy(false);
+    setMobileMessage('');
+    setMobilePopoverOpen(false);
+    setProgressSnapshotAtMs(0);
     void window.electronAPI?.window.setAlwaysOnTop(false);
     if (pollTimeoutId) {
       clearTimeout(pollTimeoutId);
@@ -130,9 +155,111 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
      }
      
      setIsExporting(false);
-     setError('Export manually stopped');
+     setRenderProgress(0);
+     setError(makeLocalFriendlyError('导出已手动停止', { code: 'EXPORT_STOPPED', severity: 'warn' }));
      void window.electronAPI?.window.setAlwaysOnTop(false);
     };
+
+  const mobileTaskId = useMemo(() => exportProgress?.task_id?.trim() || '', [exportProgress?.task_id]);
+
+  const copyTextToClipboard = async (value: string) => {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = value;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    if (!copied) {
+      throw new Error('Clipboard API unavailable');
+    }
+  };
+
+  const handleGenerateMobileQr = async () => {
+    if (!mobileTaskId) {
+      setMobileMessage(t('export.mobile.taskUnavailable'));
+      return;
+    }
+
+    if (!window.electronAPI?.exportMobile) {
+      setMobileMessage(t('export.mobile.bridgeUnavailable'));
+      return;
+    }
+
+    try {
+      setMobileBusy(true);
+      setMobileMessage('');
+
+      if (mobileSessionId) {
+        await window.electronAPI.exportMobile.closeSession(mobileSessionId);
+      }
+
+      const created = await window.electronAPI.exportMobile.createSession(mobileTaskId);
+      if (!created.ok || !created.url || !created.sessionId) {
+        throw new Error(created.error || 'Failed to create mobile session');
+      }
+
+      const qrDataUrl = await QRCode.toDataURL(created.url, {
+        width: 220,
+        margin: 1,
+      });
+
+      setMobileSessionId(created.sessionId);
+      setMobileViewUrl(created.url);
+      setMobileQrDataUrl(qrDataUrl);
+      setMobileMessage(t('export.mobile.generated'));
+      setMobilePopoverOpen(true);
+    } catch (error) {
+      console.error('Failed to generate mobile QR:', error);
+      setMobileMessage(t('export.mobile.generateFailed'));
+    } finally {
+      setMobileBusy(false);
+    }
+  };
+
+  const handleCopyMobileLink = async () => {
+    if (!mobileViewUrl) {
+      setMobileMessage(t('export.mobile.linkUnavailable'));
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(mobileViewUrl);
+      setMobileMessage(t('export.mobile.linkCopied'));
+    } catch (error) {
+      console.error('Failed to copy mobile link:', error);
+      setMobileMessage(t('export.mobile.copyFailed'));
+    }
+  };
+
+  const handleCloseMobileLink = async () => {
+    if (!mobileSessionId || !window.electronAPI?.exportMobile) {
+      setMobileSessionId('');
+      setMobileViewUrl('');
+      setMobileQrDataUrl('');
+      setMobileMessage(t('export.mobile.linkClosed'));
+      setMobilePopoverOpen(false);
+      return;
+    }
+
+    try {
+      await window.electronAPI.exportMobile.closeSession(mobileSessionId);
+    } catch (error) {
+      console.error('Failed to close mobile link:', error);
+    } finally {
+      setMobileSessionId('');
+      setMobileViewUrl('');
+      setMobileQrDataUrl('');
+      setMobileMessage(t('export.mobile.linkClosed'));
+      setMobilePopoverOpen(false);
+    }
+  };
 
 
 
@@ -143,18 +270,18 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
     console.log('Export settings:', exportSettings);
     
     if (selectedSnapshots.length === 0) {
-      setError('Please select snapshots to export');
+      setError(makeLocalFriendlyError('请先选择要导出的快照'));
       return;
     }
 
     // Validate required fields
     if (!exportSettings.output_path.trim()) {
-      setError('Output Path is required');
+      setError(makeLocalFriendlyError('请先设置输出路径'));
       return;
     }
 
     if (!exportSettings.mix_source_name.trim()) {
-      setError('Output Mix Source Name is required');
+      setError(makeLocalFriendlyError('请先填写混音源名称'));
       return;
     }
 
@@ -175,6 +302,8 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         created_at: new Date().toISOString(),
         result: undefined
       });
+      setRenderProgress(0);
+      setProgressSnapshotAtMs(Date.now());
 
       const exportRequest: ExportRequest = {
         snapshots: selectedSnapshots,
@@ -196,7 +325,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
       }
     } catch (error) {
       console.error('Export failed:', error);
-      setError(error instanceof Error ? error.message : 'Export failed');
+      setError(normalizeAppError(error));
       setIsExporting(false);
       setExportProgress(null);
       void window.electronAPI?.window.setAlwaysOnTop(false);
@@ -218,14 +347,18 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         if (response.success && response.data) {
           console.log('Updating progress:', response.data);
           setExportProgress(response.data);
+          setProgressSnapshotAtMs(Date.now());
+          setRenderProgress(prev => smoothProgress(prev, Number(response.data.progress || 0)));
           
           const status = response.data.status;
           console.log('Current status:', status);
           
           if (status === 'completed') {
             console.log('Export completed');
+            setRenderProgress(prev => smoothProgress(prev, 100));
             setSuccess(true);
             setIsExporting(false);
+            setProgressSnapshotAtMs(0);
             void window.electronAPI?.window.setAlwaysOnTop(false);
             if (pollTimeoutId) {
               clearTimeout(pollTimeoutId);
@@ -233,8 +366,13 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             }
           } else if (status === 'failed' || status === 'completed_with_errors') {
             console.log('Export failed or partially failed:', response.data.result?.error_message);
-            setError(response.data.result?.error_message || 'Error occurred during export');
+            setError(
+              makeLocalFriendlyError(response.data.result?.error_message || '导出执行失败', {
+                code: 'EXPORT_TASK_FAILED',
+              }),
+            );
             setIsExporting(false);
+            setProgressSnapshotAtMs(0);
             void window.electronAPI?.window.setAlwaysOnTop(false);
             if (pollTimeoutId) {
               clearTimeout(pollTimeoutId);
@@ -247,8 +385,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             setPollTimeoutId(timeoutId);
           } else if (status === 'cancelled') {
             console.log('Export was cancelled');
-            setError('Export was cancelled');
+            setError(makeLocalFriendlyError('导出已取消', { code: 'EXPORT_CANCELLED', severity: 'warn' }));
             setIsExporting(false);
+            setProgressSnapshotAtMs(0);
             void window.electronAPI?.window.setAlwaysOnTop(false);
             if (pollTimeoutId) {
               clearTimeout(pollTimeoutId);
@@ -256,8 +395,13 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             }
           } else {
             console.log('Unknown status:', status, 'stopping polling');
-            setError(`Unknown export status: ${status}`);
+            setError(
+              makeLocalFriendlyError(`检测到未知导出状态：${status}`, {
+                code: 'EXPORT_UNKNOWN_STATUS',
+              }),
+            );
             setIsExporting(false);
+            setProgressSnapshotAtMs(0);
             void window.electronAPI?.window.setAlwaysOnTop(false);
           }
         } else {
@@ -265,8 +409,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         }
       } catch (error) {
         console.error('Failed to get export status:', error);
-        setError('Failed to get export status');
+        setError(normalizeAppError(error));
         setIsExporting(false);
+        setProgressSnapshotAtMs(0);
         void window.electronAPI?.window.setAlwaysOnTop(false);
         if (pollTimeoutId) {
           clearTimeout(pollTimeoutId);
@@ -280,6 +425,43 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   console.log('ExportPanel rendering, received snapshots count:', snapshots.length);
   console.log('Received snapshots data:', snapshots);
+
+  const exportEtaText = useMemo(() => {
+    if (!isExporting || !exportProgress) {
+      return null;
+    }
+    if (!shouldShowExportEta(exportProgress.status, exportProgress.current_snapshot)) {
+      return t('export.progress.etaCalculating');
+    }
+    const etaSeconds =
+      typeof exportProgress.eta_seconds === 'number'
+        ? exportProgress.eta_seconds
+        : estimateEtaFromProgress(exportProgress.started_at ?? exportProgress.created_at, renderProgress);
+    if (etaSeconds == null) {
+      return t('export.progress.etaCalculating');
+    }
+    return t('export.progress.eta', { value: formatEtaLabel(etaSeconds) });
+  }, [isExporting, exportProgress, renderProgress, t]);
+
+  useEffect(() => {
+    if (!isExporting || !exportProgress || progressSnapshotAtMs <= 0) {
+      return;
+    }
+
+    const tick = setInterval(() => {
+      const projected = estimateProgressFromEta(
+        Number(exportProgress.progress || 0),
+        typeof exportProgress.eta_seconds === 'number' ? exportProgress.eta_seconds : null,
+        Date.now() - progressSnapshotAtMs,
+        exportProgress.status,
+      );
+      setRenderProgress((prev) => smoothProgress(prev, projected));
+    }, 200);
+
+    return () => {
+      clearInterval(tick);
+    };
+  }, [isExporting, exportProgress, progressSnapshotAtMs]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
@@ -510,26 +692,94 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
       {/* Export Progress */}
       {isExporting && exportProgress && (
-        <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="relative space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-blue-800">Exporting...</span>
-            <span className="text-sm font-semibold text-blue-600">
-              {exportProgress.current_snapshot}/{exportProgress.total_snapshots} snapshots
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-blue-600">
+                {exportProgress.current_snapshot}/{exportProgress.total_snapshots} snapshots
+              </span>
+              {mobileTaskId ? (
+                <button
+                  type="button"
+                  onClick={() => setMobilePopoverOpen((prev) => !prev)}
+                  className="w-8 h-8 rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 transition-colors flex items-center justify-center"
+                  title={t('export.mobile.title')}
+                >
+                  <QrCode className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           </div>
+
+          {mobileTaskId && mobilePopoverOpen ? (
+            <div className="absolute top-12 right-4 z-20 w-[320px] max-w-[calc(100vw-3rem)] space-y-3 p-4 bg-white border border-slate-200 rounded-lg shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">{t('export.mobile.title')}</div>
+                  <div className="text-xs text-slate-600 mt-1">{t('export.mobile.sameWifiHint')}</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('export.mobile.viewOnly')}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobilePopoverOpen(false)}
+                  className="text-xs text-slate-500 hover:text-slate-700"
+                >
+                  {t('export.mobile.minimize')}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateMobileQr}
+                  disabled={mobileBusy}
+                  className="px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {mobileBusy ? t('export.mobile.generating') : t('export.mobile.generateQr')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyMobileLink}
+                  disabled={!mobileViewUrl}
+                  className="px-3 py-2 text-xs bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                >
+                  <Copy className="h-3 w-3" />
+                  {t('export.mobile.copyLink')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseMobileLink}
+                  disabled={!mobileSessionId}
+                  className="px-3 py-2 text-xs bg-white text-red-700 border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {t('export.mobile.closeLink')}
+                </button>
+              </div>
+
+              {mobileQrDataUrl ? (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col items-center gap-2">
+                  <img src={mobileQrDataUrl} alt="Mobile export progress QR" className="w-44 h-44" />
+                  <div className="text-[11px] text-slate-500 break-all text-center">{mobileViewUrl}</div>
+                </div>
+              ) : null}
+
+              {mobileMessage ? <div className="text-xs text-slate-600">{mobileMessage}</div> : null}
+            </div>
+          ) : null}
           
           {/* Main Progress Bar */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-600">Overall Progress</span>
               <span className="text-xs font-medium text-blue-600">
-                {Math.round(exportProgress.progress)}%
+                {Math.round(renderProgress)}%
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner">
               <div 
                 className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm" 
-                style={{ width: `${exportProgress.progress}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, renderProgress))}%` }}
               ></div>
             </div>
           </div>
@@ -547,6 +797,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             <div className="text-xs text-gray-600">
               Status: <span className="font-medium">{exportProgress.status}</span>
             </div>
+            {exportEtaText ? <div className="text-xs text-gray-600">{exportEtaText}</div> : null}
             
             {/* Detailed Status Info */}
             <div className="mt-2 p-2 bg-white rounded border border-blue-100">
@@ -566,14 +817,8 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
        )}
 
 
-
        {/* Error Information */}
-       {error && (
-         <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-md">
-          <XCircle className="h-4 w-4 text-red-500 mr-2" />
-          <span className="text-red-700">{error}</span>
-        </div>
-      )}
+       <ErrorNotice error={error} />
 
       {/* Success Information */}
       {success && exportProgress?.result && (

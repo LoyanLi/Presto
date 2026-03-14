@@ -80,6 +80,7 @@ export interface ExportProgress {
   task_id: string;
   status: string;
   progress: number;
+  eta_seconds?: number;
   current_snapshot: number;
   total_snapshots: number;
   current_snapshot_name: string;

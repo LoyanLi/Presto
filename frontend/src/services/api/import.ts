@@ -67,6 +67,10 @@ export const importApi = {
     return payload.data as ImportRunState
   },
 
+  async runStop(runId: string): Promise<void> {
+    await httpRequest('POST', `/api/v1/import/run/stop/${runId}`)
+  },
+
   async saveSession(): Promise<void> {
     await httpRequest('POST', '/api/v1/session/save')
   },
