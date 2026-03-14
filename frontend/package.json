@@ -1,6 +1,6 @@
 {
   "name": "presto-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Web/Electron UI for Presto",
@@ -19,25 +19,24 @@
     "package:mac": "npm run package:mac:prepare && npm run package:mac:dir:arm64 && npm run package:mac:dir:x64",
     "package:mac:installer": "npm run package:mac:prepare && npm run package:mac:installer:arm64 && npm run package:mac:installer:x64"
   },
-  "dependencies": {
-    "@types/qrcode": "^1.5.6",
-    "axios": "^1.11.0",
-    "lucide-react": "^0.543.0",
-    "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.0.2",
+    "axios": "^1.11.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
     "electron": "^37.4.0",
     "electron-builder": "^26.8.1",
+    "lucide-react": "^0.543.0",
     "postcss": "^8.5.6",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.6",
     "typescript": "^5.9.2",
@@ -47,15 +46,14 @@
   "build": {
     "appId": "com.loyan.presto",
     "productName": "Presto",
-    "asar": false,
+    "asar": true,
     "directories": {
       "output": "release"
     },
     "files": [
       "electron/**/*",
       "dist/**/*",
-      "package.json",
-      "package-lock.json"
+      "package.json"
     ],
     "extraResources": [
       {

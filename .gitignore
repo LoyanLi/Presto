@@ -93,3 +93,11 @@ backend/export/test_output/
 vendor/
 .vendor/
 /Track2Do/
+
+# =========================
+# Local process/planning files
+# =========================
+task_plan.md
+findings.md
+progress.md
+docs/plans/
