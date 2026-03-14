@@ -119,6 +119,9 @@ class ConfigStore:
                 ui_raw.get("logs_collapsed_by_default", defaults_ui.logs_collapsed_by_default)
             ),
             follow_system_theme=bool(ui_raw.get("follow_system_theme", defaults_ui.follow_system_theme)),
+            developer_mode_enabled=bool(
+                ui_raw.get("developer_mode_enabled", defaults_ui.developer_mode_enabled)
+            ),
         )
 
         version = int(raw.get("version", CONFIG_VERSION))

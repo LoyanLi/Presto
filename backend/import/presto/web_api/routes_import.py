@@ -9,6 +9,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request
 
 from presto.domain.errors import PrestoError
+from presto.domain.export_models import ExportCancelToken
 from presto.domain.models import ImportItem, RenameProposal, ResolvedImportItem
 from presto.web_api.dependencies import get_services
 from presto.web_api.schemas import (
@@ -17,6 +18,7 @@ from presto.web_api.schemas import (
     ImportFinalizeRequest,
     ImportRunRequest,
 )
+from presto.web_api.progress_metrics import estimate_eta_seconds
 from presto.web_api.task_registry import TaskRecord
 
 
@@ -124,7 +126,10 @@ def import_strip_open(request: Request):
 def import_run_start(payload: ImportRunRequest, request: Request):
     services = get_services(request)
     if not payload.items:
-        raise HTTPException(status_code=400, detail="No items to import.")
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "NO_ITEMS", "message": "No items to import."},
+        )
     cfg = services.config_store.load()
     category_map = {category.id: (category.name, category.pt_color_slot) for category in cfg.categories}
     resolved_items = [
@@ -146,31 +151,78 @@ def import_run_start(payload: ImportRunRequest, request: Request):
             total=len(resolved_items),
             current_name="",
             created_at=datetime.now(),
+            stage="stage_import_rename",
+            stage_current=0,
+            stage_total=len(resolved_items),
+            stage_progress=0.0,
+            cancel_token=ExportCancelToken(),
         )
     )
 
     def _run() -> None:
-        services.task_registry.update(task_id, status="running", started_at=datetime.now())
+        started_at = datetime.now()
+        services.task_registry.update(task_id, status="running", started_at=started_at)
 
         def _update_progress(current_index: int, total: int, current_name: str) -> None:
+            task = services.task_registry.get(task_id)
+            if task is None or task.status == "cancelled":
+                return
             safe_total = max(total, 1)
             progress = min(100.0, max(0.0, (current_index / safe_total) * 100.0))
+            elapsed_seconds = (datetime.now() - started_at).total_seconds()
+            eta_seconds = estimate_eta_seconds(elapsed_seconds=elapsed_seconds, progress=progress)
             services.task_registry.update(
                 task_id,
                 status="running",
                 progress=progress,
+                eta_seconds=eta_seconds,
                 current_index=current_index,
                 total=total,
                 current_name=current_name or "",
             )
 
+        def _update_stage_progress(
+            stage_name: str,
+            stage_current: int,
+            stage_total: int,
+            _overall_current: int,
+            _overall_total: int,
+            current_name: str,
+        ) -> None:
+            task = services.task_registry.get(task_id)
+            if task is None or task.status == "cancelled":
+                return
+            safe_total = max(stage_total, 1)
+            stage_progress = min(100.0, max(0.0, (stage_current / safe_total) * 100.0))
+            services.task_registry.update(
+                task_id,
+                status="running",
+                stage=stage_name,
+                stage_current=stage_current,
+                stage_total=stage_total,
+                stage_progress=stage_progress,
+                current_name=current_name or "",
+            )
+
         try:
+            task_snapshot = services.task_registry.get(task_id)
+            cancel_token = task_snapshot.cancel_token if task_snapshot is not None else None
             report = services.import_orchestrator.run_resolved(
                 resolved_items,
                 category_map,
                 cfg.silence_profile,
                 progress_callback=_update_progress,
+                stage_progress_callback=_update_stage_progress,
+                cancel_token=cancel_token,
             )
+            task_after_run = services.task_registry.get(task_id)
+            if task_after_run is not None and task_after_run.status == "cancelled":
+                services.task_registry.update(
+                    task_id,
+                    finished_at=datetime.now(),
+                    eta_seconds=0,
+                )
+                return
             services.task_registry.update(
                 task_id,
                 status="completed" if report.failed_count == 0 else "completed_with_errors",
@@ -178,12 +230,38 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 current_index=report.total,
                 total=report.total,
                 current_name="",
+                stage="stage_completed",
+                stage_current=1,
+                stage_total=1,
+                stage_progress=100.0,
+                eta_seconds=0,
                 result={
                     "total": report.total,
                     "success_count": report.success_count,
                     "failed_count": report.failed_count,
                     "results": [result.__dict__ for result in report.results],
                 },
+                finished_at=datetime.now(),
+            )
+        except PrestoError as exc:
+            if getattr(exc, "code", "") == "IMPORT_CANCELLED":
+                services.task_registry.update(
+                    task_id,
+                    status="cancelled",
+                    current_name="",
+                    stage_progress=100.0,
+                    eta_seconds=0,
+                    finished_at=datetime.now(),
+                )
+                return
+            services.task_registry.update(
+                task_id,
+                status="failed",
+                current_name="",
+                error_code=getattr(exc, "code", "UNEXPECTED_ERROR"),
+                error_message=getattr(exc, "message", str(exc)),
+                stage_progress=100.0,
+                eta_seconds=0,
                 finished_at=datetime.now(),
             )
         except Exception as exc:
@@ -193,11 +271,40 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 current_name="",
                 error_code=getattr(exc, "code", "UNEXPECTED_ERROR"),
                 error_message=getattr(exc, "message", str(exc)),
+                stage_progress=100.0,
+                eta_seconds=0,
                 finished_at=datetime.now(),
             )
 
     Thread(target=_run, daemon=True).start()
     return {"success": True, "message": "Import task started.", "run_id": task_id}
+
+
+@router.post("/import/run/stop/{run_id}")
+def import_run_stop(run_id: str, request: Request):
+    services = get_services(request)
+    task = services.task_registry.get(run_id)
+    if task is None or task.task_type != "import":
+        raise HTTPException(
+            status_code=404,
+            detail={"error_code": "IMPORT_TASK_NOT_FOUND", "message": "Import task not found."},
+        )
+    if task.status not in {"pending", "running"}:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "IMPORT_TASK_NOT_RUNNING", "message": "Import task is not running."},
+        )
+
+    if task.cancel_token is not None:
+        task.cancel_token.cancel()
+
+    services.task_registry.update(
+        run_id,
+        status="cancelled",
+        eta_seconds=0,
+        finished_at=datetime.now(),
+    )
+    return {"success": True, "message": "Import task cancellation requested."}
 
 
 @router.get("/import/run/{run_id}")
@@ -216,6 +323,11 @@ def import_run_status(run_id: str, request: Request):
             "current_index": task.current_index,
             "total": task.total,
             "current_name": task.current_name,
+            "stage": task.stage,
+            "stage_current": task.stage_current,
+            "stage_total": task.stage_total,
+            "stage_progress": task.stage_progress,
+            "eta_seconds": task.eta_seconds,
             "created_at": task.created_at.isoformat(),
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "finished_at": task.finished_at.isoformat() if task.finished_at else None,

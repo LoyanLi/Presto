@@ -22,6 +22,7 @@ class ProToolsGateway:
     """Encapsulates PTSL operations used by the app."""
 
     DEFAULT_SET_TRACK_COLOR_COMMAND_ID = 153
+    DEFAULT_MIN_SUPPORTED_VERSION = "2025.10"
 
     def __init__(
         self,
@@ -136,6 +137,57 @@ class ProToolsGateway:
                 ) from exc
             # Other errors (e.g., invalid args/no tracks) indicate command exists.
 
+    def ensure_minimum_version(self, min_supported: str = DEFAULT_MIN_SUPPORTED_VERSION) -> str:
+        """Validate Pro Tools/PTSL host version against minimum requirement."""
+
+        engine = self._require_engine()
+        detected = self._detect_host_version(engine)
+        if not detected:
+            raise GatewayError(
+                "PT_VERSION_UNKNOWN",
+                (
+                    "Unable to detect Pro Tools/PTSL version. "
+                    f"Requires version {min_supported}+."
+                ),
+            )
+
+        current_tuple = self._parse_version_tuple(detected)
+        minimum_tuple = self._parse_version_tuple(min_supported)
+        if current_tuple is None or minimum_tuple is None:
+            raise GatewayError(
+                "PT_VERSION_CHECK_FAILED",
+                f"Cannot compare versions (current='{detected}', minimum='{min_supported}').",
+            )
+
+        if current_tuple < minimum_tuple:
+            raise GatewayError(
+                "PT_VERSION_UNSUPPORTED",
+                (
+                    f"Current Pro Tools/PTSL version {detected} is below required {min_supported}. "
+                    "Please upgrade and retry."
+                ),
+            )
+
+        return detected
+
+    def ensure_any_track_selected(self) -> list[str]:
+        """Require at least one selected track for selection-sensitive UI actions."""
+
+        engine = self._require_engine()
+        try:
+            selected = self._detect_selected_track_names(engine)
+        except GatewayError:
+            raise
+        except Exception as exc:
+            raise GatewayError("TRACK_SELECTION_CHECK_FAILED", str(exc)) from exc
+
+        if not selected:
+            raise GatewayError(
+                "NO_TRACK_SELECTED",
+                "No track selected in Pro Tools. Select at least one track and retry.",
+            )
+        return selected
+
     def list_track_names(self) -> list[str]:
         """List current track names."""
 
@@ -192,14 +244,28 @@ class ProToolsGateway:
         when Pro Tools reports a sample-rate mismatch.
         """
 
+        imported = self.import_audio_files([path])
+        if not imported:
+            raise GatewayError(
+                "TRACK_DETECTION_FAILED",
+                "Import succeeded but no new track was detected.",
+            )
+        return imported[0]
+
+    def import_audio_files(self, paths: list[str]) -> list[str]:
+        """Import multiple files and return detected new track names."""
+
+        if not paths:
+            return []
+
         engine = self._require_engine()
-        file_path = str(Path(path).expanduser().resolve())
+        file_paths = [str(Path(path).expanduser().resolve()) for path in paths]
 
         before = self.list_track_names()
         try:
             self._import_audio(
                 engine=engine,
-                file_path=file_path,
+                file_paths=file_paths,
                 audio_operation=self._resolve_audio_operation(convert=False),
             )
         except Exception as exc:
@@ -208,26 +274,35 @@ class ProToolsGateway:
             try:
                 self._import_audio(
                     engine=engine,
-                    file_path=file_path,
+                    file_paths=file_paths,
                     audio_operation=self._resolve_audio_operation(convert=True),
                 )
             except Exception as convert_exc:
-                raise GatewayError(
-                    "IMPORT_FAILED",
-                    (
-                        "Sample rate mismatch detected and automatic sample-rate conversion failed: "
-                        f"{convert_exc}"
-                    ),
-                ) from convert_exc
+                if len(file_paths) == 1:
+                    raise GatewayError(
+                        "IMPORT_FAILED",
+                        (
+                            "Sample rate mismatch detected and automatic sample-rate conversion failed: "
+                            f"{convert_exc}"
+                        ),
+                    ) from convert_exc
+                imported: list[str] = []
+                for file_path in file_paths:
+                    imported.append(self.import_audio_file(file_path))
+                return imported
 
         after = self.list_track_names()
         new_tracks = self._diff_new_tracks(before, after)
-        if not new_tracks:
-            raise GatewayError(
-                "TRACK_DETECTION_FAILED",
-                "Import succeeded but no new track was detected.",
-            )
-        return new_tracks[-1]
+        if len(new_tracks) != len(file_paths):
+            if len(file_paths) == 1:
+                raise GatewayError(
+                    "TRACK_DETECTION_FAILED",
+                    (
+                        "Import succeeded but track detection count mismatch. "
+                        f"Expected {len(file_paths)} new tracks, got {len(new_tracks)}."
+                    ),
+                )
+        return new_tracks
 
     def rename_track(self, current_name: str, new_name: str) -> None:
         """Rename track."""
@@ -280,6 +355,47 @@ class ProToolsGateway:
                     "SET_TRACK_COLOR_FAILED",
                     f"SetTrackColor completed but success_count={success_count} for track '{track_name}'.",
                 )
+
+    def apply_track_color_batch(self, slot: int, track_names: list[str]) -> None:
+        """Apply the same color to multiple tracks with grouped-call fallback."""
+
+        if not track_names:
+            return
+
+        engine = self._require_engine()
+        normalized_slot = clamp_color_slot(slot)
+        unique_track_names = [name for name in dict.fromkeys(track_names) if str(name).strip()]
+        if not unique_track_names:
+            return
+
+        try:
+            response = engine.client.run_command(
+                command_id=int(self._set_track_color_command_id),
+                request={
+                    "track_names": unique_track_names,
+                    "color_index": int(normalized_slot),
+                },
+            )
+        except Exception as exc:
+            if self._is_unknown_command_error(exc):
+                raise GatewayError(
+                    "PTSL_COLOR_UNSUPPORTED",
+                    (
+                        "Connected Pro Tools/PTSL host does not support SetTrackColor "
+                        f"(command id {self._set_track_color_command_id}). "
+                        "Requires Pro Tools/PTSL 2025.10+."
+                    ),
+                ) from exc
+
+            for track_name in unique_track_names:
+                self.apply_track_color(slot=normalized_slot, track_name=track_name)
+            return
+
+        if isinstance(response, dict):
+            success_count = int(response.get("success_count", len(unique_track_names)))
+            if success_count < len(unique_track_names):
+                for track_name in unique_track_names:
+                    self.apply_track_color(slot=normalized_slot, track_name=track_name)
 
     def select_all_clips_on_track(self, name: str) -> None:
         """Select all clips on target track."""
@@ -450,9 +566,76 @@ class ProToolsGateway:
             raise GatewayError("NOT_CONNECTED", "Pro Tools is not connected.")
         return self._engine
 
-    def _import_audio(self, engine, file_path: str, audio_operation: int) -> None:
+    @staticmethod
+    def _detect_host_version(engine) -> str:
+        for attr in ("host_version", "version", "pt_version", "server_version"):
+            if not hasattr(engine, attr):
+                continue
+            candidate = getattr(engine, attr)
+            try:
+                value = candidate() if callable(candidate) else candidate
+            except Exception:
+                continue
+            text = str(value or "").strip()
+            if text:
+                return text
+        return ""
+
+    @staticmethod
+    def _parse_version_tuple(value: str) -> tuple[int, int] | None:
+        text = str(value).strip()
+        match = re.search(r"(\d{4})\D+(\d{1,2})", text)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    @staticmethod
+    def _detect_selected_track_names(engine) -> list[str]:
+        for attr in ("selected_track_names", "get_selected_track_names"):
+            if not hasattr(engine, attr):
+                continue
+            getter = getattr(engine, attr)
+            try:
+                raw = getter() if callable(getter) else getter
+            except Exception:
+                continue
+            if raw is None:
+                continue
+            if isinstance(raw, str):
+                name = raw.strip()
+                return [name] if name else []
+            if isinstance(raw, (list, tuple, set)):
+                selected = [str(item).strip() for item in raw if str(item).strip()]
+                if selected:
+                    return selected
+                return []
+
+        if hasattr(engine, "track_list"):
+            try:
+                tracks = engine.track_list()
+            except Exception as exc:
+                raise GatewayError("TRACK_SELECTION_CHECK_FAILED", str(exc)) from exc
+
+            selected: list[str] = []
+            for track in tracks or []:
+                attrs = getattr(track, "track_attributes", None)
+                flags = (
+                    bool(getattr(attrs, "is_selected", False)),
+                    bool(getattr(attrs, "is_explicitly_selected", False)),
+                    bool(getattr(attrs, "is_targeted", False)),
+                    bool(getattr(attrs, "is_focused", False)),
+                )
+                if any(flags):
+                    name = str(getattr(track, "name", "")).strip()
+                    if name:
+                        selected.append(name)
+            return selected
+
+        return []
+
+    def _import_audio(self, engine, file_paths: list[str], audio_operation: int) -> None:
         engine.import_audio(
-            file_list=[file_path],
+            file_list=list(file_paths),
             audio_operations=audio_operation,
             audio_destination=pt.MD_NewTrack,
             audio_location=pt.ML_SessionStart,

@@ -27,6 +27,11 @@ const electronAPI = {
     put: (url, data) => ipcRenderer.invoke('http:put', url, data),
     delete: (url) => ipcRenderer.invoke('http:delete', url),
   },
+  exportMobile: {
+    createSession: (taskId) => ipcRenderer.invoke('export-mobile:create-session', taskId),
+    closeSession: (sessionId) => ipcRenderer.invoke('export-mobile:close-session', sessionId),
+    getViewUrl: (sessionId) => ipcRenderer.invoke('export-mobile:get-view-url', sessionId),
+  },
   fs: {
     readFile: (targetPath) => ipcRenderer.invoke('fs:read-file', targetPath),
     writeFile: (targetPath, content) => ipcRenderer.invoke('fs:write-file', targetPath, content),

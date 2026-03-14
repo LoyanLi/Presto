@@ -1,86 +1,135 @@
 # Findings
 
-## 2026-03-13 Initial Notes
-- User-reported reliability issues center around Electron orchestration of two Python services.
-- Highest-risk areas to inspect first:
-  1. Service startup sequencing vs. frontend request timing
-  2. Fixed-port assumptions (8000/8001) and conflict behavior
-  3. Runtime health monitoring and restart strategy
-  4. Log fragmentation and diagnostics UX
+## 2026-03-14 Obsidian v0.2 规划抽取
+
+### 主任务
+- 笔记：`TaskNotes/Tasks/presto-v0.2-稳定性与交互可用性.md`
+- 目标：优先打通 Pro Tools 自动化稳定性与关键可用性问题，确保流程可持续执行。
+- 验收条件：
+  - 子任务全部完成
+  - 回归验证通过
+  - 变更文档同步完成
+
+### 6 个子任务（原文要点）
+1. `presto-v0.2-subtask-01`：PTSL 与 UI 自动化容错增强（异常捕获、步骤重试、窗口状态判断、容错执行）
+2. `presto-v0.2-subtask-02`：Pro Tools 状态检测（工程状态、轨道选择、版本校验、友好提示）
+3. `presto-v0.2-subtask-03`：中英文界面兼容增强（多语言兼容、UI 元素智能匹配、降低对文字依赖）
+4. `presto-v0.2-subtask-04`：大工程执行性能优化（异步任务、进度回调、分批处理、后台执行）
+5. `presto-v0.2-subtask-05`：错误信息友好化（中英文提示、原因说明、解决方案指引）
+6. `presto-v0.2-subtask-06`：全局任务进度与状态（任务队列、进度条、状态实时更新）
+
+### 上游清单关联
+- 笔记：`开发/Presto/更新需解决的问题清单.md`
+- 观察：架构与稳定性部分多项已划线完成；v0.2 当前重点落在“Pro Tools 交互与自动化问题 + UX 问题”中的 6 个子任务。
+
+## 初步执行策略
+- 按“稳定性前置、体验后置”的顺序推进：
+  1. 先降低失败概率（容错 + 状态检测）
+  2. 再提升兼容与吞吐（多语言 + 性能）
+  3. 最后统一用户反馈（错误提示 + 全局进度）
 
 ## Open Questions
-- Is there already an IPC channel for backend status and logs in Electron preload/main?
-- Are frontend API base URLs static or configurable at runtime?
-- Is there any existing health endpoint contract for both services?
-- Where should unified logs be persisted and what retention policy is expected?
+- 子任务 01/02 的验收指标是否需要量化（例如失败率阈值、重试上限）？
+- 子任务 04 的性能基线用哪组工程样本衡量？
+- 子任务 06 的全局状态展示是仅主界面，还是覆盖导入/导出子流程页？
 
-## 2026-03-13 Baseline Code Findings (Electron main)
-- File inspected: `frontend/electron/main.ts`
-- Existing strengths:
-  - HTTP IPC proxy already has transient retry (`HTTP_MAX_ATTEMPTS`, timeout, exponential-ish delay by attempt factor).
-  - Backend route splitting exists (`/api/v1/import/*` -> 8001, export/session routes -> 8000).
-- Confirmed gaps vs. requested fixes:
-  1. **Startup readiness race**:
-     - `app.whenReady()` immediately does `startPythonApi()` then creates window.
-     - No wait-for-health check before renderer starts issuing API calls.
-  2. **Port conflict handling**:
-     - Ports are fixed from env/default (`8000/8001`).
-     - No port availability probe, no dynamic fallback, no conflict UX.
-  3. **Process self-healing**:
-     - On child exit only logs + null assignment.
-     - No restart policy, no heartbeat monitor, no crash state exposure beyond basic `backend:get-status`.
-  4. **Unified logging**:
-     - Logs are only forwarded to Node stdout/stderr with prefixes.
-     - No in-memory ring buffer, IPC log subscription, or export endpoint for users.
+## 2026-03-14 GitHub Issues 拆分结果（Phase 1-6）
+- 已将 v0.2 六个子任务拆为 6 个可跟踪 GitHub issue 草案。
+- 输出文件：`docs/V0_2_GITHUB_ISSUES_CHECKLIST.md`
+- 每个 issue 已包含：
+  - 标题（含 v0.2 / P1）
+  - 建议标签
+  - 依赖关系
+  - 描述
+  - 验收标准
+  - 验证方法
+- 建议创建顺序：01 -> 02 -> 03 -> 04 -> 05 -> 06
 
-## 2026-03-13 Baseline Code Findings (Preload + Frontend)
-- `frontend/electron/preload.ts` currently exposes:
-  - `backend.getStatus()` and `backend.restart()`
-  - HTTP proxy methods
-  - Filesystem helpers
-- Missing in preload API:
-  - No backend lifecycle event subscription (`starting/ready/error/restarting`)
-  - No log stream subscription
-  - No runtime port update operations
-- Frontend API clients currently pin base URL to `http://127.0.0.1:8000` when not using Electron bridge.
-- `backend.getStatus()` appears unused in frontend views; there is no always-visible backend readiness banner.
-- Existing UI has no dedicated diagnostics/log panel (only per-feature local logs in import workflow state).
+## 2026-03-14 Phase 3 实施发现（中英文界面兼容）
+- 现状确认：
+  - `ProToolsUiAutomation` 原实现默认依赖 `selector_map_en_us.json`，关键 UI 路径对英文文案耦合较强。
+- 已实施改造：
+  - 新增 `selector_map_bilingual.json`，将关键 selector 外置并提供中英候选值。
+  - 默认 selector map 切换为双语文件，避免仅依赖英文映射。
+  - Color Palette / Strip Silence 关键动作改为候选匹配与关键词兜底。
+- 测试证据：
+  - `backend/tests/test_screen_drag_mapping.py` 扩展为 5 个测试：
+    - 默认双语 map 生效
+    - 双语关键候选字段存在
+    - 生成的 AppleScript 含双语候选变量（`menuBarCandidates` / `paletteWindowCandidates` / `windowCandidates`）
+  - 相关回归：`11 passed`
+- 仍需补足：
+  - 真实 Pro Tools 中英文界面的端到端验证（尤其是不同版本 UI 文案差异）。
 
-## 2026-03-13 Runtime File Mapping
-- Electron runtime currently uses:
-  - Main process: `frontend/electron/main.mjs`
-  - Preload bridge: `frontend/electron/preload.cjs`
-- TypeScript counterparts (`main.ts`, `preload.ts`) exist, but runtime-critical behavior must be implemented in `.mjs/.cjs` for immediate effect.
+## 2026-03-14 Phase 3 策略调整（强制英文界面）
+- 用户反馈显示双语路径在真实环境下仍存在快捷键 toggle 副作用（窗口被二次触发关闭）。
+- 决策：回退为英文 UI 强约束方案，降低行为不确定性。
+- 落地结果：
+  - 默认 selector map 使用 `selector_map_en_us.json`。
+  - 预检阶段强制校验 `Window` 菜单存在，不满足则提示切换英文 UI。
+  - Strip Silence 打开动作保持“单次触发不重试”。
 
-## 2026-03-13 New Constraint From User
-- Import/Export services are not expected to run simultaneously.
-- Requested architecture change:
-  - Merge to same port
-  - Use only one active backend at a time
-- Implementation direction updated to: **single-port + mode switch** rather than dual-service concurrency.
+## 2026-03-14 Phase 3 方向变更（Presto App UI 本地化）
+- 用户最新决策：Phase 3 不再以 Pro Tools UI 自动化语言兼容为目标，改为 Presto App UI 本地化。
+- 新范围定义：
+  - 前端 UI 文案资源化（避免组件内硬编码）。
+  - 语言包至少覆盖 `zh-CN` 与 `en-US`。
+  - 在 Settings 提供语言切换入口并持久化用户偏好。
+  - 覆盖 Home / Import / Export / Settings / Developer 的核心可见文案。
+- 影响：
+  - 先前“Pro Tools 双语 selector”相关内容降级为历史尝试，不作为当前 Phase 3 验收标准。
 
-## 2026-03-13 Implemented Solution Summary
-- Runtime backend supervisor (`frontend/electron/main.mjs`) now uses:
-  - **Single shared port** (`PT_API_PORT`, default `8000`)
-  - **Single active backend mode** (`import` or `export`)
-  - Route-based mode inference + explicit mode activation IPC
-  - Startup readiness wait, request-time readiness gating, and fetch retry
-  - Port occupancy probing with automatic fallback and warning records
-  - Heartbeat monitor + bounded auto-restart window
-  - Unified in-memory runtime logs + export-to-file IPC
-- Preload bridge extended (`frontend/electron/preload.cjs`, `frontend/electron/preload.ts`) with:
-  - `backend.activateMode`
-  - `backend.updatePorts`
-  - `backend.getLogs`
-  - `backend.exportLogs`
-- Home UI (`frontend/src/App.tsx`) now includes:
-  - Backend diagnostics panel (mode/status/pid/port/restart count)
-  - Shared-port config control
-  - Restart action
-  - Unified log viewer and one-click log export
+## 2026-03-14 Phase 3 本地化实现发现（第一版）
+- 技术落点：
+  - 使用前端轻量 i18n 上下文（非第三方库）实现：
+    - locale 状态管理
+    - 运行时 `t(key, vars)` 插值
+    - `localStorage` 持久化（重启后保留语言）
+- 覆盖范围（首批）：
+  - Home / Import / Export / Settings / Developer 主页面
+  - Settings 弹窗（AI 设置、分类编辑器）
+- 当前已满足：
+  - 支持 `zh-CN` 与 `en-US` 两套文案
+  - Settings 内可切换语言并即时生效
+- 仍需补足：
+  - Export 子组件（Track2Do 内部）仍有部分硬编码英文文案未统一接入 i18n。
+  - 后续应补充 UI 冒烟验证（两种语言各跑一轮主路径）。
 
-## 2026-03-13 Follow-up: Renderer Log Unification
-- Added renderer-side log ingestion into unified runtime log stream:
-  - Captures `webContents` `console-message` and stores in main-process log ring buffer.
-  - Captures renderer lifecycle anomalies (`render-process-gone`, `unresponsive`, `responsive`) as warnings/errors.
-- Result: frontend logs now appear in the same diagnostics panel and exported log bundle.
+## 2026-03-14 Phase 4 设计决策（大工程执行性能优化）
+- 已确认优化目标与约束：
+  - 目标规模：`100-200 tracks`
+  - 优先级：吞吐优先（总耗时目标改善约 `40%`）
+  - 约束：Pro Tools UI 操作保持串行，不做 PT 并行自动化
+- 方案对比结论：
+  - 选择“减少 PT 往返 + 阶段化分批执行”为 Phase 4 主方案。
+  - 不采用“PT 操作并行”与“重型全局执行引擎”作为本 phase 主路径。
+- 关键落点：
+  - `orchestrator` 改为阶段化执行（import+rename / color batch / strip）。
+  - `gateway` 增加批量颜色调用与回退策略。
+  - `run state` 增加阶段进度字段（`stage/stage_current/stage_total/stage_progress`）。
+- 文档沉淀：
+  - 设计文档：`docs/plans/2026-03-14-phase4-large-session-performance-design.md`
+  - 实施计划：`docs/plans/2026-03-14-phase4-large-session-performance.md`
+
+## 2026-03-14 Phase 4 实施发现（第一轮）
+- 后端执行链路改造：
+  - `orchestrator` 已改为三阶段：
+    - `stage_import_rename`
+    - `stage_color_batch`
+    - `stage_strip_silence`
+  - 保留原有 `progress_callback` 兼容能力，并新增阶段进度回调。
+- 网关能力增强：
+  - `ProToolsGateway` 新增 `apply_track_color_batch`。
+  - 当批量上色调用失败时，自动回退到逐轨上色路径。
+- API 状态扩展：
+  - import 任务状态新增 `stage/stage_current/stage_total/stage_progress`。
+  - `/import/run/{id}` 已返回上述字段。
+- 前端展示升级：
+  - `ImportRunState` 类型接入 stage 字段。
+  - Import Step3 新增阶段进度条与阶段名称显示（中英文）。
+- 基准与验证：
+  - 新增基准脚本：`backend/scripts/benchmark_import_phase4.py`
+  - 新增 smoke 测试：`backend/tests/test_import_benchmark_smoke.py`
+  - 当前基准为合成场景（不含真实 Pro Tools 会话往返耗时）。
+- 当前剩余风险：
+  - 40% 提升目标尚未用真实 100-200 track PT 工程做 A/B 采样验证。

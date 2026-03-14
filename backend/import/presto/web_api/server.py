@@ -22,6 +22,7 @@ from presto.infra.protools_ui_automation import ProToolsUiAutomation
 from presto.infra.ptsl_gateway import ProToolsGateway
 from presto.util.logging_setup import setup_logging
 from presto.web_api.api_entries import register_api_entries
+from presto.web_api.error_catalog import build_friendly_error
 from presto.web_api.task_registry import TaskRegistry
 
 
@@ -79,14 +80,8 @@ def build_services(app_support_dir: Path | None = None) -> ServiceContainer:
 
 
 def _error_payload(code: str, message: str, details: Any = None) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "success": False,
-        "error_code": code,
-        "message": message,
-    }
-    if details is not None:
-        payload["details"] = details
-    return payload
+    details_dict = details if isinstance(details, dict) else ({"raw": details} if details is not None else None)
+    return build_friendly_error(code, message, details=details_dict)
 
 
 def create_app(services: ServiceContainer | None = None) -> FastAPI:

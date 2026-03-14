@@ -61,7 +61,22 @@ Key behavior:
   - `.presto_ai_analyze.json`
 - Re-selecting the same folder auto-loads cached proposals when files match.
 - Manual proposal edits (name/category) are persisted back to cache with debounce.
-- Import run progress is updated item-by-item via task registry.
+- Import run progress is updated via task registry with both overall and stage-level fields:
+  - `progress/current_index/total/current_name`
+  - `stage/stage_current/stage_total/stage_progress`
+
+### Phase 4 Benchmark Harness
+
+Import throughput benchmark entrypoint:
+
+- `backend/scripts/benchmark_import_phase4.py`
+
+Quick run:
+
+```bash
+cd backend
+python3 scripts/benchmark_import_phase4.py --tracks 100 --tracks 150 --tracks 200 --json
+```
 
 ## 5. Configuration and Persistence
 

@@ -45,6 +45,7 @@ DEFAULT_AI_NAMING_CONFIG = AiNamingConfig(
 DEFAULT_UI_PREFERENCES = UiPreferences(
     logs_collapsed_by_default=True,
     follow_system_theme=True,
+    developer_mode_enabled=False,
 )
 
 

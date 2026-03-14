@@ -51,6 +51,11 @@ export interface ElectronAPI {
     put: (url: string, data?: unknown) => Promise<any>
     delete: (url: string) => Promise<any>
   }
+  exportMobile: {
+    createSession: (taskId: string) => Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }>
+    closeSession: (sessionId: string) => Promise<{ ok: boolean }>
+    getViewUrl: (sessionId: string) => Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }>
+  }
   fs: {
     readFile: (path: string) => Promise<string | null>
     writeFile: (path: string, content: string) => Promise<boolean>
