@@ -94,6 +94,10 @@ vendor/
 .vendor/
 /Track2Do/
 
+# Team-local docs/workspace (keep local, do not track)
+docs/
+.obsidian/
+
 # =========================
 # Local process/planning files
 # =========================
