@@ -120,8 +120,8 @@ Recommended release strategy: publish single-arch installers separately to reduc
 
 Current versioned artifact naming example:
 
-- `frontend/release/Presto-0.2.0-arm64.dmg`
-- `frontend/release/Presto-0.2.0-x64.dmg`
+- `frontend/release/Presto-0.2.1-arm64.dmg`
+- `frontend/release/Presto-0.2.1-x64.dmg`
 
 Output directory:
 
@@ -132,6 +132,26 @@ App icon:
 - Source: `assets/App.icon`
 - Synced to build resources by `npm --prefix frontend run sync:icon`
 - Build setting: `frontend/package.json` -> `build.mac.icon = build/App.icon`
+
+## Opening Unsigned App on macOS
+
+Current builds are unsigned (`identity=null`), so macOS Gatekeeper may block first launch.
+
+Recommended (GUI) flow:
+
+1. Open the DMG and drag Presto to `Applications`.
+2. In `Applications`, right-click `Presto.app` and choose `Open`.
+3. In the warning dialog, click `Open`.
+4. If still blocked, go to `System Settings -> Privacy & Security` and click `Open Anyway` for Presto.
+
+Optional terminal flow (advanced users):
+
+```bash
+# Remove quarantine flag from installed app
+xattr -dr com.apple.quarantine /Applications/Presto.app
+```
+
+Then launch Presto again from `Applications`.
 
 ## API Entry Mapping
 
