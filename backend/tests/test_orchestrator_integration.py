@@ -3,7 +3,8 @@ from __future__ import annotations
 import unittest
 
 from presto.app.orchestrator import ImportOrchestrator
-from presto.domain.errors import GatewayError, UiAutomationError
+from presto.domain.export_models import ExportCancelToken
+from presto.domain.errors import GatewayError, UiAutomationError, ValidationError
 from presto.domain.models import ImportItem, ResolvedImportItem, SilenceProfile
 
 
@@ -356,6 +357,22 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertIn("track detection count mismatch", (failed.error_message or "").lower())
         self.assertIn("bass.wav", failed.error_message or "")
         self.assertIn("Sample rate mismatch on bass.wav", failed.error_message or "")
+
+    def test_run_resolved_raises_cancelled_when_token_is_cancelled(self) -> None:
+        gateway = FakeGateway()
+        ui = FakeUiAutomation()
+        ui.fail_on_track = "__never__"
+        orchestrator = ImportOrchestrator(gateway=gateway, ui_automation=ui, category_batch_size=12)
+        token = ExportCancelToken(cancelled=True)
+
+        with self.assertRaises(ValidationError) as ctx:
+            orchestrator.run_resolved(
+                items=[ResolvedImportItem("/tmp/kick.wav", "drums", "Kick_AI_Name")],
+                category_map={"drums": ("Drums", 3)},
+                silence_profile=SilenceProfile(-48.0, 120, 120, 5, 20),
+                cancel_token=token,
+            )
+        self.assertEqual(ctx.exception.code, "IMPORT_CANCELLED")
 
 
 if __name__ == "__main__":

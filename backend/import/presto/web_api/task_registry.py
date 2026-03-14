@@ -24,6 +24,7 @@ class TaskRecord:
     stage_current: int = 0
     stage_total: int = 0
     stage_progress: float = 0.0
+    eta_seconds: int | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     result: dict[str, Any] | None = None

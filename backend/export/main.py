@@ -21,6 +21,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from api.routes import router as api_router
+from api.error_catalog import build_friendly_error
 from core.ptsl_client import PTSLClient
 from core.config import settings
 
@@ -137,16 +138,44 @@ async def health_check():
     }
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    """HTTP 异常统一转为友好错误结构。"""
+    _ = request
+    detail = exc.detail
+    if isinstance(detail, dict):
+        error_code = str(detail.get("error_code") or detail.get("code") or "EXPORT_HTTP_ERROR")
+        message = str(detail.get("message") or "请求失败")
+        extra = {k: v for k, v in detail.items() if k not in {"error_code", "code", "message"}}
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=build_friendly_error(error_code, message, details=(extra or None)),
+        )
+
+    message = str(detail)
+    if exc.status_code == 400:
+        code = "EXPORT_INVALID_REQUEST"
+    elif exc.status_code == 503:
+        code = "EXPORT_NO_CONNECTION"
+    else:
+        code = "EXPORT_HTTP_ERROR"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=build_friendly_error(code, message),
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """全局异常处理器"""
     logger.error(f"未处理的异常: {exc}")
     return JSONResponse(
         status_code=500,
-        content={
-            "error": "Internal Server Error",
-            "message": "服务器内部错误，请稍后重试"
-        }
+        content=build_friendly_error(
+            "UNEXPECTED_ERROR",
+            "服务器内部错误，请稍后重试",
+            details={"exception": str(exc)},
+        ),
     )
 
 

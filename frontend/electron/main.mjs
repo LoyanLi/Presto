@@ -41,6 +41,7 @@ const RETRYABLE_FETCH_CODES = new Set([
   'UND_ERR_HEADERS_TIMEOUT',
   'UND_ERR_BODY_TIMEOUT',
 ])
+const PRESTO_API_ERROR_PREFIX = '__PRESTO_API_ERROR__'
 
 const IMPORT_ROUTE_RULE = {
   pathPrefixes: ['/api/v1/import/'],
@@ -185,6 +186,10 @@ function isRetryableFetchError(error) {
 }
 
 function formatFetchError(url, error) {
+  if (error instanceof Error && error.message.startsWith(PRESTO_API_ERROR_PREFIX)) {
+    return error
+  }
+
   if (isAbortError(error)) {
     return new Error(`Request timed out after ${HTTP_TIMEOUT_MS}ms: ${url}`)
   }
@@ -207,6 +212,21 @@ function parseJsonResponse(body, url) {
   } catch {
     throw new Error(`Invalid JSON response from ${url}`)
   }
+}
+
+function parseApiErrorBody(body) {
+  if (!body) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(body)
+    if (parsed && typeof parsed === 'object' && parsed.success === false) {
+      return parsed
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 function isLocalTarget(hostname) {
@@ -655,6 +675,10 @@ async function performHttpRequest(url, init = undefined) {
       const res = await fetch(targetUrl, { ...init, signal: controller.signal })
       const body = await res.text()
       if (!res.ok) {
+        const parsedApiError = parseApiErrorBody(body)
+        if (parsedApiError) {
+          throw new Error(`${PRESTO_API_ERROR_PREFIX}${JSON.stringify(parsedApiError)}`)
+        }
         throw new Error(body || `HTTP ${res.status}`)
       }
       return parseJsonResponse(body, targetUrl)

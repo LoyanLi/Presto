@@ -83,6 +83,7 @@ export interface ImportRunState {
   stage_current: number
   stage_total: number
   stage_progress: number
+  eta_seconds?: number | null
   created_at: string
   started_at: string | null
   finished_at: string | null

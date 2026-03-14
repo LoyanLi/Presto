@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useI18n } from '../../i18n'
+import { normalizeAppError, type FriendlyErrorView } from '../../errors/normalizeAppError'
 import { importApi } from '../../services/api/import'
 import { AiNamingConfig, AppConfigDto } from '../../types/import'
 import { AiSettingsDialog } from './ConfigDialogs'
+import { ErrorNotice } from '../../components/feedback/ErrorNotice'
 
 export type SettingsSection = 'general' | 'ai' | 'developer'
 
@@ -23,7 +25,7 @@ export function SettingsPage(props: SettingsPageProps) {
   const [hasAiKey, setHasAiKey] = useState(false)
   const [aiKeyInput, setAiKeyInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<FriendlyErrorView | null>(null)
   const [info, setInfo] = useState<string | null>(null)
 
   const loadConfig = async (): Promise<void> => {
@@ -34,7 +36,7 @@ export function SettingsPage(props: SettingsPageProps) {
       setHasAiKey(hasKey)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(normalizeAppError(err))
     } finally {
       setBusy(false)
     }
@@ -69,7 +71,7 @@ export function SettingsPage(props: SettingsPageProps) {
       setInfo(message)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(normalizeAppError(err))
     } finally {
       setBusy(false)
     }
@@ -93,7 +95,7 @@ export function SettingsPage(props: SettingsPageProps) {
       setInfo(t('settings.message.aiUpdated'))
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(normalizeAppError(err))
     } finally {
       setBusy(false)
     }
@@ -175,7 +177,7 @@ export function SettingsPage(props: SettingsPageProps) {
           ))}
         </div>
 
-        {error ? <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">{error}</div> : null}
+        <ErrorNotice error={error} />
         {info ? <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md p-3">{info}</div> : null}
 
         {!config ? (

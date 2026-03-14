@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { ErrorNotice } from '../../components/feedback/ErrorNotice'
+import { makeLocalFriendlyError, normalizeAppError, type FriendlyErrorView } from '../../errors/normalizeAppError'
 import { useI18n } from '../../i18n'
 
 type BackendStatus = {
@@ -34,12 +36,50 @@ export function DeveloperPage(props: DeveloperPageProps) {
   const { t } = useI18n()
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
   const [backendLogs, setBackendLogs] = useState<BackendLogEntry[]>([])
-  const [backendError, setBackendError] = useState<string | null>(null)
+  const [backendError, setBackendError] = useState<FriendlyErrorView | null>(null)
   const [backendInfo, setBackendInfo] = useState<string | null>(null)
   const [portInput, setPortInput] = useState('8000')
   const [isUpdatingPort, setIsUpdatingPort] = useState(false)
   const [isRestarting, setIsRestarting] = useState(false)
   const [isExportingLogs, setIsExportingLogs] = useState(false)
+  const [testerInput, setTesterInput] = useState('')
+  const [testerPreviewError, setTesterPreviewError] = useState<FriendlyErrorView | null>(null)
+  const [testerValidationError, setTesterValidationError] = useState<FriendlyErrorView | null>(null)
+
+  const testerSamples = useMemo(
+    () => ({
+      no_track_selected: {
+        success: false,
+        error_code: 'NO_TRACK_SELECTED',
+        message: 'No track selected in Pro Tools. Select at least one track and retry.',
+        friendly: {
+          title: '未检测到已选中的轨道',
+          message: '请先在 Pro Tools 选中至少一条轨道，再继续。',
+          actions: ['切回 Pro Tools 选择轨道', '确认轨道可编辑', '返回 Presto 重试'],
+          severity: 'warn',
+          retryable: true,
+        },
+        details: { stage: 'stage_strip_silence' },
+      },
+      pt_version_unsupported: {
+        success: false,
+        error_code: 'PT_VERSION_UNSUPPORTED',
+        message: 'Current Pro Tools/PTSL version 2024.6 is below required 2025.10.',
+        friendly: {
+          title: 'Pro Tools 版本不受支持',
+          message: '当前版本低于所需最低版本，请升级后再试。',
+          actions: ['升级 Pro Tools', '重启 Pro Tools 与 Presto', '重新执行当前流程'],
+          severity: 'error',
+          retryable: false,
+        },
+      },
+      network_timeout: {
+        name: 'Error',
+        message: 'Request timed out after 30000ms: http://127.0.0.1:8001/api/v1/import/preflight',
+      },
+    }),
+    [],
+  )
 
   const hasElectronBackend = useMemo(() => {
     return typeof window !== 'undefined' && Boolean(window.electronAPI?.backend)
@@ -55,7 +95,7 @@ export function DeveloperPage(props: DeveloperPageProps) {
       setPortInput(String(status.requestedPort || status.port || 8000))
       setBackendError(null)
     } catch (error) {
-      setBackendError(error instanceof Error ? error.message : String(error))
+      setBackendError(normalizeAppError(error))
     }
   }
 
@@ -67,9 +107,14 @@ export function DeveloperPage(props: DeveloperPageProps) {
       const logs = await window.electronAPI.backend.getLogs(300)
       setBackendLogs(logs)
     } catch (error) {
-      setBackendError(error instanceof Error ? error.message : String(error))
+      setBackendError(normalizeAppError(error))
     }
   }
+
+  useEffect(() => {
+    setTesterInput(JSON.stringify(testerSamples.no_track_selected, null, 2))
+    setTesterPreviewError(normalizeAppError(testerSamples.no_track_selected))
+  }, [testerSamples])
 
   useEffect(() => {
     if (!hasElectronBackend) {
@@ -100,7 +145,11 @@ export function DeveloperPage(props: DeveloperPageProps) {
 
     const parsed = Number(portInput)
     if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
-      setBackendError(t('developer.validation.portRange'))
+      setBackendError(
+        makeLocalFriendlyError(t('developer.validation.portRange'), {
+          actions: [t('developer.validation.portRange')],
+        }),
+      )
       return
     }
 
@@ -115,7 +164,7 @@ export function DeveloperPage(props: DeveloperPageProps) {
       await refreshBackendLogs()
       setBackendError(null)
     } catch (error) {
-      setBackendError(error instanceof Error ? error.message : String(error))
+      setBackendError(normalizeAppError(error))
     } finally {
       setIsUpdatingPort(false)
     }
@@ -135,7 +184,7 @@ export function DeveloperPage(props: DeveloperPageProps) {
       await refreshBackendLogs()
       setBackendError(null)
     } catch (error) {
-      setBackendError(error instanceof Error ? error.message : String(error))
+      setBackendError(normalizeAppError(error))
     } finally {
       setIsRestarting(false)
     }
@@ -155,10 +204,40 @@ export function DeveloperPage(props: DeveloperPageProps) {
       }
       setBackendError(null)
     } catch (error) {
-      setBackendError(error instanceof Error ? error.message : String(error))
+      setBackendError(normalizeAppError(error))
     } finally {
       setIsExportingLogs(false)
     }
+  }
+
+  const loadTesterSample = (sample: unknown) => {
+    setTesterInput(JSON.stringify(sample, null, 2))
+    setTesterValidationError(null)
+    setTesterPreviewError(normalizeAppError(sample))
+  }
+
+  const handleApplyTesterJson = () => {
+    try {
+      const parsed = JSON.parse(testerInput)
+      setTesterValidationError(null)
+      setTesterPreviewError(normalizeAppError(parsed))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setTesterValidationError(
+        makeLocalFriendlyError(t('developer.tester.invalidJson'), {
+          code: 'TESTER_INVALID_JSON',
+          userTitle: t('developer.tester.invalidJsonTitle'),
+          technicalMessage: message,
+          actions: [t('developer.tester.fixJson')],
+        }),
+      )
+    }
+  }
+
+  const handleClearTester = () => {
+    setTesterInput('')
+    setTesterPreviewError(null)
+    setTesterValidationError(null)
   }
 
   return (
@@ -267,9 +346,7 @@ export function DeveloperPage(props: DeveloperPageProps) {
                 </button>
               </div>
 
-              {backendError ? (
-                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">{backendError}</div>
-              ) : null}
+              <ErrorNotice error={backendError} />
 
               {backendInfo ? (
                 <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md p-3">{backendInfo}</div>
@@ -285,6 +362,61 @@ export function DeveloperPage(props: DeveloperPageProps) {
                   </div>
                 </div>
               ) : null}
+
+              <div className="border border-gray-200 rounded-md p-4 space-y-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{t('developer.tester.title')}</div>
+                  <div className="text-xs text-gray-600">{t('developer.tester.desc')}</div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => loadTesterSample(testerSamples.no_track_selected)}
+                    className="px-2.5 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                  >
+                    {t('developer.tester.sample.noTrack')}
+                  </button>
+                  <button
+                    onClick={() => loadTesterSample(testerSamples.pt_version_unsupported)}
+                    className="px-2.5 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                  >
+                    {t('developer.tester.sample.version')}
+                  </button>
+                  <button
+                    onClick={() => loadTesterSample(testerSamples.network_timeout)}
+                    className="px-2.5 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                  >
+                    {t('developer.tester.sample.network')}
+                  </button>
+                </div>
+
+                <textarea
+                  value={testerInput}
+                  onChange={(event) => setTesterInput(event.target.value)}
+                  className="w-full h-40 rounded-md border border-gray-300 px-3 py-2 text-xs font-mono text-gray-800"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleApplyTesterJson}
+                    className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  >
+                    {t('developer.tester.applyJson')}
+                  </button>
+                  <button
+                    onClick={handleClearTester}
+                    className="px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-md hover:bg-gray-100"
+                  >
+                    {t('developer.tester.clear')}
+                  </button>
+                </div>
+
+                <ErrorNotice error={testerValidationError} />
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">{t('developer.tester.preview')}</div>
+                  <ErrorNotice error={testerPreviewError} />
+                </div>
+              </div>
 
               <div>
                 <div className="text-sm text-gray-600 mb-2">
