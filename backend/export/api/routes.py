@@ -31,6 +31,7 @@ from models.schemas import (
 )
 from core.ptsl_client import PTSLClient
 from core.config import settings
+from api.progress_metrics import compute_export_snapshot_progress, estimate_eta_seconds
 
 # 导出任务存储
 export_tasks: Dict[str, Dict[str, Any]] = {}
@@ -100,12 +101,27 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
         export_tasks[task_id].update({
             "status": "running",
             "started_at": datetime.now(),
-            "progress": 0.0
+            "progress": 0.0,
+            "eta_seconds": None,
         })
         
         snapshots = export_request.snapshots
         settings = export_request.export_settings
         total_snapshots = len(snapshots)
+
+        def _update_runtime_progress(snapshot_index: int, snapshot_name: str, step_progress: float) -> None:
+            raw_progress = compute_export_snapshot_progress(snapshot_index, total_snapshots, step_progress)
+            previous = float(export_tasks[task_id].get("progress", 0.0) or 0.0)
+            progress = max(previous, raw_progress)
+            elapsed_seconds = time.time() - start_time
+            eta_seconds = estimate_eta_seconds(elapsed_seconds=elapsed_seconds, progress=progress)
+            export_tasks[task_id].update({
+                "status": "running",
+                "progress": progress,
+                "current_snapshot": snapshot_index + 1,
+                "current_snapshot_name": snapshot_name,
+                "eta_seconds": eta_seconds,
+            })
         
         logger.info(f"开始导出任务 {task_id}，共 {total_snapshots} 个快照")
         
@@ -132,14 +148,8 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                 return
             
             try:
-                # 更新进度
-                progress = (i / total_snapshots) * 100
-                export_tasks[task_id].update({
-                    "progress": progress,
-                    "current_snapshot": i + 1,
-                    "current_snapshot_name": snapshot.name,
-                    "status": "running"
-                })
+                # 开始处理当前快照
+                _update_runtime_progress(i, snapshot.name, 5.0)
                 
                 logger.info(f"处理快照 {i+1}/{total_snapshots}: {snapshot.name}")
                 
@@ -151,7 +161,9 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                     error_msg = f"应用快照失败: {', '.join(apply_result.get('errors', []))}"
                     logger.error(error_msg)
                     failed_snapshots.append(snapshot.name)
+                    _update_runtime_progress(i, snapshot.name, 100.0)
                     continue
+                _update_runtime_progress(i, snapshot.name, 25.0)
                 
                 # 检查任务是否被取消
                 if export_tasks[task_id].get("status") == "cancelled":
@@ -171,6 +183,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                 
                 # 等待一下确保状态应用完成
                 await asyncio.sleep(0.5)
+                _update_runtime_progress(i, snapshot.name, 35.0)
                 
                 # 2. 生成导出文件名（直接导出到Pro Tools工程文件夹的Bounced Files目录）
                 session_info = await ptsl_client.get_session_info()
@@ -189,6 +202,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                 except Exception as dir_error:
                     logger.error(f"创建Bounced Files目录失败: {dir_error}")
                     failed_snapshots.append(snapshot.name)
+                    _update_runtime_progress(i, snapshot.name, 100.0)
                     continue
                 
                 # 临时导出文件名（在Bounced Files目录中）
@@ -214,6 +228,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                 except Exception as dir_error:
                     logger.error(f"创建目标目录失败: {dir_error}")
                     failed_snapshots.append(snapshot.name)
+                    _update_runtime_progress(i, snapshot.name, 100.0)
                     continue
                 
                 # 检查任务是否被取消（在开始导出前）
@@ -234,6 +249,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                 
                 # 3. 执行导出到Bounced Files目录
                 logger.info(f"开始导出快照 {snapshot.name} 到: {temp_output_path}")
+                _update_runtime_progress(i, snapshot.name, 45.0)
                 bounce_result = await ptsl_client.export_mix_with_source(
                     output_path=temp_output_path,
                     source_name=settings.mix_source_name,
@@ -241,6 +257,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                     file_format=settings.file_format.value,
                     offline_bounce=not settings.online_export
                 )
+                _update_runtime_progress(i, snapshot.name, 85.0)
                 
                 # 检查导出是否被取消
                 if bounce_result.get("cancelled", False):
@@ -254,7 +271,8 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                             "failed_snapshots": failed_snapshots,
                             "total_duration": time.time() - start_time,
                             "error_message": "导出任务被用户取消"
-                        }
+                        },
+                        "eta_seconds": 0,
                     })
                     return
                 
@@ -278,7 +296,8 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                             "failed_snapshots": failed_snapshots,
                             "total_duration": time.time() - start_time,
                             "error_message": "导出任务被用户取消"
-                        }
+                        },
+                        "eta_seconds": 0,
                     })
                     return
                 
@@ -318,6 +337,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
                     error_msg = bounce_result.get("error", "未知错误")
                     logger.error(f"快照 {snapshot.name} 导出失败: {error_msg}")
                     failed_snapshots.append(snapshot.name)
+                _update_runtime_progress(i, snapshot.name, 100.0)
                     
                 # 5. 短暂等待，确保文件系统操作完成，然后继续下一个快照
                 await asyncio.sleep(0.2)
@@ -325,6 +345,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
             except Exception as e:
                 logger.error(f"处理快照 {snapshot.name} 时发生错误: {e}")
                 failed_snapshots.append(snapshot.name)
+                _update_runtime_progress(i, snapshot.name, 100.0)
         
         # 计算总耗时
         total_duration = time.time() - start_time
@@ -335,6 +356,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
             "status": "completed" if success else "completed_with_errors",
             "completed_at": datetime.now(),
             "progress": 100.0,
+            "eta_seconds": 0,
             "result": {
                 "success": success,
                 "exported_files": exported_files,
@@ -352,6 +374,7 @@ async def execute_export_task(task_id: str, export_request: ExportRequest, ptsl_
         export_tasks[task_id].update({
             "status": "failed",
             "completed_at": datetime.now(),
+            "eta_seconds": 0,
             "result": {
                 "success": False,
                 "exported_files": exported_files,
@@ -403,6 +426,7 @@ async def start_export(
             "snapshots_count": len(export_request.snapshots),
             "export_settings": export_request.export_settings.dict(),
             "progress": 0.0,
+            "eta_seconds": None,
             "current_snapshot": 0,
             "current_snapshot_name": "",
             "result": None
@@ -477,6 +501,7 @@ async def get_export_status(task_id: str):
         "task_id": task_id,
         "status": task_info["status"],
         "progress": task_info["progress"],
+        "eta_seconds": task_info.get("eta_seconds"),
         "current_snapshot": task_info.get("current_snapshot", 0),
         "total_snapshots": task_info["snapshots_count"],
         "current_snapshot_name": task_info.get("current_snapshot_name", ""),

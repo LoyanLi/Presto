@@ -31,6 +31,7 @@ class ImportRunStatusRouteTests(unittest.TestCase):
                 stage_current=2,
                 stage_total=5,
                 stage_progress=40.0,
+                eta_seconds=42,
             )
         )
 
@@ -41,6 +42,7 @@ class ImportRunStatusRouteTests(unittest.TestCase):
         self.assertEqual(data["stage_current"], 2)
         self.assertEqual(data["stage_total"], 5)
         self.assertEqual(data["stage_progress"], 40.0)
+        self.assertEqual(data["eta_seconds"], 42)
 
     def test_import_run_status_raises_404_for_missing_task(self) -> None:
         registry = TaskRegistry()

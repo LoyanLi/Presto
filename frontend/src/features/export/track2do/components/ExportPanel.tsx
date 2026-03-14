@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, Download, CheckCircle, XCircle, FolderOpen } from 'lucide-react';
+import { ErrorNotice } from '../../../../components/feedback/ErrorNotice';
+import { makeLocalFriendlyError, normalizeAppError, type FriendlyErrorView } from '../../../../errors/normalizeAppError';
+import { useI18n } from '../../../../i18n';
+import { estimateEtaFromProgress, formatEtaLabel, smoothProgress } from '../../../../utils/progressEta';
 import {
   Snapshot,
   ExportSettings,
@@ -17,6 +21,7 @@ interface ExportPanelProps {
 }
 
 const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
+  const { t } = useI18n();
   const [selectedSnapshots, setSelectedSnapshots] = useState<Snapshot[]>([]);
 
   // Default select all snapshots when snapshots change
@@ -34,7 +39,8 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [error, setError] = useState<FriendlyErrorView | null>(null);
   const [success, setSuccess] = useState(false);
   const [pollTimeoutId, setPollTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
@@ -102,6 +108,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
   const resetState = () => {
     setIsExporting(false);
     setExportProgress(null);
+    setRenderProgress(0);
     setError(null);
     setSuccess(false);
     void window.electronAPI?.window.setAlwaysOnTop(false);
@@ -130,7 +137,8 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
      }
      
      setIsExporting(false);
-     setError('Export manually stopped');
+     setRenderProgress(0);
+     setError(makeLocalFriendlyError('导出已手动停止', { code: 'EXPORT_STOPPED', severity: 'warn' }));
      void window.electronAPI?.window.setAlwaysOnTop(false);
     };
 
@@ -143,18 +151,18 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
     console.log('Export settings:', exportSettings);
     
     if (selectedSnapshots.length === 0) {
-      setError('Please select snapshots to export');
+      setError(makeLocalFriendlyError('请先选择要导出的快照'));
       return;
     }
 
     // Validate required fields
     if (!exportSettings.output_path.trim()) {
-      setError('Output Path is required');
+      setError(makeLocalFriendlyError('请先设置输出路径'));
       return;
     }
 
     if (!exportSettings.mix_source_name.trim()) {
-      setError('Output Mix Source Name is required');
+      setError(makeLocalFriendlyError('请先填写混音源名称'));
       return;
     }
 
@@ -175,6 +183,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         created_at: new Date().toISOString(),
         result: undefined
       });
+      setRenderProgress(0);
 
       const exportRequest: ExportRequest = {
         snapshots: selectedSnapshots,
@@ -196,7 +205,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
       }
     } catch (error) {
       console.error('Export failed:', error);
-      setError(error instanceof Error ? error.message : 'Export failed');
+      setError(normalizeAppError(error));
       setIsExporting(false);
       setExportProgress(null);
       void window.electronAPI?.window.setAlwaysOnTop(false);
@@ -218,12 +227,14 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         if (response.success && response.data) {
           console.log('Updating progress:', response.data);
           setExportProgress(response.data);
+          setRenderProgress(prev => smoothProgress(prev, Number(response.data.progress || 0)));
           
           const status = response.data.status;
           console.log('Current status:', status);
           
           if (status === 'completed') {
             console.log('Export completed');
+            setRenderProgress(prev => smoothProgress(prev, 100));
             setSuccess(true);
             setIsExporting(false);
             void window.electronAPI?.window.setAlwaysOnTop(false);
@@ -233,7 +244,11 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             }
           } else if (status === 'failed' || status === 'completed_with_errors') {
             console.log('Export failed or partially failed:', response.data.result?.error_message);
-            setError(response.data.result?.error_message || 'Error occurred during export');
+            setError(
+              makeLocalFriendlyError(response.data.result?.error_message || '导出执行失败', {
+                code: 'EXPORT_TASK_FAILED',
+              }),
+            );
             setIsExporting(false);
             void window.electronAPI?.window.setAlwaysOnTop(false);
             if (pollTimeoutId) {
@@ -247,7 +262,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             setPollTimeoutId(timeoutId);
           } else if (status === 'cancelled') {
             console.log('Export was cancelled');
-            setError('Export was cancelled');
+            setError(makeLocalFriendlyError('导出已取消', { code: 'EXPORT_CANCELLED', severity: 'warn' }));
             setIsExporting(false);
             void window.electronAPI?.window.setAlwaysOnTop(false);
             if (pollTimeoutId) {
@@ -256,7 +271,11 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             }
           } else {
             console.log('Unknown status:', status, 'stopping polling');
-            setError(`Unknown export status: ${status}`);
+            setError(
+              makeLocalFriendlyError(`检测到未知导出状态：${status}`, {
+                code: 'EXPORT_UNKNOWN_STATUS',
+              }),
+            );
             setIsExporting(false);
             void window.electronAPI?.window.setAlwaysOnTop(false);
           }
@@ -265,7 +284,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         }
       } catch (error) {
         console.error('Failed to get export status:', error);
-        setError('Failed to get export status');
+        setError(normalizeAppError(error));
         setIsExporting(false);
         void window.electronAPI?.window.setAlwaysOnTop(false);
         if (pollTimeoutId) {
@@ -280,6 +299,20 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   console.log('ExportPanel rendering, received snapshots count:', snapshots.length);
   console.log('Received snapshots data:', snapshots);
+
+  const exportEtaText = useMemo(() => {
+    if (!isExporting || !exportProgress) {
+      return null;
+    }
+    const etaSeconds =
+      typeof exportProgress.eta_seconds === 'number'
+        ? exportProgress.eta_seconds
+        : estimateEtaFromProgress(exportProgress.started_at ?? exportProgress.created_at, renderProgress);
+    if (etaSeconds == null) {
+      return t('export.progress.etaCalculating');
+    }
+    return t('export.progress.eta', { value: formatEtaLabel(etaSeconds) });
+  }, [isExporting, exportProgress, renderProgress, t]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
@@ -523,13 +556,13 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-600">Overall Progress</span>
               <span className="text-xs font-medium text-blue-600">
-                {Math.round(exportProgress.progress)}%
+                {Math.round(renderProgress)}%
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner">
               <div 
                 className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm" 
-                style={{ width: `${exportProgress.progress}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, renderProgress))}%` }}
               ></div>
             </div>
           </div>
@@ -547,6 +580,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
             <div className="text-xs text-gray-600">
               Status: <span className="font-medium">{exportProgress.status}</span>
             </div>
+            {exportEtaText ? <div className="text-xs text-gray-600">{exportEtaText}</div> : null}
             
             {/* Detailed Status Info */}
             <div className="mt-2 p-2 bg-white rounded border border-blue-100">
@@ -568,12 +602,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
 
        {/* Error Information */}
-       {error && (
-         <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-md">
-          <XCircle className="h-4 w-4 text-red-500 mr-2" />
-          <span className="text-red-700">{error}</span>
-        </div>
-      )}
+       <ErrorNotice error={error} />
 
       {/* Success Information */}
       {success && exportProgress?.result && (

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from presto.domain.errors import PrestoError, ValidationError
+from presto.domain.export_models import ExportCancelToken
 from presto.domain.models import (
     ImportItem,
     ResolvedImportItem,
@@ -148,6 +149,7 @@ class ImportOrchestrator:
         silence_profile: SilenceProfile,
         progress_callback: Callable[[int, int, str], None] | None = None,
         stage_progress_callback: StageProgressCallback | None = None,
+        cancel_token: ExportCancelToken | None = None,
     ) -> RunReport:
         """Run batch using pre-resolved target names."""
 
@@ -157,6 +159,7 @@ class ImportOrchestrator:
             silence_profile=silence_profile,
             progress_callback=progress_callback,
             stage_progress_callback=stage_progress_callback,
+            cancel_token=cancel_token,
             desired_name_builder=lambda item, _category: sanitize_track_component(item.target_track_name),
         )
 
@@ -167,6 +170,7 @@ class ImportOrchestrator:
         silence_profile: SilenceProfile,
         progress_callback: Callable[[int, int, str], None] | None = None,
         stage_progress_callback: StageProgressCallback | None = None,
+        cancel_token: ExportCancelToken | None = None,
     ) -> RunReport:
         """Run a full batch import and processing job."""
 
@@ -176,6 +180,7 @@ class ImportOrchestrator:
             silence_profile=silence_profile,
             progress_callback=progress_callback,
             stage_progress_callback=stage_progress_callback,
+            cancel_token=cancel_token,
             desired_name_builder=lambda item, category: (
                 f"{sanitize_track_component(category)}__{sanitize_track_component(Path(item.file_path).stem)}"
             ),
@@ -189,7 +194,9 @@ class ImportOrchestrator:
         desired_name_builder: Callable[[ImportItem | ResolvedImportItem, str], str],
         progress_callback: Callable[[int, int, str], None] | None,
         stage_progress_callback: StageProgressCallback | None,
+        cancel_token: ExportCancelToken | None,
     ) -> RunReport:
+        self._ensure_not_cancelled(cancel_token)
         started_at = datetime.now()
         existing_names = set(self.gateway.list_track_names())
         total_items = len(items)
@@ -210,6 +217,7 @@ class ImportOrchestrator:
         # Stage 1 queueing: validate and group by category
         stage_current_import = 0
         for stage_current, item in enumerate(items, start=1):
+            self._ensure_not_cancelled(cancel_token)
             current_name = Path(item.file_path).name
             if not is_supported_audio_file(item.file_path):
                 stage_current_import += 1
@@ -282,15 +290,18 @@ class ImportOrchestrator:
 
         # Stage 1 execution: import + rename + select in category batches
         for category_id in category_order:
+            self._ensure_not_cancelled(cancel_token)
             queued_tracks = queued_by_category.get(category_id, [])
             if not queued_tracks:
                 continue
 
             for chunk in self._chunked(queued_tracks, self.category_batch_size):
+                self._ensure_not_cancelled(cancel_token)
                 chunk_file_paths = [queued.file_path for queued in chunk]
                 imported_track_by_offset: dict[int, str] = {}
                 item_error_by_offset: dict[int, PrestoError] = {}
                 try:
+                    self._ensure_not_cancelled(cancel_token)
                     imported_tracks = list(self.gateway.import_audio_files(chunk_file_paths))
                 except PrestoError as exc:
                     imported_tracks = []
@@ -341,6 +352,7 @@ class ImportOrchestrator:
                             )
 
                 for item_offset, queued in enumerate(chunk):
+                    self._ensure_not_cancelled(cancel_token)
                     stage_current_import += 1
                     overall_current += 1
                     self._emit_stage_progress(
@@ -356,6 +368,7 @@ class ImportOrchestrator:
                     imported_track = imported_track_by_offset.get(item_offset)
                     if imported_track is not None:
                         try:
+                            self._ensure_not_cancelled(cancel_token)
                             desired = allocate_unique_track_name(queued.desired_base_name, existing_names)
                             self.gateway.rename_track(imported_track, desired)
                             self.gateway.select_track(desired)
@@ -384,6 +397,7 @@ class ImportOrchestrator:
                             )
 
                             try:
+                                self._ensure_not_cancelled(cancel_token)
                                 self._apply_track_color_with_fallback(slot=queued.color_slot, track_name=desired)
                             except PrestoError as exc:
                                 self.logger.exception("Track failed in color stage: %s", queued.file_path)
@@ -429,6 +443,7 @@ class ImportOrchestrator:
                             )
 
                             try:
+                                self._ensure_not_cancelled(cancel_token)
                                 self.gateway.select_all_clips_on_track(desired)
                                 self.ui_automation.strip_silence(desired, silence_profile)
                                 results_by_index[queued.index] = TrackProcessResult(
@@ -544,6 +559,11 @@ class ImportOrchestrator:
             self.ui_automation.apply_track_color(slot, track_name)
         except PrestoError as exc:
             raise exc
+
+    @staticmethod
+    def _ensure_not_cancelled(cancel_token: ExportCancelToken | None) -> None:
+        if cancel_token is not None and cancel_token.cancelled:
+            raise ValidationError("IMPORT_CANCELLED", "Import task was cancelled by user.")
 
     @staticmethod
     def build_category_map(categories: list[tuple[str, str, int]]) -> dict[str, tuple[str, int]]:

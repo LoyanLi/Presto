@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle, Loader2 } from 'lucide-react'
 import { WorkflowActionBar } from '../../components/workflow/WorkflowActionBar'
 import { WorkflowCard } from '../../components/workflow/WorkflowCard'
 import { WorkflowStepper } from '../../components/workflow/WorkflowStepper'
 import { WorkflowTitle } from '../../components/workflow/WorkflowTitle'
+import { ErrorNotice } from '../../components/feedback/ErrorNotice'
 
 import {
   AiNamingConfig,
@@ -14,8 +15,10 @@ import {
   RenameProposal,
   ResolvedImportItem,
 } from '../../types/import'
+import { makeLocalFriendlyError, normalizeAppError, type FriendlyErrorView } from '../../errors/normalizeAppError'
 import { useI18n } from '../../i18n'
 import { importApi } from '../../services/api/import'
+import { estimateEtaFromProgress, formatEtaLabel } from '../../utils/progressEta'
 import { AiSettingsDialog, CategoryEditorDialog } from '../settings/ConfigDialogs'
 
 type SortMode = 'name' | 'type' | 'category_order'
@@ -115,6 +118,11 @@ function terminalStatus(status: string): boolean {
   return ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(status)
 }
 
+function isImportStopRouteMissingError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes('/api/v1/import/run/stop/') && message.includes('"detail":"Not Found"')
+}
+
 function buildDefaultProposal(file: LocalFile): RenameProposal {
   const normalized = stemOf(file.file_path)
   return {
@@ -195,8 +203,9 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
   const [runId, setRunId] = useState<string | null>(null)
   const [runState, setRunState] = useState<ImportRunState | null>(null)
   const [banner, setBanner] = useState(() => t('import.banner.ready'))
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<FriendlyErrorView | null>(null)
   const [busy, setBusy] = useState(false)
+  const [isStoppingRun, setIsStoppingRun] = useState(false)
 
   const [logs, setLogs] = useState<string[]>([])
 
@@ -368,6 +377,20 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
     return runState.stage
   }, [runState?.stage, t])
 
+  const importEtaText = useMemo(() => {
+    if (!runState || terminalStatus(runState.status)) {
+      return null
+    }
+    const etaSeconds =
+      typeof runState.eta_seconds === 'number'
+        ? runState.eta_seconds
+        : estimateEtaFromProgress(runState.started_at, Number(runState.progress || 0))
+    if (etaSeconds == null) {
+      return t('import.step3.etaCalculating')
+    }
+    return t('import.step3.eta', { value: formatEtaLabel(etaSeconds) })
+  }, [runState, t])
+
   const loadConfig = async (): Promise<void> => {
     try {
       const data = await importApi.getConfig()
@@ -376,7 +399,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       setHasAiKey(status)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Load config failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Load config failed: ${msg}`)
     }
   }
@@ -525,7 +548,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
 
   const pickFolders = async (): Promise<void> => {
     if (!window.electronAPI?.showOpenDialog) {
-      setError('Electron file dialog is unavailable.')
+      setError(makeLocalFriendlyError('当前环境不可用系统文件选择器，请在桌面版应用中使用该功能。'))
       return
     }
     const result = await window.electronAPI.showOpenDialog({
@@ -578,7 +601,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       setBanner(`Scanned ${result.filePaths.length} folder(s), found ${allAudioFiles.length} audio files.${cacheSuffix}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Scan folder failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Scan folder failed: ${msg}`)
     } finally {
       setBusy(false)
@@ -608,7 +631,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       return
     }
     if (files.length === 0) {
-      setError('Add folder first.')
+      setError(makeLocalFriendlyError('请先添加文件夹再执行 AI 分析。'))
       return
     }
 
@@ -629,7 +652,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       setStep(1)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`AI analyze failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`AI analyze failed: ${msg}`)
     } finally {
       setBusy(false)
@@ -796,7 +819,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       appendLog('Strip Silence window opened.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Open Strip Silence failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Open Strip Silence failed: ${msg}`)
     } finally {
       setBusy(false)
@@ -824,7 +847,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       }, 1000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Run polling failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Run polling failed: ${msg}`)
       await window.electronAPI?.window.setAlwaysOnTop(false)
     }
@@ -848,11 +871,51 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       void pollRun(id)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Start automation failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Start automation failed: ${msg}`)
       await window.electronAPI?.window.setAlwaysOnTop(false)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const stopAutomation = async (): Promise<void> => {
+    if (!runId) {
+      return
+    }
+    try {
+      setIsStoppingRun(true)
+      await importApi.runStop(runId)
+      setRunState((prev) => (prev ? { ...prev, status: 'cancelled', eta_seconds: 0 } : prev))
+      setBanner(t('import.step3.cancelRequested'))
+      appendLog(`Import run cancellation requested: ${runId}`)
+      await window.electronAPI?.window.setAlwaysOnTop(false)
+    } catch (err) {
+      if (isImportStopRouteMissingError(err)) {
+        appendLog('Import stop route not found on running backend; restarting backend for route refresh.')
+        try {
+          await window.electronAPI?.backend.restart()
+          await window.electronAPI?.window.setAlwaysOnTop(false)
+          setRunState((prev) => (prev ? { ...prev, status: 'cancelled', eta_seconds: 0 } : prev))
+          setBanner(t('import.step3.cancelByRestart'))
+          setError(
+            makeLocalFriendlyError(t('import.step3.stopRouteOutdated'), {
+              code: 'IMPORT_STOP_API_MISMATCH',
+              severity: 'warn',
+              actions: [t('import.step3.stopRouteAction')],
+            }),
+          )
+          return
+        } catch (restartErr) {
+          const msg = restartErr instanceof Error ? restartErr.message : String(restartErr)
+          appendLog(`Backend restart after stop-route mismatch failed: ${msg}`)
+        }
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(normalizeAppError(err))
+      appendLog(`Cancel import failed: ${msg}`)
+    } finally {
+      setIsStoppingRun(false)
     }
   }
 
@@ -863,7 +926,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       appendLog('Session saved.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Save session failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Save session failed: ${msg}`)
     }
   }
@@ -882,7 +945,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        setError(`Finalize failed: ${msg}`)
+        setError(normalizeAppError(err))
         appendLog(`Finalize failed: ${msg}`)
         return
       } finally {
@@ -917,7 +980,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       appendLog('AI settings updated.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Save AI settings failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Save AI settings failed: ${msg}`)
     } finally {
       setBusy(false)
@@ -940,7 +1003,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       appendLog('Categories updated.')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      setError(`Save categories failed: ${msg}`)
+      setError(normalizeAppError(err))
       appendLog(`Save categories failed: ${msg}`)
     } finally {
       setBusy(false)
@@ -990,6 +1053,9 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       <WorkflowStepper steps={stepNames} currentStep={step} />
 
       <div className="px-6 py-3 border-b border-gray-200 bg-gray-100 text-sm text-gray-700">{banner}</div>
+      <div className="px-6 pt-3">
+        <ErrorNotice error={error} />
+      </div>
 
       <div className="flex-1 overflow-auto">
         {step === 1 && (
@@ -1198,13 +1264,24 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
               <WorkflowCard
                 title={t('import.step3.title')}
                 rightSlot={
-                  <button
-                    onClick={() => void startAutomation()}
-                    className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                    disabled={busy || (runState && !terminalStatus(runState.status))}
-                  >
-                    {t('import.step3.startAutomation')}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void startAutomation()}
+                      className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                      disabled={busy || isStoppingRun || (runState && !terminalStatus(runState.status))}
+                    >
+                      {t('import.step3.startAutomation')}
+                    </button>
+                    {runState && !terminalStatus(runState.status) ? (
+                      <button
+                        onClick={() => void stopAutomation()}
+                        className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                        disabled={busy || isStoppingRun}
+                      >
+                        {isStoppingRun ? t('import.step3.stopping') : t('import.step3.stopAutomation')}
+                      </button>
+                    ) : null}
+                  </div>
                 }
               >
                 <div className="text-sm text-gray-600">{t('import.step3.desc')}</div>
@@ -1234,29 +1311,6 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">
-                        {t('import.step3.stageProgressLabel', { stage: currentStageLabel })}
-                      </span>
-                      <span className="text-xs font-medium text-blue-600">
-                        {Math.round(Number(runState.stage_progress || 0))}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 shadow-inner">
-                      <div
-                        className="bg-gradient-to-r from-cyan-500 to-sky-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-sm"
-                        style={{ width: `${Math.max(0, Math.min(100, Number(runState.stage_progress || 0)))}%` }}
-                      />
-                    </div>
-                    <div className="text-[11px] text-gray-600">
-                      {t('import.step3.stageItems', {
-                        current: runState.stage_current || 0,
-                        total: runState.stage_total || 0,
-                      })}
-                    </div>
-                  </div>
-
                   <div className="space-y-1">
                     {runState.current_name ? (
                       <div className="flex items-center space-x-2">
@@ -1269,6 +1323,10 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                     <div className="text-xs text-gray-600">
                       {t('import.step3.status', { status: runState.status || t('import.step3.idle') })}
                     </div>
+                    <div className="text-xs text-gray-600">
+                      {t('import.step3.stageProgressLabel', { stage: currentStageLabel })}
+                    </div>
+                    {importEtaText ? <div className="text-xs text-gray-600">{importEtaText}</div> : null}
                     <div className="mt-2 p-2 bg-white rounded border border-blue-100">
                       <div className="text-xs text-gray-500 space-y-1">
                         <div>{t('import.step3.runId', { id: runId || '-' })}</div>
@@ -1282,10 +1340,13 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
               ) : null}
 
               {runState?.error_message ? (
-                <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-md">
-                  <XCircle className="h-4 w-4 text-red-500 mr-2" />
-                  <span className="text-red-700">{runState.error_message}</span>
-                </div>
+                <ErrorNotice
+                  error={normalizeAppError({
+                    success: false,
+                    error_code: runState.error_code || 'UNEXPECTED_ERROR',
+                    message: runState.error_message,
+                  })}
+                />
               ) : null}
 
               {runState && terminalStatus(runState.status) && runState.result ? (

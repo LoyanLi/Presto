@@ -8,10 +8,19 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
+class FriendlyErrorPayload(BaseModel):
+    title: str
+    message: str
+    actions: list[str] = Field(default_factory=list)
+    severity: str = "error"
+    retryable: bool = False
+
+
 class ApiError(BaseModel):
     success: bool = False
     error_code: str
     message: str
+    friendly: FriendlyErrorPayload
     details: Optional[dict[str, Any]] = None
 
 
