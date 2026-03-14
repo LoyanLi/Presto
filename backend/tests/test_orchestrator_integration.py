@@ -93,11 +93,13 @@ class FakeGateway:
 class FakeUiAutomation:
     def __init__(self) -> None:
         self.fail_on_track = "Bass__bass"
+        self.open_strip_called = False
 
     def preflight_accessibility(self) -> None:
         return None
 
     def open_strip_silence_window(self) -> None:
+        self.open_strip_called = True
         return None
 
     def strip_silence(self, track_name: str, profile: SilenceProfile) -> None:
@@ -116,14 +118,15 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertTrue(gateway.color_support_checked)
         self.assertTrue(gateway.version_checked)
 
-    def test_prepare_strip_silence_checks_track_selection(self) -> None:
+    def test_prepare_strip_silence_opens_window_without_track_selection(self) -> None:
         gateway = FakeGateway()
         ui = FakeUiAutomation()
         orchestrator = ImportOrchestrator(gateway=gateway, ui_automation=ui)
 
         orchestrator.prepare_strip_silence()
 
-        self.assertTrue(gateway.selection_checked)
+        self.assertFalse(gateway.selection_checked)
+        self.assertTrue(ui.open_strip_called)
 
     def test_preflight_allows_unknown_version_when_color_support_available(self) -> None:
         gateway = FakeGateway()

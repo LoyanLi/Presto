@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.1] - 2026-03-14
+
+### Fixed
+- `Open Strip Silence` action no longer requires pre-selected tracks; opening the Strip Silence window now works as a pure window-open step.
+- Improved frontend error normalization for Electron IPC-wrapped backend errors, so structured API errors (for example `NO_TRACK_SELECTED`) no longer degrade to `UNEXPECTED_ERROR`.
+
+### Changed
+- Bumped frontend app version to `0.2.1` for release packaging.
+
 ## [0.2.0] - 2026-03-14
 
 ### Added
@@ -26,4 +35,3 @@ All notable changes to this project are documented in this file.
 ### Docs
 - Added phase plans and rollout notes under `docs/plans/`.
 - Added v0.2.0 release prep docs and release copy template.
-
