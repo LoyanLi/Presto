@@ -35,7 +35,7 @@ source .venv/bin/activate
 When making changes, preserve these contracts unless the change explicitly includes migration work:
 
 - Keep `/api/v1/*` route contracts backward compatible
-- Keep Electron route mapping aligned with frontend API entries
+- Keep Electron mode-routing rules aligned with frontend API entries
 - Keep import/export workflow behavior stable by default
 - Keep generated artifacts and local runtime files out of git
 
@@ -71,6 +71,15 @@ When touching Electron runtime routing, also verify:
 node --check frontend/electron/main.mjs
 ```
 
+When touching settings/developer mode behavior, also verify:
+
+```bash
+npm --prefix frontend run dev
+# Manually verify:
+# - Home only shows Developer entry after enabling Developer Mode in Settings
+# - Settings sections (General/AI/Developer) persist and refresh correctly
+```
+
 ## 7. Pull Request Checklist
 
 Include in every PR:
@@ -93,14 +102,20 @@ Include in every PR:
 Update related docs when applicable:
 
 - `README.md` for setup, behavior, or command changes
-- `docs/TECHNICAL_ARCHITECTURE.md` for module/flow/interface changes
+- `docs/TECHNICAL_ARCHITECTURE.md` for module/flow/interface changes (local maintainer doc)
 - `CONTRIBUTING.md` if workflow expectations change
+
+If your local workflow keeps `docs/` ignored in git, do both:
+
+- Update local `docs/TECHNICAL_ARCHITECTURE.md` for maintainability
+- Mirror key architecture deltas in tracked release notes/changelog material
 
 ## 10. Security and Local Data
 
 - Never commit API keys, tokens, or local secrets
 - Do not commit runtime caches/logs/output
 - Validate `.gitignore` coverage when adding new generated files
+- Keep team-local workspace folders (for example `docs/`, `.obsidian/`) aligned with current ignore policy
 
 ## 11. Reporting Bugs and Proposing Features
 
