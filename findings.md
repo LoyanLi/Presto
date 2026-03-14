@@ -94,3 +94,42 @@
 - 仍需补足：
   - Export 子组件（Track2Do 内部）仍有部分硬编码英文文案未统一接入 i18n。
   - 后续应补充 UI 冒烟验证（两种语言各跑一轮主路径）。
+
+## 2026-03-14 Phase 4 设计决策（大工程执行性能优化）
+- 已确认优化目标与约束：
+  - 目标规模：`100-200 tracks`
+  - 优先级：吞吐优先（总耗时目标改善约 `40%`）
+  - 约束：Pro Tools UI 操作保持串行，不做 PT 并行自动化
+- 方案对比结论：
+  - 选择“减少 PT 往返 + 阶段化分批执行”为 Phase 4 主方案。
+  - 不采用“PT 操作并行”与“重型全局执行引擎”作为本 phase 主路径。
+- 关键落点：
+  - `orchestrator` 改为阶段化执行（import+rename / color batch / strip）。
+  - `gateway` 增加批量颜色调用与回退策略。
+  - `run state` 增加阶段进度字段（`stage/stage_current/stage_total/stage_progress`）。
+- 文档沉淀：
+  - 设计文档：`docs/plans/2026-03-14-phase4-large-session-performance-design.md`
+  - 实施计划：`docs/plans/2026-03-14-phase4-large-session-performance.md`
+
+## 2026-03-14 Phase 4 实施发现（第一轮）
+- 后端执行链路改造：
+  - `orchestrator` 已改为三阶段：
+    - `stage_import_rename`
+    - `stage_color_batch`
+    - `stage_strip_silence`
+  - 保留原有 `progress_callback` 兼容能力，并新增阶段进度回调。
+- 网关能力增强：
+  - `ProToolsGateway` 新增 `apply_track_color_batch`。
+  - 当批量上色调用失败时，自动回退到逐轨上色路径。
+- API 状态扩展：
+  - import 任务状态新增 `stage/stage_current/stage_total/stage_progress`。
+  - `/import/run/{id}` 已返回上述字段。
+- 前端展示升级：
+  - `ImportRunState` 类型接入 stage 字段。
+  - Import Step3 新增阶段进度条与阶段名称显示（中英文）。
+- 基准与验证：
+  - 新增基准脚本：`backend/scripts/benchmark_import_phase4.py`
+  - 新增 smoke 测试：`backend/tests/test_import_benchmark_smoke.py`
+  - 当前基准为合成场景（不含真实 Pro Tools 会话往返耗时）。
+- 当前剩余风险：
+  - 40% 提升目标尚未用真实 100-200 track PT 工程做 A/B 采样验证。

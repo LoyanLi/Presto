@@ -9,6 +9,7 @@ import {
   AiNamingConfig,
   AppConfigDto,
   CategoryTemplate,
+  ImportRunState,
   ProposalStatus,
   RenameProposal,
   ResolvedImportItem,
@@ -192,7 +193,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
   const [stripReady, setStripReady] = useState(false)
 
   const [runId, setRunId] = useState<string | null>(null)
-  const [runState, setRunState] = useState<any>(null)
+  const [runState, setRunState] = useState<ImportRunState | null>(null)
   const [banner, setBanner] = useState(() => t('import.banner.ready'))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -355,6 +356,17 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
     }
     return false
   }, [step, files.length, proposals.length, conflictCount, emptyCount, stripReady])
+
+  const currentStageLabel = useMemo(() => {
+    if (!runState?.stage) {
+      return t('import.step3.stage.unknown')
+    }
+    if (runState.stage === 'stage_import_rename') return t('import.step3.stage.importRename')
+    if (runState.stage === 'stage_color_batch') return t('import.step3.stage.colorBatch')
+    if (runState.stage === 'stage_strip_silence') return t('import.step3.stage.stripSilence')
+    if (runState.stage === 'stage_completed') return t('import.step3.stage.completed')
+    return runState.stage
+  }, [runState?.stage, t])
 
   const loadConfig = async (): Promise<void> => {
     try {
@@ -1162,7 +1174,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                     <button
                       onClick={markStripReady}
                       className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                      disabled={!stripOpened}
+                      disabled={busy}
                     >
                       {t('import.step2.markReady')}
                     </button>
@@ -1171,7 +1183,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
               >
                 <div className="text-sm text-gray-700">
                   {t('import.step2.status', {
-                    opened: stripOpened ? t('import.step2.windowOpened') : t('import.step2.windowNotOpened'),
+                    opened: stripOpened || stripReady ? t('import.step2.windowOpened') : t('import.step2.windowNotOpened'),
                     confirmed: stripReady ? t('import.step2.confirmed') : t('import.step2.notConfirmed'),
                   })}
                 </div>
@@ -1219,6 +1231,29 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                         className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm"
                         style={{ width: `${Math.max(0, Math.min(100, Number(runState.progress || 0)))}%` }}
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">
+                        {t('import.step3.stageProgressLabel', { stage: currentStageLabel })}
+                      </span>
+                      <span className="text-xs font-medium text-blue-600">
+                        {Math.round(Number(runState.stage_progress || 0))}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 shadow-inner">
+                      <div
+                        className="bg-gradient-to-r from-cyan-500 to-sky-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-sm"
+                        style={{ width: `${Math.max(0, Math.min(100, Number(runState.stage_progress || 0)))}%` }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-gray-600">
+                      {t('import.step3.stageItems', {
+                        current: runState.stage_current || 0,
+                        total: runState.stage_total || 0,
+                      })}
                     </div>
                   </div>
 

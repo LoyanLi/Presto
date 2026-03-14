@@ -20,6 +20,10 @@ class TaskRecord:
     total: int
     current_name: str
     created_at: datetime
+    stage: str = ""
+    stage_current: int = 0
+    stage_total: int = 0
+    stage_progress: float = 0.0
     started_at: datetime | None = None
     finished_at: datetime | None = None
     result: dict[str, Any] | None = None
@@ -63,4 +67,3 @@ class TaskRegistry:
                 return False
             del self._tasks[task_id]
             return True
-

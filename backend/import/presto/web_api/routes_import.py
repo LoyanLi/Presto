@@ -146,6 +146,10 @@ def import_run_start(payload: ImportRunRequest, request: Request):
             total=len(resolved_items),
             current_name="",
             created_at=datetime.now(),
+            stage="stage_import_rename",
+            stage_current=0,
+            stage_total=len(resolved_items),
+            stage_progress=0.0,
         )
     )
 
@@ -164,12 +168,32 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 current_name=current_name or "",
             )
 
+        def _update_stage_progress(
+            stage_name: str,
+            stage_current: int,
+            stage_total: int,
+            _overall_current: int,
+            _overall_total: int,
+            current_name: str,
+        ) -> None:
+            safe_total = max(stage_total, 1)
+            stage_progress = min(100.0, max(0.0, (stage_current / safe_total) * 100.0))
+            services.task_registry.update(
+                task_id,
+                stage=stage_name,
+                stage_current=stage_current,
+                stage_total=stage_total,
+                stage_progress=stage_progress,
+                current_name=current_name or "",
+            )
+
         try:
             report = services.import_orchestrator.run_resolved(
                 resolved_items,
                 category_map,
                 cfg.silence_profile,
                 progress_callback=_update_progress,
+                stage_progress_callback=_update_stage_progress,
             )
             services.task_registry.update(
                 task_id,
@@ -178,6 +202,10 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 current_index=report.total,
                 total=report.total,
                 current_name="",
+                stage="stage_completed",
+                stage_current=1,
+                stage_total=1,
+                stage_progress=100.0,
                 result={
                     "total": report.total,
                     "success_count": report.success_count,
@@ -193,6 +221,7 @@ def import_run_start(payload: ImportRunRequest, request: Request):
                 current_name="",
                 error_code=getattr(exc, "code", "UNEXPECTED_ERROR"),
                 error_message=getattr(exc, "message", str(exc)),
+                stage_progress=100.0,
                 finished_at=datetime.now(),
             )
 
@@ -216,6 +245,10 @@ def import_run_status(run_id: str, request: Request):
             "current_index": task.current_index,
             "total": task.total,
             "current_name": task.current_name,
+            "stage": task.stage,
+            "stage_current": task.stage_current,
+            "stage_total": task.stage_total,
+            "stage_progress": task.stage_progress,
             "created_at": task.created_at.isoformat(),
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "finished_at": task.finished_at.isoformat() if task.finished_at else None,
