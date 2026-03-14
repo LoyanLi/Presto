@@ -81,16 +81,32 @@ function toFriendlyView(payload: ApiError): FriendlyErrorView {
 }
 
 function tryParsePrefixedErrorMessage(message: string): ApiError | null {
-  if (!message.startsWith(PRESTO_API_ERROR_PREFIX)) {
+  const prefixIndex = message.indexOf(PRESTO_API_ERROR_PREFIX)
+  if (prefixIndex < 0) {
     return null
   }
-  const raw = message.slice(PRESTO_API_ERROR_PREFIX.length)
-  try {
-    const parsed = JSON.parse(raw)
-    return isApiError(parsed) ? parsed : null
-  } catch {
-    return null
+
+  const raw = message.slice(prefixIndex + PRESTO_API_ERROR_PREFIX.length).trim()
+  const candidates: string[] = [raw]
+
+  const jsonStart = raw.indexOf('{')
+  const jsonEnd = raw.lastIndexOf('}')
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    candidates.push(raw.slice(jsonStart, jsonEnd + 1))
   }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (isApiError(parsed)) {
+        return parsed
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return null
 }
 
 export function normalizeAppError(input: unknown): FriendlyErrorView {

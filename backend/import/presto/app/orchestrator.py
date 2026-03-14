@@ -139,7 +139,6 @@ class ImportOrchestrator:
     def prepare_strip_silence(self) -> None:
         """Open Strip Silence before batch so user can confirm parameters."""
 
-        self.gateway.ensure_any_track_selected()
         self.ui_automation.open_strip_silence_window()
 
     def run_resolved(
