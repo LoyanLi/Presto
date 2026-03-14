@@ -81,6 +81,7 @@ class UiPreferences:
 
     logs_collapsed_by_default: bool
     follow_system_theme: bool
+    developer_mode_enabled: bool = False
 
 
 @dataclass(frozen=True)

@@ -163,6 +163,7 @@ class AiNamingConfigPayload(BaseModel):
 class UiPreferencesPayload(BaseModel):
     logs_collapsed_by_default: bool
     follow_system_theme: bool
+    developer_mode_enabled: bool = False
 
 
 class ConfigUpdateRequest(BaseModel):

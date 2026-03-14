@@ -28,6 +28,7 @@ export interface AiNamingConfig {
 export interface UiPreferences {
   logs_collapsed_by_default: boolean
   follow_system_theme: boolean
+  developer_mode_enabled: boolean
 }
 
 export interface AppConfigDto {

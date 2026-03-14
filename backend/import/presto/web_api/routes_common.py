@@ -100,6 +100,7 @@ def update_config(payload: ConfigUpdateRequest, request: Request):
         ui_preferences=UiPreferences(
             logs_collapsed_by_default=bool(payload.ui_preferences.logs_collapsed_by_default),
             follow_system_theme=bool(payload.ui_preferences.follow_system_theme),
+            developer_mode_enabled=bool(payload.ui_preferences.developer_mode_enabled),
         ),
     )
     services.config_store.save(config)
