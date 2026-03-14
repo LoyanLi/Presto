@@ -105,6 +105,8 @@ npm --prefix frontend run package:mac:installer:arm64
 npm --prefix frontend run package:mac:installer:x64
 ```
 
+Recommended release strategy: publish single-arch installers separately to reduce total distribution size.
+
 Output directory:
 
 - `frontend/release/`
@@ -165,6 +167,8 @@ Checks:
 
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Technical internals: [docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Release notes template: [docs/releases/v0.2.0-release.md](docs/releases/v0.2.0-release.md)
 
 ## License
 
