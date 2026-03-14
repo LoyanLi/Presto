@@ -50,6 +50,13 @@ const electronAPI = {
     put: (url: string, data?: unknown): Promise<any> => ipcRenderer.invoke('http:put', url, data),
     delete: (url: string): Promise<any> => ipcRenderer.invoke('http:delete', url),
   },
+  exportMobile: {
+    createSession: (taskId: string): Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }> =>
+      ipcRenderer.invoke('export-mobile:create-session', taskId),
+    closeSession: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('export-mobile:close-session', sessionId),
+    getViewUrl: (sessionId: string): Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }> =>
+      ipcRenderer.invoke('export-mobile:get-view-url', sessionId),
+  },
   fs: {
     readFile: (targetPath: string): Promise<string | null> => ipcRenderer.invoke('fs:read-file', targetPath),
     writeFile: (targetPath: string, content: string): Promise<boolean> =>

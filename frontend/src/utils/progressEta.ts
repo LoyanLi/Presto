@@ -5,6 +5,46 @@ export function smoothProgress(previous: number, next: number): number {
   return Math.max(prev, clamped)
 }
 
+export function shouldShowExportEta(status: string | null | undefined, currentSnapshot: number | null | undefined): boolean {
+  const normalizedStatus = String(status || '').toLowerCase()
+  const normalizedSnapshot = Number.isFinite(currentSnapshot as number) ? Math.max(0, Math.trunc(currentSnapshot as number)) : 0
+
+  if ((normalizedStatus === 'running' || normalizedStatus === 'pending') && normalizedSnapshot <= 1) {
+    return false
+  }
+
+  return true
+}
+
+export function estimateProgressFromEta(
+  baseProgress: number,
+  etaSeconds: number | null | undefined,
+  elapsedMs: number,
+  status: string | null | undefined,
+): number {
+  const safeBase = Math.max(0, Math.min(100, Number.isFinite(baseProgress) ? baseProgress : 0))
+  const normalizedStatus = String(status || '').toLowerCase()
+  const safeEta = Number.isFinite(etaSeconds as number) ? Number(etaSeconds) : NaN
+
+  if (safeBase >= 100) {
+    return 100
+  }
+  if (normalizedStatus !== 'running' && normalizedStatus !== 'pending') {
+    return safeBase
+  }
+  if (!Number.isFinite(safeEta) || safeEta <= 0) {
+    return safeBase
+  }
+
+  const elapsedSeconds = Math.max(0, (Number.isFinite(elapsedMs) ? elapsedMs : 0) / 1000)
+  if (elapsedSeconds <= 0) {
+    return safeBase
+  }
+
+  const projected = safeBase + (elapsedSeconds * (100 - safeBase)) / safeEta
+  return Math.max(safeBase, Math.min(99.9, projected))
+}
+
 export function estimateEtaFromProgress(
   startedAt: string | null | undefined,
   progress: number,
