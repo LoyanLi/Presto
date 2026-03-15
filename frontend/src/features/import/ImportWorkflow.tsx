@@ -20,6 +20,9 @@ import { useI18n } from '../../i18n'
 import { importApi } from '../../services/api/import'
 import { estimateEtaFromProgress, formatEtaLabel } from '../../utils/progressEta'
 import { AiSettingsDialog, CategoryEditorDialog } from '../settings/ConfigDialogs'
+import { applyCategoryToPaths } from './batchCategory'
+import { shouldPreventRowMouseDown } from './rowInteraction'
+import { computeNextRowSelection } from './rowSelection'
 
 type SortMode = 'name' | 'type' | 'category_order'
 
@@ -92,26 +95,26 @@ function relativePathFromFolder(filePath: string, folderPath: string): string {
   return basenameOf(filePath)
 }
 
-function rowBackgroundFromCategoryHex(color: string | null | undefined): string {
+function rowBackgroundFromCategoryHex(color: string | null | undefined, alpha = 0.1): string {
   if (!color || color === 'null' || !color.startsWith('#')) {
-    return 'rgba(107, 114, 128, 0.1)'
+    return `rgba(107, 114, 128, ${alpha})`
   }
   const hex = color.replace('#', '')
   if (hex.length === 8) {
     const r = parseInt(hex.slice(2, 4), 16)
     const g = parseInt(hex.slice(4, 6), 16)
     const b = parseInt(hex.slice(6, 8), 16)
-    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 'rgba(107, 114, 128, 0.1)'
-    return `rgba(${r}, ${g}, ${b}, 0.1)`
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return `rgba(107, 114, 128, ${alpha})`
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
   }
   if (hex.length === 6) {
     const r = parseInt(hex.slice(0, 2), 16)
     const g = parseInt(hex.slice(2, 4), 16)
     const b = parseInt(hex.slice(4, 6), 16)
-    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 'rgba(107, 114, 128, 0.1)'
-    return `rgba(${r}, ${g}, ${b}, 0.1)`
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return `rgba(107, 114, 128, ${alpha})`
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
   }
-  return 'rgba(107, 114, 128, 0.1)'
+  return `rgba(107, 114, 128, ${alpha})`
 }
 
 function terminalStatus(status: string): boolean {
@@ -196,6 +199,8 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
   const [resolvedItems, setResolvedItems] = useState<ResolvedImportItem[]>([])
   const [step, setStep] = useState(1)
   const [sortMode, setSortMode] = useState<SortMode>('category_order')
+  const [selectedRowPaths, setSelectedRowPaths] = useState<Set<string>>(new Set())
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState<string | null>(null)
 
   const [stripOpened, setStripOpened] = useState(false)
   const [stripReady, setStripReady] = useState(false)
@@ -339,6 +344,8 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
     return order
   }, [sortedRows])
 
+  const selectedCount = selectedRowPaths.size
+
   const orderByDisplayOrder = <T extends { file_path: string }>(rows: T[]): T[] => {
     return [...rows].sort((a, b) => {
       const orderA = displayOrderMap.get(a.file_path) ?? Number.MAX_SAFE_INTEGER
@@ -454,6 +461,26 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
       setShowCategoryEditor(true)
     }
   }, [props.openCategorySignal])
+
+  useEffect(() => {
+    const allowed = new Set(sortedRows.map((row) => row.file_path))
+    setSelectedRowPaths((prev) => {
+      if (prev.size === 0) {
+        return prev
+      }
+      const next = new Set<string>()
+      prev.forEach((path) => {
+        if (allowed.has(path)) {
+          next.add(path)
+        }
+      })
+      if (next.size === prev.size) {
+        return prev
+      }
+      return next
+    })
+    setSelectionAnchorPath((prev) => (prev && allowed.has(prev) ? prev : null))
+  }, [sortedRows])
 
   const appendLog = (text: string): void => {
     setLogs((prev) => [...prev, `${new Date().toISOString()} ${text}`])
@@ -622,6 +649,8 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
     setStripReady(false)
     setRunId(null)
     setRunState(null)
+    setSelectedRowPaths(new Set())
+    setSelectionAnchorPath(null)
     setError(null)
     setBanner('Files cleared.')
   }
@@ -771,9 +800,61 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
     return { rows, loadedCount: rows.length, foundCacheFiles }
   }
 
+  const updateCategoryForPaths = (paths: Iterable<string>, nextCategoryId: string): boolean => {
+    const result = applyCategoryToPaths(files, proposals, paths, nextCategoryId)
+    if (!result.changed) {
+      return false
+    }
+    setFiles(result.files)
+    setProposals(result.proposals)
+    if (result.proposalChanged) {
+      schedulePersistAnalyzeResultCache(result.proposals)
+    }
+    setResolvedItems([])
+    return true
+  }
+
+  const handleRowSelection = (
+    filePath: string,
+    options: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean },
+  ): void => {
+    const orderedPaths = sortedRows.map((row) => row.file_path)
+    const result = computeNextRowSelection({
+      orderedPaths,
+      prevSelected: selectedRowPaths,
+      prevAnchor: selectionAnchorPath,
+      clickedPath: filePath,
+      metaKey: options.metaKey,
+      ctrlKey: options.ctrlKey,
+      shiftKey: options.shiftKey,
+    })
+    setSelectedRowPaths(result.selected)
+    setSelectionAnchorPath(result.anchor)
+  }
+
+  const handleCategoryChange = (filePath: string, nextCategoryId: string): void => {
+    if (!nextCategoryId) {
+      return
+    }
+    if (selectedRowPaths.has(filePath) && selectedRowPaths.size > 0) {
+      updateCategoryForPaths(selectedRowPaths, nextCategoryId)
+      return
+    }
+    updateCategoryForPaths([filePath], nextCategoryId)
+  }
+
   const updateProposal = (filePath: string, patch: Partial<RenameProposal>): void => {
     if (patch.category_id) {
-      setFiles((prev) => prev.map((row) => (row.file_path === filePath ? { ...row, category_id: patch.category_id || row.category_id } : row)))
+      updateCategoryForPaths([filePath], patch.category_id)
+    }
+    const hasNonCategoryPatch =
+      patch.ai_name !== undefined ||
+      patch.final_name !== undefined ||
+      patch.status !== undefined ||
+      patch.error_message !== undefined ||
+      patch.original_stem !== undefined
+    if (!hasNonCategoryPatch) {
+      return
     }
     setProposals((prev) => {
       const next = prev.map((row) => (row.file_path === filePath ? { ...row, ...patch } : row))
@@ -1122,7 +1203,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                   status: ptConnected ? t('import.projectInfo.connected') : t('import.projectInfo.notConnected'),
                 })}
                 rightSlot={
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <label className="text-sm text-gray-600">{t('import.projectInfo.sortBy')}</label>
                     <select
                       value={sortMode}
@@ -1133,31 +1214,46 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                       <option value="name">{t('import.sort.name')}</option>
                       <option value="type">{t('import.sort.type')}</option>
                     </select>
+                    <div className="text-xs text-gray-600">{t('import.batch.selected', { count: selectedCount })}</div>
                   </div>
                 }
                 noBodyPadding
               >
-                <div className="overflow-auto">
+                <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.trackInfo')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.category')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.aiName')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.finalName')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('import.table.status')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-gray-50">{t('import.table.trackInfo')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-gray-50">{t('import.table.category')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-gray-50">{t('import.table.aiName')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-gray-50">{t('import.table.finalName')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-gray-50">{t('import.table.status')}</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {sortedRows.map((row) => {
                         const categoryMeta = (config?.categories || []).find((item) => item.id === row.category_id)
                         const colorDot = categoryMeta?.preview_hex || '#9CA3AF'
-                        const rowBackground = rowBackgroundFromCategoryHex(colorDot)
+                        const rowBackground = rowBackgroundFromCategoryHex(colorDot, 0.1)
+                        const isSelected = selectedRowPaths.has(row.file_path)
+                        const selectedBackground = rowBackgroundFromCategoryHex(colorDot, 0.22)
                         return (
                           <tr
                             key={row.file_path}
-                            className="hover:opacity-80 transition-all"
-                            style={{ backgroundColor: rowBackground }}
+                            className={`transition-all cursor-pointer ${isSelected ? '' : 'hover:opacity-80'}`}
+                            style={{ backgroundColor: isSelected ? selectedBackground : rowBackground }}
+                            onMouseDown={(event) => {
+                              if (shouldPreventRowMouseDown(event.target)) {
+                                event.preventDefault()
+                              }
+                            }}
+                            onClick={(event) =>
+                              handleRowSelection(row.file_path, {
+                                metaKey: event.metaKey,
+                                ctrlKey: event.ctrlKey,
+                                shiftKey: event.shiftKey,
+                              })
+                            }
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
@@ -1171,7 +1267,8 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                             <td className="px-4 py-3">
                               <select
                                 value={row.category_id}
-                                onChange={(event) => updateProposal(row.file_path, { category_id: event.target.value })}
+                                onChange={(event) => handleCategoryChange(row.file_path, event.target.value)}
+                                onClick={(event) => event.stopPropagation()}
                                 className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                               >
                                 {(config?.categories || []).map((category) => (
@@ -1186,6 +1283,7 @@ export function ImportWorkflow(props: ImportWorkflowProps) {
                               <input
                                 value={row.final_name}
                                 onChange={(event) => updateProposal(row.file_path, { final_name: event.target.value })}
+                                onClick={(event) => event.stopPropagation()}
                                 className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
                                 disabled={row.status !== 'ready'}
                               />
