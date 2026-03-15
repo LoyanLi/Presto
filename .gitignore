@@ -94,6 +94,21 @@ vendor/
 .vendor/
 /Track2Do/
 
+# =========================
+# Third-party SDK artifacts (do not commit)
+# =========================
+**/AvidSDK/
+**/Avid-SDK/
+**/Avid_SDK/
+**/PTSLSDK/
+**/PTSL-SDK/
+**/PTSL_SDK/
+**/ProToolsSDK/
+**/ProTools-SDK/
+**/ProTools_SDK/
+**/Avid*SDK*.zip
+**/PTSL*SDK*.zip
+
 # Team-local docs/workspace (keep local, do not track)
 docs/*
 !docs/TECHNICAL_ARCHITECTURE.md
