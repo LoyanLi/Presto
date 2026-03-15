@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 const electronAPI = {
   app: {
     getVersion: () => ipcRenderer.invoke('app:get-version'),
+    getLatestRelease: () => ipcRenderer.invoke('app:get-latest-release'),
   },
   backend: {
     getStatus: () => ipcRenderer.invoke('backend:get-status'),
@@ -20,6 +21,7 @@ const electronAPI = {
   },
   shell: {
     openPath: (targetPath) => ipcRenderer.invoke('shell:open-path', targetPath),
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   },
   showOpenDialog: (options) => ipcRenderer.invoke('dialog:open', options),
   http: {

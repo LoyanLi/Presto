@@ -9,12 +9,66 @@ import { ErrorNotice } from '../../components/feedback/ErrorNotice'
 
 export type SettingsSection = 'general' | 'ai' | 'developer'
 
+type GithubLatestRelease = {
+  repo: string
+  tagName: string
+  name: string
+  htmlUrl: string
+  publishedAt: string
+  prerelease: boolean
+  draft: boolean
+}
+
 type SettingsPageProps = {
   initialSection: SettingsSection
   focusToken: number
   onBackHome: () => void
   onOpenDeveloper: () => void
   onDeveloperModeChange: (enabled: boolean) => void
+}
+
+const GITHUB_RELEASES_REPO = 'LoyanLi/Presto'
+const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_RELEASES_REPO}/releases/latest`
+
+function normalizeVersion(raw: string): string {
+  return String(raw || '').trim().replace(/^v/i, '').split('-')[0]
+}
+
+function isLatestVersionNewer(currentRaw: string, latestRaw: string): boolean {
+  const currentParts = normalizeVersion(currentRaw)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const latestParts = normalizeVersion(latestRaw)
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
+
+  const maxLen = Math.max(currentParts.length, latestParts.length, 3)
+  for (let i = 0; i < maxLen; i += 1) {
+    const current = currentParts[i] || 0
+    const latest = latestParts[i] || 0
+    if (latest > current) return true
+    if (latest < current) return false
+  }
+  return false
+}
+
+function normalizeReleasePayload(payload: unknown): GithubLatestRelease {
+  const data = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>
+  return {
+    repo: typeof data.repo === 'string' ? data.repo : GITHUB_RELEASES_REPO,
+    tagName: typeof data.tagName === 'string' ? data.tagName : typeof data.tag_name === 'string' ? data.tag_name : '',
+    name: typeof data.name === 'string' ? data.name : '',
+    htmlUrl: typeof data.htmlUrl === 'string' ? data.htmlUrl : typeof data.html_url === 'string' ? data.html_url : '',
+    publishedAt:
+      typeof data.publishedAt === 'string' ? data.publishedAt : typeof data.published_at === 'string' ? data.published_at : '',
+    prerelease: Boolean(data.prerelease),
+    draft: Boolean(data.draft),
+  }
+}
+
+function isNoHandlerError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes("No handler registered for 'app:get-latest-release'")
 }
 
 export function SettingsPage(props: SettingsPageProps) {
@@ -27,6 +81,16 @@ export function SettingsPage(props: SettingsPageProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<FriendlyErrorView | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState<string>('-')
+  const [latestRelease, setLatestRelease] = useState<GithubLatestRelease | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+
+  const hasVersionBridge = typeof window !== 'undefined' && Boolean(window.electronAPI?.app?.getVersion)
+  const hasReleaseBridge =
+    typeof window !== 'undefined' &&
+    Boolean(window.electronAPI?.app?.getLatestRelease || window.electronAPI?.http?.get || window.fetch)
+  const canOpenExternal = typeof window !== 'undefined' && Boolean(window.electronAPI?.shell?.openExternal)
 
   const loadConfig = async (): Promise<void> => {
     try {
@@ -45,6 +109,20 @@ export function SettingsPage(props: SettingsPageProps) {
   useEffect(() => {
     void loadConfig()
   }, [])
+
+  useEffect(() => {
+    if (!hasVersionBridge) {
+      return
+    }
+    void window.electronAPI!.app
+      .getVersion()
+      .then((version) => {
+        setAppVersion(version || '-')
+      })
+      .catch(() => {
+        setAppVersion('-')
+      })
+  }, [hasVersionBridge])
 
   useEffect(() => {
     setActiveSection(props.initialSection)
@@ -136,6 +214,77 @@ export function SettingsPage(props: SettingsPageProps) {
     props.onDeveloperModeChange(nextEnabled)
   }
 
+  const checkForUpdates = async (): Promise<void> => {
+    if (!hasReleaseBridge) {
+      setUpdateError(t('settings.update.bridgeUnavailable'))
+      return
+    }
+    try {
+      setCheckingUpdate(true)
+      setUpdateError(null)
+      const versionPromise = hasVersionBridge ? window.electronAPI!.app.getVersion() : Promise.resolve(appVersion)
+      let releasePayload: unknown
+      try {
+        if (window.electronAPI?.app?.getLatestRelease) {
+          releasePayload = await window.electronAPI.app.getLatestRelease()
+        } else if (window.electronAPI?.http?.get) {
+          releasePayload = await window.electronAPI.http.get(GITHUB_LATEST_RELEASE_URL)
+        } else {
+          const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
+            headers: { Accept: 'application/vnd.github+json' },
+          })
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          releasePayload = await response.json()
+        }
+      } catch (err) {
+        if (!isNoHandlerError(err)) {
+          throw err
+        }
+        if (window.electronAPI?.http?.get) {
+          releasePayload = await window.electronAPI.http.get(GITHUB_LATEST_RELEASE_URL)
+        } else {
+          const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
+            headers: { Accept: 'application/vnd.github+json' },
+          })
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          releasePayload = await response.json()
+        }
+      }
+      const [version] = await Promise.all([versionPromise])
+      setAppVersion(version || '-')
+      setLatestRelease(normalizeReleasePayload(releasePayload))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setUpdateError(message)
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  const openReleasePage = async (releaseUrl: string): Promise<void> => {
+    if (!releaseUrl) {
+      return
+    }
+    try {
+      setUpdateError(null)
+      if (canOpenExternal) {
+        await window.electronAPI!.shell.openExternal(releaseUrl)
+        return
+      }
+      window.open(releaseUrl, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setUpdateError(message)
+    }
+  }
+
+  const hasNewRelease =
+    latestRelease && appVersion !== '-' ? isLatestVersionNewer(appVersion, latestRelease.tagName) : false
+
   return (
     <div className="h-full overflow-auto bg-gray-50 px-6 py-8">
       <div className="max-w-5xl mx-auto space-y-5">
@@ -217,6 +366,46 @@ export function SettingsPage(props: SettingsPageProps) {
                       <option value="zh-CN">{t('settings.language.zh-CN')}</option>
                     </select>
                   </label>
+
+                  <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <div className="text-sm font-medium text-gray-900">{t('settings.update.title')}</div>
+                    <div className="text-sm text-gray-700">{t('settings.update.currentVersion', { value: appVersion })}</div>
+                    <div className="text-sm text-gray-700">
+                      {t('settings.update.latestVersion', {
+                        value: latestRelease?.tagName || t('settings.update.notChecked'),
+                      })}
+                    </div>
+                    {latestRelease ? (
+                      <div className={`text-sm ${hasNewRelease ? 'text-amber-700' : 'text-green-700'}`}>
+                        {hasNewRelease
+                          ? t('settings.update.available', { value: latestRelease.tagName })
+                          : t('settings.update.upToDate')}
+                      </div>
+                    ) : null}
+                    {!hasReleaseBridge ? (
+                      <div className="text-xs text-gray-500">{t('settings.update.bridgeUnavailable')}</div>
+                    ) : null}
+                    {updateError ? (
+                      <div className="text-sm text-red-700">{t('settings.update.failed', { value: updateError })}</div>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void checkForUpdates()}
+                        disabled={checkingUpdate || !hasReleaseBridge}
+                        className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50"
+                      >
+                        {checkingUpdate ? t('settings.update.checking') : t('settings.update.check')}
+                      </button>
+                      {latestRelease?.htmlUrl ? (
+                        <button
+                          onClick={() => void openReleasePage(latestRelease.htmlUrl)}
+                          className="px-3 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-black"
+                        >
+                          {t('settings.update.openRelease')}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </>
             ) : null}

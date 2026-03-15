@@ -57,6 +57,8 @@ const RETRYABLE_FETCH_CODES = new Set([
   'UND_ERR_BODY_TIMEOUT',
 ])
 const PRESTO_API_ERROR_PREFIX = '__PRESTO_API_ERROR__'
+const GITHUB_RELEASES_REPO = process.env.PRESTO_GITHUB_REPO || 'LoyanLi/Presto'
+const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_RELEASES_REPO}/releases/latest`
 
 const IMPORT_ROUTE_RULE = {
   pathPrefixes: ['/api/v1/import/'],
@@ -110,6 +112,29 @@ function nowIso() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchLatestGithubRelease() {
+  const payload = await performHttpRequest(GITHUB_LATEST_RELEASE_URL, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'Presto-App',
+    },
+  })
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid release payload from GitHub')
+  }
+
+  return {
+    repo: GITHUB_RELEASES_REPO,
+    tagName: typeof payload.tag_name === 'string' ? payload.tag_name : '',
+    name: typeof payload.name === 'string' ? payload.name : '',
+    htmlUrl: typeof payload.html_url === 'string' ? payload.html_url : '',
+    publishedAt: typeof payload.published_at === 'string' ? payload.published_at : '',
+    prerelease: Boolean(payload.prerelease),
+    draft: Boolean(payload.draft),
+  }
 }
 
 function normalizeLogLevel(level) {
@@ -207,6 +232,28 @@ function getProjectRoot() {
     return process.resourcesPath
   }
   return path.resolve(CURRENT_DIR, '..', '..')
+}
+
+async function resolveDisplayVersion() {
+  const envVersion = String(process.env.PRESTO_APP_VERSION || '').trim()
+  if (envVersion) {
+    return envVersion
+  }
+
+  if (!app.isPackaged) {
+    try {
+      const packagePath = path.join(getProjectRoot(), 'frontend', 'package.json')
+      const raw = await fs.readFile(packagePath, 'utf-8')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed.version === 'string' && parsed.version.trim()) {
+        return parsed.version.trim()
+      }
+    } catch {
+      // Fall back to Electron app version.
+    }
+  }
+
+  return app.getVersion()
 }
 
 function normalizePort(value, fallback) {
@@ -1261,6 +1308,11 @@ function registerIpcHandlers() {
     return shell.openPath(targetPath)
   })
 
+  ipcMain.handle('shell:open-external', async (_event, url) => {
+    await shell.openExternal(String(url))
+    return true
+  })
+
   ipcMain.handle('window:toggle-always-on-top', async () => {
     if (!mainWindow) {
       return false
@@ -1285,7 +1337,8 @@ function registerIpcHandlers() {
     return mainWindow.isAlwaysOnTop()
   })
 
-  ipcMain.handle('app:get-version', async () => app.getVersion())
+  ipcMain.handle('app:get-version', async () => resolveDisplayVersion())
+  ipcMain.handle('app:get-latest-release', async () => fetchLatestGithubRelease())
 
   ipcMain.handle('backend:get-status', async () => getBackendStatusPayload())
 

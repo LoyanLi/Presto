@@ -3,6 +3,15 @@ import { contextBridge, ipcRenderer } from 'electron'
 const electronAPI = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+    getLatestRelease: (): Promise<{
+      repo: string
+      tagName: string
+      name: string
+      htmlUrl: string
+      publishedAt: string
+      prerelease: boolean
+      draft: boolean
+    }> => ipcRenderer.invoke('app:get-latest-release'),
   },
   backend: {
     getStatus: (): Promise<{
@@ -53,6 +62,7 @@ const electronAPI = {
   },
   shell: {
     openPath: (targetPath: string): Promise<string> => ipcRenderer.invoke('shell:open-path', targetPath),
+    openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('shell:open-external', url),
   },
   showOpenDialog: (options: {
     properties: string[]

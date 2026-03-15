@@ -27,6 +27,8 @@ const RETRYABLE_FETCH_CODES = new Set([
   'UND_ERR_BODY_TIMEOUT',
 ])
 const PRESTO_API_ERROR_PREFIX = '__PRESTO_API_ERROR__'
+const GITHUB_RELEASES_REPO = process.env.PRESTO_GITHUB_REPO || 'LoyanLi/Presto'
+const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_RELEASES_REPO}/releases/latest`
 type FrontendApiEntry = 'import' | 'export'
 
 type BackendRouteRule = {
@@ -59,6 +61,45 @@ const BACKEND_ROUTE_RULES: BackendRouteRule[] = [
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchLatestGithubRelease(): Promise<{
+  repo: string
+  tagName: string
+  name: string
+  htmlUrl: string
+  publishedAt: string
+  prerelease: boolean
+  draft: boolean
+}> {
+  const payload = await performHttpRequest(GITHUB_LATEST_RELEASE_URL, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'Presto-App',
+    },
+  })
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid release payload from GitHub')
+  }
+
+  const parsed = payload as {
+    tag_name?: unknown
+    name?: unknown
+    html_url?: unknown
+    published_at?: unknown
+    prerelease?: unknown
+    draft?: unknown
+  }
+  return {
+    repo: GITHUB_RELEASES_REPO,
+    tagName: typeof parsed.tag_name === 'string' ? parsed.tag_name : '',
+    name: typeof parsed.name === 'string' ? parsed.name : '',
+    htmlUrl: typeof parsed.html_url === 'string' ? parsed.html_url : '',
+    publishedAt: typeof parsed.published_at === 'string' ? parsed.published_at : '',
+    prerelease: Boolean(parsed.prerelease),
+    draft: Boolean(parsed.draft),
+  }
 }
 
 function readErrorCode(error: unknown): string | null {
@@ -230,6 +271,28 @@ function getProjectRoot(): string {
     return process.resourcesPath
   }
   return path.resolve(CURRENT_DIR, '..', '..')
+}
+
+async function resolveDisplayVersion(): Promise<string> {
+  const envVersion = String(process.env.PRESTO_APP_VERSION || '').trim()
+  if (envVersion) {
+    return envVersion
+  }
+
+  if (!app.isPackaged) {
+    try {
+      const packagePath = path.join(getProjectRoot(), 'frontend', 'package.json')
+      const raw = await fs.readFile(packagePath, 'utf-8')
+      const parsed = JSON.parse(raw) as { version?: unknown }
+      if (typeof parsed.version === 'string' && parsed.version.trim()) {
+        return parsed.version.trim()
+      }
+    } catch {
+      // Fall back to Electron app version.
+    }
+  }
+
+  return app.getVersion()
 }
 
 function startPythonApi(): void {
@@ -422,6 +485,11 @@ function registerIpcHandlers(): void {
     return shell.openPath(targetPath)
   })
 
+  ipcMain.handle('shell:open-external', async (_event, url: string) => {
+    await shell.openExternal(String(url))
+    return true
+  })
+
   ipcMain.handle('window:toggle-always-on-top', async () => {
     if (!mainWindow) {
       return false
@@ -446,7 +514,8 @@ function registerIpcHandlers(): void {
     return mainWindow.isAlwaysOnTop()
   })
 
-  ipcMain.handle('app:get-version', async () => app.getVersion())
+  ipcMain.handle('app:get-version', async () => resolveDisplayVersion())
+  ipcMain.handle('app:get-latest-release', async () => fetchLatestGithubRelease())
 
   ipcMain.handle('backend:get-status', async () => ({
     running: Boolean(pythonApi && !pythonApi.killed && importPythonApi && !importPythonApi.killed),
