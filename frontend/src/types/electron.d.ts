@@ -1,6 +1,15 @@
 export interface ElectronAPI {
   app: {
     getVersion: () => Promise<string>
+    getLatestRelease: () => Promise<{
+      repo: string
+      tagName: string
+      name: string
+      htmlUrl: string
+      publishedAt: string
+      prerelease: boolean
+      draft: boolean
+    }>
   }
   backend: {
     getStatus: () => Promise<{
@@ -56,6 +65,7 @@ export interface ElectronAPI {
   }
   shell: {
     openPath: (path: string) => Promise<string>
+    openExternal: (url: string) => Promise<boolean>
   }
   showOpenDialog: (options: {
     properties: string[]
