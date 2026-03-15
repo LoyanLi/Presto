@@ -25,6 +25,9 @@ type BackendLogEntry = {
   source: string
   level: string
   message: string
+  event?: string
+  code?: string
+  repeatCount?: number
 }
 
 type DeveloperPageProps = {
@@ -429,6 +432,7 @@ export function DeveloperPage(props: DeveloperPageProps) {
                     backendLogs.map((entry) => (
                       <div key={entry.id}>
                         [{entry.timestamp}] [{entry.level}] [{entry.source}] {entry.message}
+                        {entry.repeatCount && entry.repeatCount > 1 ? ` (x${entry.repeatCount})` : ''}
                       </div>
                     ))
                   )}

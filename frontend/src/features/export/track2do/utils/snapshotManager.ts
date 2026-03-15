@@ -79,7 +79,6 @@ export class SnapshotManager {
       const content = await (window.electronAPI as any).fs.readFile(filePath)
       if (content) {
         const snapshots = JSON.parse(content) as Snapshot[]
-        console.log(`从文件加载了 ${snapshots.length} 个快照: ${filePath}`)
         return snapshots
       }
     } catch (error) {
@@ -116,7 +115,6 @@ export class SnapshotManager {
       const success = await (window.electronAPI as any).fs.writeFile(filePath, content)
       
       if (success) {
-        console.log(`快照已保存到文件: ${filePath} (${snapshots.length} 个快照)`)
         return true
       }
     } catch (error) {
