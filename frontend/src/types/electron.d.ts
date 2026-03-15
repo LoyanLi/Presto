@@ -22,13 +22,31 @@ export interface ElectronAPI {
       } | null
       warnings: string[]
       logsCount: number
+      debugLoggingEnabled?: boolean
       baseUrl: string
       importBaseUrl: string
     }>
     activateMode: (mode: 'import' | 'export') => Promise<{ ok: boolean; status: unknown }>
+    setDeveloperMode: (enabled: boolean) => Promise<{ ok: boolean; enabled: boolean }>
     restart: () => Promise<{ ok: boolean; status: unknown }>
     updatePorts: (config: { port?: number; exportPort?: number; importPort?: number }) => Promise<{ ok: boolean; status: unknown }>
-    getLogs: (limit?: number) => Promise<Array<{ id: number; timestamp: string; source: string; level: string; message: string }>>
+    getLogs: (limit?: number) => Promise<
+      Array<{
+        id: number
+        timestamp: string
+        source: string
+        level: string
+        message: string
+        service?: string
+        event?: string
+        code?: string
+        requestId?: string
+        taskId?: string
+        runId?: string
+        sessionId?: string
+        repeatCount?: number
+      }>
+    >
     exportLogs: () => Promise<{ ok: boolean; filePath: string; count: number }>
   }
   window: {

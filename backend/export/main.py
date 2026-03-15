@@ -7,6 +7,7 @@ PT-STEM Backend Server
 
 import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -28,13 +29,53 @@ from core.config import settings
 # 加载环境变量
 load_dotenv()
 
+LOG_RETENTION_DAYS = 7
+LOG_MAX_TOTAL_BYTES = 50 * 1024 * 1024
+
+
+def _cleanup_log_files(logs_dir: Path) -> None:
+    """Apply retention policy: 7 days and <= 50MB total."""
+
+    if not logs_dir.exists():
+        return
+
+    now = datetime.utcnow()
+    files = [p for p in logs_dir.glob("*.log*") if p.is_file()]
+    for file_path in files:
+        try:
+            mtime = datetime.utcfromtimestamp(file_path.stat().st_mtime)
+            if now - mtime > timedelta(days=LOG_RETENTION_DAYS):
+                file_path.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+    files = [p for p in logs_dir.glob("*.log*") if p.is_file()]
+    files.sort(key=lambda path: path.stat().st_mtime)
+    total_size = sum(path.stat().st_size for path in files)
+    for file_path in files:
+        if total_size <= LOG_MAX_TOTAL_BYTES:
+            break
+        try:
+            file_size = file_path.stat().st_size
+            file_path.unlink(missing_ok=True)
+            total_size -= file_size
+        except OSError:
+            continue
+
+
 # 配置日志
+logs_dir = project_root / "logs"
+logs_dir.mkdir(parents=True, exist_ok=True)
+_cleanup_log_files(logs_dir)
+
+logger.remove()
+logger.add(sys.stdout, level="INFO", serialize=True)
 logger.add(
-    "logs/app.log",
+    str(logs_dir / "app.log"),
     rotation="10 MB",
-    retention="7 days",
+    retention=5,
     level="INFO",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+    serialize=True,
 )
 
 # 全局 PTSL 客户端实例
@@ -134,7 +175,7 @@ async def health_check():
     return {
         "status": "healthy",
         "ptsl_status": ptsl_status,
-        "timestamp": logger.bind().info("Health check requested")
+        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
 
 

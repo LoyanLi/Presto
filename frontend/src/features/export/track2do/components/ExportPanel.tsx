@@ -148,7 +148,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
      if (exportProgress?.task_id) {
        try {
          await apiService.stopExportTask(exportProgress.task_id);
-         console.log('Export task stopped successfully');
        } catch (error) {
          console.error('Failed to stop export task:', error);
        }
@@ -265,9 +264,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
 
   // Start export
   const startExport = async () => {
-    console.log('Starting export, selected snapshots count:', selectedSnapshots.length);
-    console.log('Selected snapshots:', selectedSnapshots);
-    console.log('Export settings:', exportSettings);
     
     if (selectedSnapshots.length === 0) {
       setError(makeLocalFriendlyError('请先选择要导出的快照'));
@@ -310,12 +306,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
         export_settings: exportSettings,
       };
 
-      console.log('Sending export request:', exportRequest);
       const response = await apiService.startExport(exportRequest);
-      console.log('Export request response:', response);
       
       if (response.success && response.task_id) {
-        console.log('Starting to poll task status, task_id:', response.task_id);
         // Update task_id in progress state
         setExportProgress(prev => prev ? { ...prev, task_id: response.task_id } : null);
         // Start polling task status
@@ -340,21 +333,16 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
   const pollExportStatus = async (taskId: string) => {
     const poll = async () => {
       try {
-        console.log('Polling export status, task_id:', taskId);
         const response = await apiService.getExportStatus(taskId);
-        console.log('Export status response:', response);
         
         if (response.success && response.data) {
-          console.log('Updating progress:', response.data);
           setExportProgress(response.data);
           setProgressSnapshotAtMs(Date.now());
           setRenderProgress(prev => smoothProgress(prev, Number(response.data.progress || 0)));
           
           const status = response.data.status;
-          console.log('Current status:', status);
           
           if (status === 'completed') {
-            console.log('Export completed');
             setRenderProgress(prev => smoothProgress(prev, 100));
             setSuccess(true);
             setIsExporting(false);
@@ -365,7 +353,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
               setPollTimeoutId(null);
             }
           } else if (status === 'failed' || status === 'completed_with_errors') {
-            console.log('Export failed or partially failed:', response.data.result?.error_message);
             setError(
               makeLocalFriendlyError(response.data.result?.error_message || '导出执行失败', {
                 code: 'EXPORT_TASK_FAILED',
@@ -379,12 +366,10 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
               setPollTimeoutId(null);
             }
           } else if (status === 'running' || status === 'pending') {
-            console.log('Continue polling, check again in 1 second');
             // Continue polling
             const timeoutId = setTimeout(poll, 1000);
             setPollTimeoutId(timeoutId);
           } else if (status === 'cancelled') {
-            console.log('Export was cancelled');
             setError(makeLocalFriendlyError('导出已取消', { code: 'EXPORT_CANCELLED', severity: 'warn' }));
             setIsExporting(false);
             setProgressSnapshotAtMs(0);
@@ -394,7 +379,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
               setPollTimeoutId(null);
             }
           } else {
-            console.log('Unknown status:', status, 'stopping polling');
             setError(
               makeLocalFriendlyError(`检测到未知导出状态：${status}`, {
                 code: 'EXPORT_UNKNOWN_STATUS',
@@ -423,8 +407,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
     poll();
   };
 
-  console.log('ExportPanel rendering, received snapshots count:', snapshots.length);
-  console.log('Received snapshots data:', snapshots);
 
   const exportEtaText = useMemo(() => {
     if (!isExporting || !exportProgress) {
@@ -869,14 +851,10 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ snapshots }) => {
                    try {
                      if (window.electronAPI && (window.electronAPI as any).shell) {
                        await (window.electronAPI as any).shell.openPath(exportSettings.output_path);
-                     } else {
-                       console.log('Electron API not available');
                      }
                    } catch (error) {
                      console.error('Failed to open folder:', error);
                    }
-                 } else {
-                   console.log('No output path specified');
                  }
                }}
                className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors flex items-center space-x-2"

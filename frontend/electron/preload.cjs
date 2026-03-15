@@ -7,6 +7,7 @@ const electronAPI = {
   backend: {
     getStatus: () => ipcRenderer.invoke('backend:get-status'),
     activateMode: (mode) => ipcRenderer.invoke('backend:activate-mode', mode),
+    setDeveloperMode: (enabled) => ipcRenderer.invoke('backend:set-developer-mode', enabled),
     restart: () => ipcRenderer.invoke('backend:restart'),
     updatePorts: (config) => ipcRenderer.invoke('backend:update-ports', config),
     getLogs: (limit) => ipcRenderer.invoke('backend:get-logs', limit),

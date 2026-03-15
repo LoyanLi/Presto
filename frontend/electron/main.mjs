@@ -40,6 +40,7 @@ const BACKEND_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_BACKEND_PORT_S
 
 const MAX_BACKEND_LOG_ENTRIES = Math.max(100, Number(process.env.PT_MAX_BACKEND_LOG_ENTRIES || '2000'))
 const MAX_BACKEND_WARNINGS = 100
+const LOG_DEDUP_WINDOW_MS = 60 * 1000
 const MOBILE_PROGRESS_DEFAULT_PORT = 18888
 const MOBILE_PROGRESS_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_MOBILE_PROGRESS_PORT_SCAN_RANGE || '30'))
 const MOBILE_PROGRESS_POLL_MS = 1000
@@ -96,10 +97,12 @@ let activeHeartbeatFailures = 0
 let lastError = null
 let lastExit = null
 let restartCount = 0
+let developerModeLoggingEnabled = false
 
 let mobileProgressServer = null
 let mobileProgressPort = null
 let mobileProgressLanHost = null
+const logDedupState = new Map()
 
 function nowIso() {
   return new Date().toISOString()
@@ -109,27 +112,80 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function localLog(source, level, message) {
+function normalizeLogLevel(level) {
+  const normalized = String(level || 'info').toLowerCase()
+  if (normalized === 'debug') return 'debug'
+  if (normalized === 'warn' || normalized === 'warning') return 'warn'
+  if (normalized === 'error') return 'error'
+  return 'info'
+}
+
+function shouldDropLog(level) {
+  return normalizeLogLevel(level) === 'debug' && !developerModeLoggingEnabled
+}
+
+function pruneDedupState(oldestEntryId) {
+  for (const [key, state] of logDedupState.entries()) {
+    if (!state?.entry || state.entry.id < oldestEntryId) {
+      logDedupState.delete(key)
+    }
+  }
+}
+
+function localLog(source, level, message, meta = {}) {
+  const normalizedLevel = normalizeLogLevel(level)
+  if (shouldDropLog(normalizedLevel)) {
+    return
+  }
+
   const lines = String(message)
     .split(/\r?\n/g)
     .map((line) => line.trimEnd())
     .filter((line) => line.length > 0)
 
   for (const line of lines) {
+    const dedupKey = JSON.stringify({
+      source,
+      level: normalizedLevel,
+      event: String(meta.event || ''),
+      code: String(meta.code || ''),
+      message: line,
+    })
+    const now = Date.now()
+    const dedupState = logDedupState.get(dedupKey)
+    if (dedupState && now - dedupState.lastAt < LOG_DEDUP_WINDOW_MS) {
+      dedupState.lastAt = now
+      dedupState.entry.repeatCount = Number(dedupState.entry.repeatCount || 1) + 1
+      continue
+    }
+
     const entry = {
       id: ++logSequence,
       timestamp: nowIso(),
       source,
-      level,
+      level: normalizedLevel,
       message: line,
+      service: 'electron-main',
+      event: typeof meta.event === 'string' ? meta.event : 'runtime.log',
+      code: typeof meta.code === 'string' ? meta.code : '',
+      requestId: typeof meta.requestId === 'string' ? meta.requestId : '',
+      taskId: typeof meta.taskId === 'string' ? meta.taskId : '',
+      runId: typeof meta.runId === 'string' ? meta.runId : '',
+      sessionId: typeof meta.sessionId === 'string' ? meta.sessionId : '',
+      ctx: meta.ctx && typeof meta.ctx === 'object' ? meta.ctx : undefined,
+      err: meta.err && typeof meta.err === 'object' ? meta.err : undefined,
+      repeatCount: 1,
     }
     backendLogs.push(entry)
+    logDedupState.set(dedupKey, { lastAt: now, entry })
     if (backendLogs.length > MAX_BACKEND_LOG_ENTRIES) {
       backendLogs.splice(0, backendLogs.length - MAX_BACKEND_LOG_ENTRIES)
+      const oldestEntryId = backendLogs[0]?.id ?? logSequence
+      pruneDedupState(oldestEntryId)
     }
 
     const rendered = `[${source}] ${line}\n`
-    if (level === 'error') {
+    if (normalizedLevel === 'error') {
       process.stderr.write(rendered)
     } else {
       process.stdout.write(rendered)
@@ -143,7 +199,7 @@ function pushWarning(message) {
   if (backendWarnings.length > MAX_BACKEND_WARNINGS) {
     backendWarnings.splice(MAX_BACKEND_WARNINGS)
   }
-  localLog('backend-manager', 'warn', message)
+  localLog('backend-manager', 'warn', message, { event: 'backend.warning' })
 }
 
 function getProjectRoot() {
@@ -728,16 +784,16 @@ function attachActiveProcessHandlers(mode, proc) {
   updateLegacyProcessPointers(mode, proc)
 
   proc.stdout.on('data', (chunk) => {
-    localLog(source, 'info', chunk.toString())
+    localLog(source, 'info', chunk.toString(), { event: `${mode}.process.stdout` })
   })
 
   proc.stderr.on('data', (chunk) => {
-    localLog(source, 'error', chunk.toString())
+    localLog(source, 'error', chunk.toString(), { event: `${mode}.process.stderr` })
   })
 
   proc.on('error', (error) => {
     lastError = error instanceof Error ? error.message : String(error)
-    localLog(source, 'error', `spawn error: ${lastError}`)
+    localLog(source, 'error', `spawn error: ${lastError}`, { event: `${mode}.process.spawn_failed` })
   })
 
   proc.on('exit', (code, signal) => {
@@ -747,7 +803,7 @@ function attachActiveProcessHandlers(mode, proc) {
       timestamp: nowIso(),
       mode,
     }
-    localLog(source, 'warn', `exited (code=${code}, signal=${signal})`)
+    localLog(source, 'warn', `exited (code=${code}, signal=${signal})`, { event: `${mode}.process.exited` })
 
     activeProcess = null
     activePid = null
@@ -786,12 +842,17 @@ function scheduleAutoRestart(reason) {
   }
 
   if (restartTimer) {
-    localLog('backend-manager', 'warn', `Auto-restart already scheduled. Reason: ${reason}`)
+    localLog('backend-manager', 'warn', `Auto-restart already scheduled. Reason: ${reason}`, {
+      event: 'backend.autorestart.already_scheduled',
+    })
     return
   }
 
   autoRestartCount += 1
-  localLog('backend-manager', 'warn', `Scheduling auto-restart #${autoRestartCount}: ${reason}`)
+  localLog('backend-manager', 'warn', `Scheduling auto-restart #${autoRestartCount}: ${reason}`, {
+    event: 'backend.autorestart.scheduled',
+    ctx: { autoRestartCount },
+  })
 
   restartTimer = setTimeout(() => {
     restartTimer = null
@@ -863,7 +924,10 @@ function startHeartbeatMonitor() {
       const healthy = await checkActiveHealth()
       if (healthy) {
         if (!activeReady || activeStatus !== 'ready') {
-          localLog('backend-manager', 'info', `${activeMode} backend is healthy`)
+          localLog('backend-manager', 'info', `${activeMode} backend is healthy`, {
+            event: 'backend.heartbeat.recovered',
+            ctx: { mode: activeMode },
+          })
         }
         activeReady = true
         activeStatus = 'ready'
@@ -872,6 +936,12 @@ function startHeartbeatMonitor() {
       }
 
       activeReady = false
+      if (activeStatus === 'ready') {
+        localLog('backend-manager', 'warn', `${activeMode} backend heartbeat degraded`, {
+          event: 'backend.heartbeat.degraded',
+          ctx: { mode: activeMode },
+        })
+      }
       activeStatus = activeStatus === 'crashed' ? 'crashed' : 'degraded'
       activeHeartbeatFailures += 1
       lastError = `Heartbeat failed (${activeHeartbeatFailures}/${BACKEND_HEARTBEAT_FAILURE_THRESHOLD})`
@@ -1071,22 +1141,22 @@ function getBackendStatusPayload() {
     importBaseUrl: `http://${API_HOST}:${runtimePort}`,
     warnings: [...backendWarnings],
     logsCount: backendLogs.length,
+    debugLoggingEnabled: developerModeLoggingEnabled,
   }
 }
 
 function formatLogExport() {
   const headerLines = [
     '# Presto Unified Runtime Logs',
+    'schema=v1-lite',
     `generated_at=${nowIso()}`,
     `project_root=${getProjectRoot()}`,
     `status=${JSON.stringify(getBackendStatusPayload(), null, 2)}`,
     '',
-    '# entries',
+    '# entries(jsonl)',
   ]
 
-  const entries = backendLogs.map(
-    (entry) => `${entry.timestamp} [${entry.level}] [${entry.source}] ${entry.message}`,
-  )
+  const entries = backendLogs.map((entry) => JSON.stringify(entry))
 
   return [...headerLines, ...entries, ''].join('\n')
 }
@@ -1218,6 +1288,15 @@ function registerIpcHandlers() {
   ipcMain.handle('app:get-version', async () => app.getVersion())
 
   ipcMain.handle('backend:get-status', async () => getBackendStatusPayload())
+
+  ipcMain.handle('backend:set-developer-mode', async (_event, enabled) => {
+    developerModeLoggingEnabled = Boolean(enabled)
+    localLog('backend-manager', 'info', `developer mode logging ${developerModeLoggingEnabled ? 'enabled' : 'disabled'}`, {
+      event: 'logging.developer_mode.updated',
+      ctx: { enabled: developerModeLoggingEnabled },
+    })
+    return { ok: true, enabled: developerModeLoggingEnabled }
+  })
 
   ipcMain.handle('backend:activate-mode', async (_event, mode) => {
     const status = await activateMode(mode, 'frontend requested mode switch')

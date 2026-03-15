@@ -22,11 +22,27 @@ const electronAPI = {
       ipcRenderer.invoke('backend:get-status'),
     activateMode: (mode: 'import' | 'export'): Promise<{ ok: boolean; status: unknown }> =>
       ipcRenderer.invoke('backend:activate-mode', mode),
+    setDeveloperMode: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean }> =>
+      ipcRenderer.invoke('backend:set-developer-mode', enabled),
     restart: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backend:restart'),
     updatePorts: (config: { port?: number; exportPort?: number; importPort?: number }): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke('backend:update-ports', config),
     getLogs: (limit?: number): Promise<
-      Array<{ id: number; timestamp: string; source: string; level: string; message: string }>
+      Array<{
+        id: number
+        timestamp: string
+        source: string
+        level: string
+        message: string
+        service?: string
+        event?: string
+        code?: string
+        requestId?: string
+        taskId?: string
+        runId?: string
+        sessionId?: string
+        repeatCount?: number
+      }>
     > => ipcRenderer.invoke('backend:get-logs', limit),
     exportLogs: (): Promise<{ ok: boolean; filePath: string; count: number }> => ipcRenderer.invoke('backend:export-logs'),
   },

@@ -67,6 +67,15 @@ export default function App() {
   }, [view, hasElectronBackend])
 
   useEffect(() => {
+    if (!hasElectronBackend || !window.electronAPI?.backend?.setDeveloperMode) {
+      return
+    }
+    void window.electronAPI.backend.setDeveloperMode(developerModeEnabled).catch(() => {
+      // Keep UI usable even if electron bridge is temporarily unavailable.
+    })
+  }, [developerModeEnabled, hasElectronBackend])
+
+  useEffect(() => {
     if (view === 'developer' && !developerModeEnabled) {
       openSettings('developer')
     }
