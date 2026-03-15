@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.2] - 2026-03-15
+
+### Added
+- Settings `General` section now includes a GitHub Release based update checker (`Check for Updates`) with direct release-page opening.
+- Import track list now supports keyboard-aware multi-row editing (`single/cmd/shift` selection).
+
+### Changed
+- App version display now reports Presto version (`frontend/package.json`) in development mode instead of Electron runtime version.
+- Update check now supports compatibility fallback: if `app:get-latest-release` IPC is unavailable in older Electron runtime, it falls back to HTTP/fetch release lookup.
+- Category edits from one import row can be applied to all selected rows in track list editing.
+- Runtime logging is standardized across Electron/import/export paths with improved schema consistency and noisy-log reduction.
+- Bumped frontend app version to `0.2.2` for release packaging.
+
+### Docs
+- Updated release artifact naming examples in `README.md` to `0.2.2`.
+- Updated technical architecture document to include update-check flow, track-list editing behavior, logging standardization, and architecture doc version marker `v0.2.2`.
+
 ## [0.2.1] - 2026-03-14
 
 ### Fixed

@@ -1,6 +1,6 @@
 # Technical Architecture
 
-This document describes the current runtime architecture used by Presto `v0.2.0`.
+This document describes the current runtime architecture used by Presto `v0.2.2`.
 
 ## 1. System Overview
 
@@ -60,6 +60,19 @@ Developer Mode is a guarded feature:
 - Only when enabled does Home show Developer entry
 - Developer page includes backend status, shared-port update, restart, runtime logs export, and error tester
 
+### 3.1 App version display and update check
+
+Settings `General` includes a manual update checker with two runtime paths:
+
+1. Preferred path: Electron IPC `app:get-latest-release` handled in `frontend/electron/main.mjs`.
+2. Compatibility fallback: renderer calls `window.electronAPI.http.get(...)` (or browser `fetch`) for GitHub latest-release endpoint when old runtimes do not expose the new IPC handler.
+
+Current app version is resolved by Electron main through `resolveDisplayVersion()`:
+
+- Dev mode: reads `frontend/package.json` version (Presto semantic version).
+- Packaged mode: falls back to `app.getVersion()`.
+- Optional override: `PRESTO_APP_VERSION`.
+
 ## 4. Import Workflow Internals
 
 Primary modules:
@@ -97,6 +110,21 @@ This is implemented in `ImportOrchestrator._run_pipeline(...)` and surfaced in U
 
 Strip Silence open is preflighted once via `open_strip_silence_window()`.
 The open action first checks whether Strip Silence window already exists before sending Cmd+U, preventing toggle-close behavior.
+
+### 4.5 Track-list editing and keyboard multi-select
+
+Import track list editing supports keyboard-aware row selection semantics:
+
+- Single click: select current row
+- Cmd/Ctrl click: toggle row in current selection
+- Shift click: select range from anchor row
+
+Selection state is handled in dedicated helpers:
+
+- `frontend/src/features/import/rowSelection.ts`
+- `frontend/src/features/import/rowInteraction.ts`
+
+Batch category application is applied through `applyCategoryToPaths(...)` so category edits on one row can propagate to all selected rows while preserving manual-edit workflow expectations.
 
 ## 5. Export Workflow, Progress, and Mobile Read-only View
 
@@ -162,6 +190,12 @@ Electron main (`main.mjs`) owns lifecycle:
 - Auto-restart on repeated failures (bounded window)
 - Runtime status/log export for diagnostics
 - Graceful shutdown of active backend and mobile progress server
+
+Logging in `v0.2.2` is standardized across runtime layers:
+
+- Electron runtime logs use structured schema + dedup window to reduce noisy duplicates.
+- Debug logs are gated by Developer Mode.
+- Import backend logging uses rotation/retention policy with compact JSON format.
 
 ## 9. Extending API Domains (Current Pattern)
 

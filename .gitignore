@@ -111,6 +111,7 @@ vendor/
 
 # Team-local docs/workspace (keep local, do not track)
 docs/*
+docs/releases/
 !docs/TECHNICAL_ARCHITECTURE.md
 .obsidian/
 
