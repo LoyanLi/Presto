@@ -40,7 +40,7 @@ test('plugin docs keep raw runtime/backend boundaries closed', async () => {
   const systemDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-system-design.zh-CN.md')
   const guideDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-development-guide.zh-CN.md')
 
-  for (const token of ['原始 Electron IPC', 'PTSL', 'backend/import/presto/**', 'backend DAW adapter internals']) {
+  for (const token of ['原始 Electron IPC', 'PTSL', 'backend/presto/**', 'backend DAW adapter internals']) {
     assert.match(contractsDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     assert.match(systemDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     assert.match(guideDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))

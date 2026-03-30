@@ -20,7 +20,7 @@
 
 目录：
 
-- `backend/import/presto/transport/http/*`
+- `backend/presto/transport/http/*`
 
 职责：
 
@@ -41,7 +41,7 @@
 
 目录：
 
-- `backend/import/presto/application/*`
+- `backend/presto/application/*`
 
 职责：
 
@@ -56,7 +56,7 @@
 
 目录：
 
-- `backend/import/presto/domain/*`
+- `backend/presto/domain/*`
 
 职责：
 
@@ -70,7 +70,7 @@
 
 目录：
 
-- `backend/import/presto/integrations/*`
+- `backend/presto/integrations/*`
 
 职责：
 
@@ -82,7 +82,7 @@
 
 ## 3. 入口与应用创建
 
-后端入口是 `backend/import/presto/main_api.py`。
+后端入口是 `backend/presto/main_api.py`。
 
 当前实现做了以下事情：
 
@@ -100,7 +100,7 @@
 
 ## 4. Service Container 设计
 
-`backend/import/presto/application/service_container.py` 是当前后端结构的中心。
+`backend/presto/application/service_container.py` 是当前后端结构的中心。
 
 当前容器聚合了这些核心对象：
 
@@ -144,7 +144,7 @@
 
 这说明当前后端默认是一套“本地进程内内存实现 + Pro Tools 适配”的组合。
 
-这里要补一个当前实现事实：后端能力目录并不是手写维护一份独立清单。`backend/import/presto/application/capabilities/catalog.py` 直接引用生成产物 `catalog_generated.py`，其来源是 `packages/contracts-manifest` 经 `scripts/generate-contracts.mjs` 生成的能力定义。
+这里要补一个当前实现事实：后端能力目录并不是手写维护一份独立清单。`backend/presto/application/capabilities/catalog.py` 直接引用生成产物 `catalog_generated.py`，其来源是 `packages/contracts-manifest` 经 `scripts/generate-contracts.mjs` 生成的能力定义。
 
 ### 4.3 当前配置存储现实
 

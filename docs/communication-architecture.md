@@ -92,7 +92,7 @@ Main 到 Backend 当前使用本地 HTTP JSON 调用。
 关键位置：
 
 - `frontend/electron/runtime/backendSupervisor.ts`
-- `backend/import/presto/main_api.py`
+- `backend/presto/main_api.py`
 
 ### 3.2 当前职责分配
 

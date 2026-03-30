@@ -69,7 +69,7 @@
 
 - `packages/contracts/src/generated/capabilityRegistry.ts`
 - `host-plugin-runtime/src/discovery/generated/runtimeServices.ts`
-- `backend/import/presto/application/capabilities/catalog_generated.py`
+- `backend/presto/application/capabilities/catalog_generated.py`
 
 ### 1.2 `packages/sdk-core`
 
@@ -538,7 +538,7 @@ jobs 域的意义是：
 
 - 插件可以通过 `presto.*` 调用公开 capability
 - 这些 capability 的底层当前多数会落到 Pro Tools 适配器
-- 插件不能直接 import 或调用 `backend/import/presto/integrations/daw/protools_adapter.py`
+- 插件不能直接 import 或调用 `backend/presto/integrations/daw/protools_adapter.py`
 - 插件不能直接调用 py-ptsl
 
 对外文档中的正确表述应是：

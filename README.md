@@ -18,7 +18,7 @@ Presto
 │   ├── electron/            # Electron 主进程、预加载、IPC、运行时装配
 │   ├── host/                # React 宿主壳层、插件挂载、设置页、开发者界面
 │   └── ui/                  # UI 设计令牌、基础控件、复合组件
-├── backend/import/presto/   # FastAPI 后端、能力处理器、领域模型、Pro Tools 适配
+├── backend/presto/          # FastAPI 后端、能力处理器、领域模型、Pro Tools 适配
 ├── host-plugin-runtime/     # 插件发现、校验、加载、挂载、权限守卫
 ├── packages/
 │   ├── contracts/           # 类型契约、能力协议、插件协议、事件与错误模型
