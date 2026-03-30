@@ -1,0 +1,20 @@
+[
+  "dialog.openFolder",
+  "automation.listDefinitions",
+  "automation.runDefinition",
+  "shell.openPath",
+  "shell.openExternal",
+  "fs.readFile",
+  "fs.getHomePath",
+  "fs.writeFile",
+  "fs.ensureDir",
+  "fs.readdir",
+  "fs.stat",
+  "mobileProgress.createSession",
+  "mobileProgress.closeSession",
+  "mobileProgress.getViewUrl",
+  "mobileProgress.updateSession",
+  "macAccessibility.preflight",
+  "macAccessibility.runScript",
+  "macAccessibility.runFile"
+]

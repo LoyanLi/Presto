@@ -1,0 +1,117 @@
+{
+  "pluginId": "official.export-workflow",
+  "extensionType": "workflow",
+  "version": "1.0.1",
+  "hostApiVersion": "0.1.0",
+  "supportedDaws": ["pro_tools"],
+  "uiRuntime": "react18",
+  "displayName": "Export Workflow",
+  "description": "Capture track snapshots, manage export presets, and run the official batch export workflow.",
+  "entry": "dist/entry.mjs",
+  "styleEntry": "dist/export-workflow.css",
+  "pages": [
+    {
+      "pageId": "export-workflow.page.main",
+      "path": "/plugins/export-workflow",
+      "title": "Export Workflow",
+      "mount": "workspace",
+      "componentExport": "ExportWorkflowPage"
+    }
+  ],
+  "settingsPages": [
+    {
+      "pageId": "export-workflow.page.settings",
+      "title": "Export Workflow",
+      "order": 40,
+      "storageKey": "settings.v1",
+      "loadExport": "loadExportWorkflowSettings",
+      "saveExport": "saveExportWorkflowSettings",
+      "defaults": {
+        "defaultSnapshotSelection": "all",
+        "mobileProgressEnabled": false
+      },
+      "sections": [
+        {
+          "sectionId": "defaultSnapshotSelection",
+          "title": "Default snapshot selection",
+          "fields": [
+            {
+              "fieldId": "default-snapshot-selection",
+              "kind": "toggle",
+              "label": "Select all snapshots by default",
+              "path": "defaultSnapshotSelection",
+              "checkedValue": "all",
+              "uncheckedValue": "none"
+            }
+          ]
+        },
+        {
+          "sectionId": "mobileProgressQr",
+          "title": "Mobile progress QR",
+          "fields": [
+            {
+              "fieldId": "mobile-progress-enabled",
+              "kind": "toggle",
+              "label": "Enable mobile progress QR",
+              "path": "mobileProgressEnabled",
+              "description": "Allows the Export step to generate a QR code so your phone can follow the current export progress."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "navigationItems": [
+    {
+      "itemId": "export-workflow.nav.main",
+      "title": "Export Workflow",
+      "pageId": "export-workflow.page.main",
+      "section": "sidebar",
+      "order": 70
+    }
+  ],
+  "commands": [
+    {
+      "commandId": "export-workflow.open",
+      "title": "Open Export Workflow",
+      "pageId": "export-workflow.page.main"
+    }
+  ],
+  "requiredCapabilities": [
+    "daw.connection.getStatus",
+    "session.getInfo",
+    "track.list",
+    "export.mixWithSource",
+    "export.run.start",
+    "jobs.get",
+    "jobs.cancel"
+  ],
+  "adapterModuleRequirements": [
+    { "moduleId": "daw", "minVersion": "2025.10.0" },
+    { "moduleId": "session", "minVersion": "2025.10.0" },
+    { "moduleId": "track", "minVersion": "2025.10.0" },
+    { "moduleId": "export", "minVersion": "2025.10.0" },
+    { "moduleId": "jobs", "minVersion": "2025.10.0" }
+  ],
+  "capabilityRequirements": [
+    { "capabilityId": "daw.connection.getStatus", "minVersion": "2025.10.0" },
+    { "capabilityId": "session.getInfo", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.list", "minVersion": "2025.10.0" },
+    { "capabilityId": "export.mixWithSource", "minVersion": "2025.10.0" },
+    { "capabilityId": "export.run.start", "minVersion": "2025.10.0" },
+    { "capabilityId": "jobs.get", "minVersion": "2025.10.0" },
+    { "capabilityId": "jobs.cancel", "minVersion": "2025.10.0" }
+  ],
+  "requiredRuntimeServices": [
+    "dialog.openFolder",
+    "shell.openPath",
+    "mobileProgress.createSession",
+    "mobileProgress.closeSession",
+    "mobileProgress.getViewUrl",
+    "mobileProgress.updateSession",
+    "fs.readFile",
+    "fs.writeFile",
+    "fs.ensureDir",
+    "fs.getHomePath"
+  ]
+}

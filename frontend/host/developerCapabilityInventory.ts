@@ -1,0 +1,233 @@
+import type { PublicCapabilityId } from '../../packages/contracts/src'
+
+export type CapabilityStatus = 'live' | 'public'
+export type DeveloperCapabilityId =
+  | PublicCapabilityId
+  | 'import.run.start'
+  | 'export.range.set'
+  | 'export.start'
+  | 'export.direct.start'
+  | 'jobs.create'
+  | 'jobs.update'
+
+export interface DeveloperCapabilityDefinition {
+  id: DeveloperCapabilityId
+  domain: string
+  status: CapabilityStatus
+  minimumDawVersion: string
+  sideEffect: boolean
+  defaultPayload: unknown
+  note: string
+}
+
+export const CORE_CONSOLE_CAPABILITY_IDS = [
+  'system.health',
+  'config.get',
+  'config.update',
+  'daw.connection.connect',
+  'daw.connection.disconnect',
+  'daw.connection.getStatus',
+  'session.getInfo',
+  'session.getLength',
+  'session.save',
+  'track.list',
+  'track.listNames',
+  'track.selection.get',
+  'track.rename',
+  'track.select',
+  'track.color.apply',
+  'track.mute.set',
+  'track.solo.set',
+  'clip.selectAllOnTrack',
+  'transport.play',
+  'transport.stop',
+  'transport.record',
+  'transport.getStatus',
+  'import.run.start',
+  'stripSilence.open',
+  'stripSilence.execute',
+  'export.range.set',
+  'export.start',
+  'export.direct.start',
+  'jobs.get',
+  'jobs.list',
+  'jobs.create',
+  'jobs.update',
+  'jobs.cancel',
+  'jobs.delete',
+] as const satisfies readonly DeveloperCapabilityId[]
+
+export const PUBLIC_CAPABILITY_IDS = [
+  'system.health',
+  'config.get',
+  'config.update',
+  'daw.connection.connect',
+  'daw.connection.disconnect',
+  'daw.connection.getStatus',
+  'session.getInfo',
+  'session.getLength',
+  'session.save',
+  'session.applySnapshot',
+  'session.getSnapshotInfo',
+  'track.list',
+  'track.listNames',
+  'track.selection.get',
+  'track.rename',
+  'track.select',
+  'track.color.apply',
+  'track.mute.set',
+  'track.solo.set',
+  'clip.selectAllOnTrack',
+  'transport.play',
+  'transport.stop',
+  'transport.record',
+  'transport.getStatus',
+  'import.run.start',
+  'stripSilence.open',
+  'stripSilence.execute',
+  'export.range.set',
+  'export.start',
+  'export.direct.start',
+  'jobs.get',
+  'jobs.list',
+  'jobs.create',
+  'jobs.update',
+  'jobs.cancel',
+  'jobs.delete',
+] as const satisfies readonly PublicCapabilityId[]
+
+export const DEVELOPER_CAPABILITIES: readonly DeveloperCapabilityDefinition[] = [
+  { id: 'system.health', domain: 'system', status: 'live', minimumDawVersion: 'Host only', sideEffect: false, defaultPayload: {}, note: 'Verified through Electron -> host -> sdk -> backend live chain.' },
+  { id: 'config.get', domain: 'config', status: 'live', minimumDawVersion: 'Host only', sideEffect: false, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'config.update', domain: 'config', status: 'live', minimumDawVersion: 'Host only', sideEffect: true, defaultPayload: { values: { audioImportRoot: '/Volumes/Samples' } }, note: 'Verified through the final live backend chain.' },
+  { id: 'daw.connection.connect', domain: 'daw', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'daw.connection.disconnect', domain: 'daw', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'daw.connection.getStatus', domain: 'daw', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: false, defaultPayload: {}, note: 'Verified through the Developer read smoke path.' },
+  { id: 'session.getInfo', domain: 'session', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: false, defaultPayload: {}, note: 'Reads the current live Pro Tools session.' },
+  { id: 'session.getLength', domain: 'session', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: false, defaultPayload: {}, note: 'Uses current session timecode rate; verified on live session.' },
+  { id: 'session.save', domain: 'session', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: {}, note: 'Saves the current Pro Tools session through the formal backend edge.' },
+  { id: 'session.applySnapshot', domain: 'session', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: { snapshot: { name: 'Verse A', trackStates: [{ trackName: 'Kick', isMuted: true, isSoloed: false }, { trackName: 'Snare', isMuted: false, isSoloed: true }] } }, note: 'Applies mute/solo snapshot state to the current session.' },
+  { id: 'session.getSnapshotInfo', domain: 'session', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: false, defaultPayload: { snapshot: { name: 'Verse A', trackStates: [{ trackName: 'Kick', isMuted: true, isSoloed: false }, { trackName: 'Snare', isMuted: false, isSoloed: true }] } }, note: 'Reads snapshot statistics through the formal public session edge.' },
+  { id: 'track.list', domain: 'track', status: 'live', minimumDawVersion: '2023.09.0', sideEffect: false, defaultPayload: {}, note: 'Returns real track metadata.' },
+  { id: 'track.listNames', domain: 'track', status: 'live', minimumDawVersion: '2023.09.0', sideEffect: false, defaultPayload: {}, note: 'Returns real track names.' },
+  { id: 'track.selection.get', domain: 'track', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: false, defaultPayload: {}, note: 'Returns the current Pro Tools track selection through PTSL track attributes.' },
+  { id: 'track.rename', domain: 'track', status: 'live', minimumDawVersion: '2023.03.0', sideEffect: true, defaultPayload: { currentName: 'Crash_Cymbal', newName: 'Crash Cymbal' }, note: 'Renames an existing track through the formal public edge.' },
+  { id: 'track.select', domain: 'track', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: { trackName: 'Crash_Cymbal' }, note: 'Real write action. Requires a live track name.' },
+  { id: 'track.color.apply', domain: 'track', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: { trackName: 'Crash_Cymbal', colorSlot: 1 }, note: 'Direct PTSL SetTrackColor write action. No preselect required.' },
+  { id: 'track.mute.set', domain: 'track', status: 'live', minimumDawVersion: '2023.09.0', sideEffect: true, defaultPayload: { trackNames: ['Crash_Cymbal'], enabled: true }, note: 'Sets mute state for one or more tracks.' },
+  { id: 'track.solo.set', domain: 'track', status: 'live', minimumDawVersion: '2023.09.0', sideEffect: true, defaultPayload: { trackNames: ['Crash_Cymbal'], enabled: true }, note: 'Sets solo state for one or more tracks.' },
+  { id: 'clip.selectAllOnTrack', domain: 'clip', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: { trackName: 'Crash_Cymbal' }, note: 'Selects all clips on a named track through the formal clip client edge.' },
+  { id: 'transport.play', domain: 'transport', status: 'live', minimumDawVersion: '2025.06.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'transport.stop', domain: 'transport', status: 'live', minimumDawVersion: '2025.06.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'transport.record', domain: 'transport', status: 'live', minimumDawVersion: '2025.06.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'transport.getStatus', domain: 'transport', status: 'live', minimumDawVersion: '2025.06.0', sideEffect: false, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  {
+    id: 'import.run.start',
+    domain: 'import',
+    status: 'live',
+    minimumDawVersion: '2025.06.0',
+    sideEffect: true,
+    defaultPayload: {
+      folderPaths: ['/private/tmp/presto-core-io-import'],
+    },
+    note: 'Core low-level I/O import capability driven by source folders. This is not a workflow capability.',
+  },
+  { id: 'stripSilence.open', domain: 'stripSilence', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: {}, note: 'Verified through the final live backend chain.' },
+  { id: 'stripSilence.execute', domain: 'stripSilence', status: 'live', minimumDawVersion: '2025.10.0', sideEffect: true, defaultPayload: { preset: 'default' }, note: 'Verified through the final live backend chain.' },
+  {
+    id: 'export.range.set',
+    domain: 'export',
+    status: 'live',
+    minimumDawVersion: '2025.10.0',
+    sideEffect: true,
+    defaultPayload: {
+      inTime: '00:00:00:00',
+      outTime: '00:00:10:00',
+    },
+    note: 'Core low-level I/O export capability to set timeline range. This is not a workflow capability.',
+  },
+  {
+    id: 'export.start',
+    domain: 'export',
+    status: 'live',
+    minimumDawVersion: '2025.10.0',
+    sideEffect: true,
+    defaultPayload: {
+      outputPath: '/private/tmp/presto-core-io-export',
+      fileName: 'presto-core-io-smoke-main',
+      fileType: 'WAV',
+      offline: true,
+      audio: {
+        format: 'interleaved',
+        bitDepth: 24,
+        sampleRate: 48000,
+      },
+    },
+    note: 'Core low-level I/O export capability via public edge. This is not a workflow capability.',
+  },
+  {
+    id: 'export.direct.start',
+    domain: 'export',
+    status: 'live',
+    minimumDawVersion: '2025.10.0',
+    sideEffect: true,
+    defaultPayload: {
+      outputPath: '/private/tmp/presto-core-io-export',
+      fileName: 'presto-core-io-smoke-direct',
+      fileType: 'WAV',
+      offline: true,
+      audio: {
+        format: 'interleaved',
+        bitDepth: 24,
+        sampleRate: 48000,
+      },
+    },
+    note: 'Core low-level I/O direct export capability via public edge. This is not a workflow capability.',
+  },
+  { id: 'jobs.get', domain: 'jobs', status: 'live', minimumDawVersion: 'Host only', sideEffect: false, defaultPayload: { jobId: 'job-xxxxxxxxxxxx' }, note: 'Job record query over public edge for both producer and manual jobs.' },
+  { id: 'jobs.list', domain: 'jobs', status: 'live', minimumDawVersion: 'Host only', sideEffect: false, defaultPayload: {}, note: 'Lists unified async job records created by import/export producers and jobs.create.' },
+  {
+    id: 'jobs.create',
+    domain: 'jobs',
+    status: 'live',
+    minimumDawVersion: 'Host only',
+    sideEffect: true,
+    defaultPayload: {
+      capability: 'jobs.create',
+      targetDaw: 'pro_tools',
+      state: 'queued',
+      progress: {
+        phase: 'queued',
+        current: 0,
+        total: 1,
+        percent: 0,
+        message: 'Manual placeholder job queued.',
+      },
+      metadata: {
+        source: 'developer-console',
+      },
+    },
+    note: 'Manual job record capability. Creates a placeholder job only and does not execute business work.',
+  },
+  {
+    id: 'jobs.update',
+    domain: 'jobs',
+    status: 'live',
+    minimumDawVersion: 'Host only',
+    sideEffect: true,
+    defaultPayload: {
+      jobId: 'job-xxxxxxxxxxxx',
+      state: 'running',
+      progress: {
+        phase: 'running',
+        current: 1,
+        total: 2,
+        percent: 50,
+        message: 'Manual progress update from Developer Core Console.',
+      },
+    },
+    note: 'Manual job record capability. Updates state/progress/result/error on an existing job record.',
+  },
+  { id: 'jobs.cancel', domain: 'jobs', status: 'live', minimumDawVersion: 'Host only', sideEffect: true, defaultPayload: { jobId: 'job-xxxxxxxxxxxx' }, note: 'Cancels queued/running jobs through the unified job manager for producer and manual jobs.' },
+  { id: 'jobs.delete', domain: 'jobs', status: 'live', minimumDawVersion: 'Host only', sideEffect: true, defaultPayload: { jobId: 'job-xxxxxxxxxxxx' }, note: 'Deletes non-running jobs through the unified job manager for producer and manual jobs.' },
+] as const

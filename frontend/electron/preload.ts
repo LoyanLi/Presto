@@ -1,103 +1,100 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { createRuntimeBridge } from './runtime/runtimeBridge'
+import { createPrestoClient } from '../../packages/sdk-core/src/createPrestoClient'
+import type {
+  CapabilityRequestEnvelope,
+  CapabilityResponseEnvelope,
+  PrestoClient,
+  PrestoTransport,
+} from '../../packages/contracts/src'
 
-const electronAPI = {
-  app: {
-    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
-    getLatestRelease: (): Promise<{
-      repo: string
-      tagName: string
-      name: string
-      htmlUrl: string
-      publishedAt: string
-      prerelease: boolean
-      draft: boolean
-    }> => ipcRenderer.invoke('app:get-latest-release'),
-  },
-  backend: {
-    getStatus: (): Promise<{
-      running: boolean
-      ready: boolean
-      mode: 'import' | 'export'
-      pid: number | null
-      requestedPort: number
-      port: number
-      status: string
-      lastError: string | null
-      warnings: string[]
-      logsCount: number
-      baseUrl: string
-      importBaseUrl: string
-    }> =>
-      ipcRenderer.invoke('backend:get-status'),
-    activateMode: (mode: 'import' | 'export'): Promise<{ ok: boolean; status: unknown }> =>
-      ipcRenderer.invoke('backend:activate-mode', mode),
-    setDeveloperMode: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean }> =>
-      ipcRenderer.invoke('backend:set-developer-mode', enabled),
-    restart: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('backend:restart'),
-    updatePorts: (config: { port?: number; exportPort?: number; importPort?: number }): Promise<{ ok: boolean }> =>
-      ipcRenderer.invoke('backend:update-ports', config),
-    getLogs: (limit?: number): Promise<
-      Array<{
-        id: number
-        timestamp: string
-        source: string
-        level: string
-        message: string
-        service?: string
-        event?: string
-        code?: string
-        requestId?: string
-        taskId?: string
-        runId?: string
-        sessionId?: string
-        repeatCount?: number
-      }>
-    > => ipcRenderer.invoke('backend:get-logs', limit),
-    exportLogs: (): Promise<{ ok: boolean; filePath: string; count: number }> => ipcRenderer.invoke('backend:export-logs'),
-  },
-  window: {
-    toggleAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-always-on-top'),
-    getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:get-always-on-top'),
-    setAlwaysOnTop: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('window:set-always-on-top', enabled),
-  },
-  shell: {
-    openPath: (targetPath: string): Promise<string> => ipcRenderer.invoke('shell:open-path', targetPath),
-    openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('shell:open-external', url),
-  },
-  showOpenDialog: (options: {
-    properties: string[]
-    title?: string
-    defaultPath?: string
-    filters?: Array<{ name: string; extensions: string[] }>
-  }): Promise<{ canceled: boolean; filePaths: string[] }> => ipcRenderer.invoke('dialog:open', options),
-  http: {
-    get: (url: string): Promise<any> => ipcRenderer.invoke('http:get', url),
-    post: (url: string, data?: unknown): Promise<any> => ipcRenderer.invoke('http:post', url, data),
-    put: (url: string, data?: unknown): Promise<any> => ipcRenderer.invoke('http:put', url, data),
-    delete: (url: string): Promise<any> => ipcRenderer.invoke('http:delete', url),
-  },
-  exportMobile: {
-    createSession: (taskId: string): Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }> =>
-      ipcRenderer.invoke('export-mobile:create-session', taskId),
-    closeSession: (sessionId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('export-mobile:close-session', sessionId),
-    getViewUrl: (sessionId: string): Promise<{ ok: boolean; sessionId?: string; url?: string; error?: string }> =>
-      ipcRenderer.invoke('export-mobile:get-view-url', sessionId),
-  },
-  fs: {
-    readFile: (targetPath: string): Promise<string | null> => ipcRenderer.invoke('fs:read-file', targetPath),
-    writeFile: (targetPath: string, content: string): Promise<boolean> =>
-      ipcRenderer.invoke('fs:write-file', targetPath, content),
-    ensureDir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:ensure-dir', targetPath),
-    getHomePath: (): Promise<string> => ipcRenderer.invoke('fs:get-home-path'),
-    exists: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', targetPath),
-    stat: (targetPath: string): Promise<{ isFile: boolean; isDirectory: boolean } | null> =>
-      ipcRenderer.invoke('fs:stat', targetPath),
-    readdir: (targetPath: string): Promise<string[]> => ipcRenderer.invoke('fs:readdir', targetPath),
-    mkdir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:mkdir', targetPath),
-    unlink: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:unlink', targetPath),
-    rmdir: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:rmdir', targetPath),
-    deleteFile: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('fs:delete-file', targetPath),
-  },
+type ElectronPreloadApi = {
+  contextBridge: {
+    exposeInMainWorld(key: string, api: unknown): void
+  }
+  ipcRenderer: {
+    invoke(channel: string, ...args: unknown[]): Promise<unknown>
+  }
 }
 
-contextBridge.exposeInMainWorld('electronAPI', electronAPI)
+type PluginHostBridge = {
+  listPlugins(): Promise<unknown>
+  installFromDirectory(overwrite?: boolean): Promise<unknown>
+  installFromZip(overwrite?: boolean): Promise<unknown>
+  uninstall(pluginId: string): Promise<unknown>
+}
+
+type PrestoBootstrap = {
+  takeClient(): PrestoClient
+  takeRuntime(): typeof runtime
+  takePluginHostBridge(): PluginHostBridge
+}
+
+declare const require: {
+  (id: string): ElectronPreloadApi
+}
+
+const { contextBridge, ipcRenderer } = require('electron')
+
+const runtime = createRuntimeBridge((channel, ...args) => ipcRenderer.invoke(channel, ...args))
+const transport: PrestoTransport = Object.freeze({
+  invoke<TRequest, TResponse>(
+    request: CapabilityRequestEnvelope<TRequest>
+  ): Promise<CapabilityResponseEnvelope<TResponse>> {
+    return ipcRenderer.invoke('backend:invoke-capability', request) as Promise<CapabilityResponseEnvelope<TResponse>>
+  },
+})
+const prestoClient = createPrestoClient({
+  transport,
+  clientName: 'electron-renderer',
+  clientVersion: '0.1.0',
+})
+const pluginHostBridge: PluginHostBridge = Object.freeze({
+  listPlugins: () => ipcRenderer.invoke('plugins:list'),
+  installFromDirectory: (overwrite = false) => ipcRenderer.invoke('plugins:install-directory', overwrite),
+  installFromZip: (overwrite = false) => ipcRenderer.invoke('plugins:install-zip', overwrite),
+  uninstall: (pluginId: string) => ipcRenderer.invoke('plugins:uninstall', pluginId),
+})
+
+const prestoBootstrap: PrestoBootstrap = (() => {
+  let client: PrestoClient | null = prestoClient
+  let hostRuntime: typeof runtime | null = runtime
+  let hostBridge: PluginHostBridge | null = pluginHostBridge
+
+  return Object.freeze({
+    takeClient(): PrestoClient {
+      if (!client) {
+        throw new Error('presto_client_already_taken')
+      }
+
+      const nextClient = client
+      client = null
+      return nextClient
+    },
+    takeRuntime(): typeof runtime {
+      if (!hostRuntime) {
+        throw new Error('presto_runtime_already_taken')
+      }
+
+      const nextRuntime = hostRuntime
+      hostRuntime = null
+      return nextRuntime
+    },
+    takePluginHostBridge(): PluginHostBridge {
+      if (!hostBridge) {
+        throw new Error('presto_plugin_host_bridge_already_taken')
+      }
+
+      const nextBridge = hostBridge
+      hostBridge = null
+      return nextBridge
+    },
+  })
+})()
+
+contextBridge.exposeInMainWorld('__PRESTO_BOOTSTRAP__', prestoBootstrap)
+
+declare global {
+  interface Window {
+    __PRESTO_BOOTSTRAP__?: typeof prestoBootstrap
+  }
+}

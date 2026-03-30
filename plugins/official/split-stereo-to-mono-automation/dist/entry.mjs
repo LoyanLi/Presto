@@ -1,0 +1,41 @@
+export const manifest = {
+  pluginId: 'official.split-stereo-to-mono-automation',
+  extensionType: 'automation',
+  version: '1.0.0',
+  hostApiVersion: '0.1.0',
+  supportedDaws: ['pro_tools'],
+  uiRuntime: 'react18',
+  displayName: 'Split Stereo To Mono',
+  description:
+    'Split the current stereo selection into mono tracks and keep the chosen side through the core automation capability.',
+  entry: 'dist/entry.mjs',
+  pages: [],
+  automationItems: [
+    {
+      itemId: 'split-stereo-to-mono.card',
+      title: 'Split Stereo To Mono',
+      automationType: 'splitStereoToMono',
+      description: 'Use the current Pro Tools selection and keep either the left or right mono channel.',
+      order: 10,
+    },
+  ],
+  requiredCapabilities: ['automation.splitStereoToMono.execute'],
+  adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
+  capabilityRequirements: [{ capabilityId: 'automation.splitStereoToMono.execute', minVersion: '2025.10.0' }],
+  requiredRuntimeServices: [],
+}
+
+let activePluginId = ''
+
+export function activate(context) {
+  activePluginId = context.pluginId
+  context.logger.info('Split stereo to mono automation plugin activated.')
+}
+
+export function deactivate() {
+  activePluginId = ''
+}
+
+export function getActivePluginId() {
+  return activePluginId
+}

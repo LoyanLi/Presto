@@ -1,0 +1,1341 @@
+[
+  {
+    "id": "system.health",
+    "version": 1,
+    "kind": "query",
+    "domain": "system",
+    "visibility": "public",
+    "description": "检查后端与当前 DAW 可用性",
+    "requestSchema": {
+      "name": "SystemHealthRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SystemHealthResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "system.health"
+  },
+  {
+    "id": "config.get",
+    "version": 1,
+    "kind": "query",
+    "domain": "config",
+    "visibility": "public",
+    "description": "读取应用配置",
+    "requestSchema": {
+      "name": "ConfigGetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ConfigGetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "config_store"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "config.get"
+  },
+  {
+    "id": "config.update",
+    "version": 1,
+    "kind": "command",
+    "domain": "config",
+    "visibility": "public",
+    "description": "更新应用配置",
+    "requestSchema": {
+      "name": "ConfigUpdateRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ConfigUpdateResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "config_store",
+      "keychain_store"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "config.update"
+  },
+  {
+    "id": "daw.connection.connect",
+    "version": 1,
+    "kind": "command",
+    "domain": "daw",
+    "visibility": "public",
+    "description": "连接 DAW",
+    "requestSchema": {
+      "name": "DawConnectionConnectRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "DawConnectionConnectResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "daw.connection.connect",
+    "emitsEvents": [
+      "daw.connection.changed"
+    ]
+  },
+  {
+    "id": "daw.connection.disconnect",
+    "version": 1,
+    "kind": "command",
+    "domain": "daw",
+    "visibility": "public",
+    "description": "断开 DAW",
+    "requestSchema": {
+      "name": "DawConnectionDisconnectRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "DawConnectionDisconnectResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "daw.connection.disconnect",
+    "emitsEvents": [
+      "daw.connection.changed"
+    ]
+  },
+  {
+    "id": "daw.connection.getStatus",
+    "version": 1,
+    "kind": "query",
+    "domain": "daw",
+    "visibility": "public",
+    "description": "读取 DAW 连接状态",
+    "requestSchema": {
+      "name": "DawConnectionGetStatusRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "DawConnectionGetStatusResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "daw.connection.getStatus"
+  },
+  {
+    "id": "daw.adapter.getSnapshot",
+    "version": 1,
+    "kind": "query",
+    "domain": "daw",
+    "visibility": "public",
+    "description": "读取当前 DAW 适配器能力快照",
+    "requestSchema": {
+      "name": "DawAdapterGetSnapshotRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "DawAdapterGetSnapshotResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "daw.adapter.getSnapshot"
+  },
+  {
+    "id": "automation.splitStereoToMono.execute",
+    "version": 1,
+    "kind": "command",
+    "domain": "automation",
+    "visibility": "public",
+    "description": "读取当前选中立体声轨道并拆分后按指定声道保留单声道",
+    "requestSchema": {
+      "name": "AutomationSplitStereoToMonoExecuteRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "AutomationSplitStereoToMonoExecuteResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw",
+      "mac_automation",
+      "daw_ui_profile"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "automation.splitStereoToMono.execute"
+  },
+  {
+    "id": "session.getInfo",
+    "version": 1,
+    "kind": "query",
+    "domain": "session",
+    "visibility": "public",
+    "description": "读取 Session 信息",
+    "requestSchema": {
+      "name": "SessionGetInfoRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionGetInfoResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.getInfo"
+  },
+  {
+    "id": "session.getLength",
+    "version": 1,
+    "kind": "query",
+    "domain": "session",
+    "visibility": "public",
+    "description": "读取 Session 长度",
+    "requestSchema": {
+      "name": "SessionGetLengthRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionGetLengthResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.getLength"
+  },
+  {
+    "id": "session.save",
+    "version": 1,
+    "kind": "command",
+    "domain": "session",
+    "visibility": "public",
+    "description": "保存 Session",
+    "requestSchema": {
+      "name": "SessionSaveRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionSaveResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.save"
+  },
+  {
+    "id": "session.applySnapshot",
+    "version": 1,
+    "kind": "command",
+    "domain": "session",
+    "visibility": "public",
+    "description": "应用快照到当前 Session",
+    "requestSchema": {
+      "name": "SessionApplySnapshotRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionApplySnapshotResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.applySnapshot"
+  },
+  {
+    "id": "session.getSnapshotInfo",
+    "version": 1,
+    "kind": "query",
+    "domain": "session",
+    "visibility": "public",
+    "description": "读取快照统计信息",
+    "requestSchema": {
+      "name": "SessionGetSnapshotInfoRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionGetSnapshotInfoResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.getSnapshotInfo"
+  },
+  {
+    "id": "track.list",
+    "version": 1,
+    "kind": "query",
+    "domain": "track",
+    "visibility": "public",
+    "description": "列出轨道",
+    "requestSchema": {
+      "name": "TrackListRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackListResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.list"
+  },
+  {
+    "id": "track.listNames",
+    "version": 1,
+    "kind": "query",
+    "domain": "track",
+    "visibility": "public",
+    "description": "列出轨道名称",
+    "requestSchema": {
+      "name": "TrackListNamesRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackListNamesResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.listNames"
+  },
+  {
+    "id": "track.selection.get",
+    "version": 1,
+    "kind": "query",
+    "domain": "track",
+    "visibility": "public",
+    "description": "读取当前选中的轨道",
+    "requestSchema": {
+      "name": "TrackSelectionGetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackSelectionGetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.selection.get"
+  },
+  {
+    "id": "track.rename",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "重命名轨道",
+    "requestSchema": {
+      "name": "TrackRenameRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackRenameResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.rename"
+  },
+  {
+    "id": "track.select",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "选择轨道",
+    "requestSchema": {
+      "name": "TrackSelectRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackSelectResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.select"
+  },
+  {
+    "id": "track.color.apply",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "为轨道应用颜色",
+    "requestSchema": {
+      "name": "TrackColorApplyRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackColorApplyResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.color.apply"
+  },
+  {
+    "id": "track.pan.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道声像",
+    "requestSchema": {
+      "name": "TrackPanSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackPanSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.pan.set"
+  },
+  {
+    "id": "track.mute.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道静音",
+    "requestSchema": {
+      "name": "TrackMuteSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackMuteSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.mute.set"
+  },
+  {
+    "id": "track.solo.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道独奏",
+    "requestSchema": {
+      "name": "TrackSoloSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackSoloSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.solo.set"
+  },
+  {
+    "id": "clip.selectAllOnTrack",
+    "version": 1,
+    "kind": "command",
+    "domain": "clip",
+    "visibility": "public",
+    "description": "选择轨道上的所有 clip",
+    "requestSchema": {
+      "name": "ClipSelectAllOnTrackRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ClipSelectAllOnTrackResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "clip.selectAllOnTrack"
+  },
+  {
+    "id": "transport.play",
+    "version": 1,
+    "kind": "command",
+    "domain": "transport",
+    "visibility": "public",
+    "description": "开始播放",
+    "requestSchema": {
+      "name": "TransportPlayRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TransportPlayResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "transport.play"
+  },
+  {
+    "id": "transport.stop",
+    "version": 1,
+    "kind": "command",
+    "domain": "transport",
+    "visibility": "public",
+    "description": "停止播放",
+    "requestSchema": {
+      "name": "TransportStopRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TransportStopResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "transport.stop"
+  },
+  {
+    "id": "transport.record",
+    "version": 1,
+    "kind": "command",
+    "domain": "transport",
+    "visibility": "public",
+    "description": "开始录音",
+    "requestSchema": {
+      "name": "TransportRecordRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TransportRecordResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "transport.record"
+  },
+  {
+    "id": "transport.getStatus",
+    "version": 1,
+    "kind": "query",
+    "domain": "transport",
+    "visibility": "public",
+    "description": "读取传输状态",
+    "requestSchema": {
+      "name": "TransportGetStatusRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TransportGetStatusResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "transport.getStatus"
+  },
+  {
+    "id": "import.run.start",
+    "version": 1,
+    "kind": "job",
+    "domain": "import",
+    "visibility": "public",
+    "description": "启动导入",
+    "requestSchema": {
+      "name": "ImportRunStartRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ImportRunStartResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "dependsOn": [
+      "daw",
+      "jobs"
+    ],
+    "handler": "import.run.start"
+  },
+  {
+    "id": "stripSilence.open",
+    "version": 1,
+    "kind": "command",
+    "domain": "stripSilence",
+    "visibility": "public",
+    "description": "打开 Strip Silence",
+    "requestSchema": {
+      "name": "StripSilenceOpenRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "StripSilenceOpenResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw_ui_profile"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "stripSilence.open"
+  },
+  {
+    "id": "stripSilence.execute",
+    "version": 1,
+    "kind": "command",
+    "domain": "stripSilence",
+    "visibility": "public",
+    "description": "执行 Strip Silence",
+    "requestSchema": {
+      "name": "StripSilenceExecuteRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "StripSilenceExecuteResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "mac_automation",
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "stripSilence.execute"
+  },
+  {
+    "id": "export.range.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "export",
+    "visibility": "public",
+    "description": "设置导出范围",
+    "requestSchema": {
+      "name": "ExportRangeSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportRangeSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.range.set"
+  },
+  {
+    "id": "export.start",
+    "version": 1,
+    "kind": "job",
+    "domain": "export",
+    "visibility": "public",
+    "description": "启动混音导出",
+    "requestSchema": {
+      "name": "ExportStartRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportStartResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw",
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.start"
+  },
+  {
+    "id": "export.direct.start",
+    "version": 1,
+    "kind": "job",
+    "domain": "export",
+    "visibility": "public",
+    "description": "直接导出剪辑为文件",
+    "requestSchema": {
+      "name": "ExportDirectStartRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportDirectStartResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw",
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.direct.start"
+  },
+  {
+    "id": "export.run.start",
+    "version": 1,
+    "kind": "job",
+    "domain": "export",
+    "visibility": "public",
+    "description": "启动快照批量导出工作流",
+    "requestSchema": {
+      "name": "ExportRunStartRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportRunStartResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw",
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.run.start"
+  },
+  {
+    "id": "jobs.create",
+    "version": 1,
+    "kind": "command",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "创建任务占位记录",
+    "requestSchema": {
+      "name": "JobsCreateRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsCreateResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.create"
+  },
+  {
+    "id": "jobs.update",
+    "version": 1,
+    "kind": "command",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "更新任务状态与结果",
+    "requestSchema": {
+      "name": "JobsUpdateRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsUpdateResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.update"
+  },
+  {
+    "id": "jobs.get",
+    "version": 1,
+    "kind": "query",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "读取任务状态",
+    "requestSchema": {
+      "name": "JobsGetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsGetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.get"
+  },
+  {
+    "id": "jobs.list",
+    "version": 1,
+    "kind": "query",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "列出任务",
+    "requestSchema": {
+      "name": "JobsListRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsListResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.list"
+  },
+  {
+    "id": "jobs.cancel",
+    "version": 1,
+    "kind": "command",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "取消任务",
+    "requestSchema": {
+      "name": "JobsCancelRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsCancelResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.cancel"
+  },
+  {
+    "id": "jobs.delete",
+    "version": 1,
+    "kind": "command",
+    "domain": "jobs",
+    "visibility": "public",
+    "description": "删除任务",
+    "requestSchema": {
+      "name": "JobsDeleteRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "JobsDeleteResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "jobs.delete"
+  },
+  {
+    "id": "session.requireOpen",
+    "version": 1,
+    "kind": "query",
+    "domain": "session",
+    "visibility": "internal",
+    "description": "要求当前 Session 已打开",
+    "requestSchema": {
+      "name": "SessionRequireOpenRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "SessionRequireOpenResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "session.requireOpen"
+  },
+  {
+    "id": "track.requireAnySelected",
+    "version": 1,
+    "kind": "query",
+    "domain": "track",
+    "visibility": "internal",
+    "description": "要求至少选择一个轨道",
+    "requestSchema": {
+      "name": "TrackRequireAnySelectedRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackRequireAnySelectedResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.requireAnySelected"
+  },
+  {
+    "id": "daw.requireMinimumVersion",
+    "version": 1,
+    "kind": "query",
+    "domain": "daw",
+    "visibility": "internal",
+    "description": "要求最低 DAW 版本",
+    "requestSchema": {
+      "name": "DawRequireMinimumVersionRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "DawRequireMinimumVersionResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "daw.requireMinimumVersion"
+  },
+  {
+    "id": "trackColor.requireSupport",
+    "version": 1,
+    "kind": "query",
+    "domain": "track",
+    "visibility": "internal",
+    "description": "要求轨道颜色能力可用",
+    "requestSchema": {
+      "name": "TrackColorRequireSupportRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackColorRequireSupportResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "trackColor.requireSupport"
+  },
+  {
+    "id": "audio.importOne",
+    "version": 1,
+    "kind": "command",
+    "domain": "import",
+    "visibility": "internal",
+    "description": "导入单个音频文件",
+    "requestSchema": {
+      "name": "AudioImportOneRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "AudioImportOneResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "audio.importOne"
+  },
+  {
+    "id": "audio.importBatch",
+    "version": 1,
+    "kind": "job",
+    "domain": "import",
+    "visibility": "internal",
+    "description": "批量导入音频文件",
+    "requestSchema": {
+      "name": "AudioImportBatchRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "AudioImportBatchResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw",
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "audio.importBatch"
+  },
+  {
+    "id": "export.cancel",
+    "version": 1,
+    "kind": "command",
+    "domain": "export",
+    "visibility": "internal",
+    "description": "取消导出任务",
+    "requestSchema": {
+      "name": "ExportCancelRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportCancelResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.cancel"
+  },
+  {
+    "id": "export.mixWithSource",
+    "version": 1,
+    "kind": "command",
+    "domain": "export",
+    "visibility": "public",
+    "description": "按源导出混音",
+    "requestSchema": {
+      "name": "ExportMixWithSourceRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportMixWithSourceResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.mixWithSource"
+  },
+  {
+    "id": "export.isCancelled",
+    "version": 1,
+    "kind": "query",
+    "domain": "export",
+    "visibility": "internal",
+    "description": "检查导出任务是否已取消",
+    "requestSchema": {
+      "name": "ExportIsCancelledRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ExportIsCancelledResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "jobs"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "export.isCancelled"
+  },
+  {
+    "id": "mac.preflightAccessibility",
+    "version": 1,
+    "kind": "query",
+    "domain": "system",
+    "visibility": "internal",
+    "description": "预检 mac 辅助功能权限",
+    "requestSchema": {
+      "name": "MacPreflightAccessibilityRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "MacPreflightAccessibilityResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "mac_automation"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "mac.preflightAccessibility"
+  },
+  {
+    "id": "track.color.applyViaUi",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "internal",
+    "description": "通过 UI 应用轨道颜色",
+    "requestSchema": {
+      "name": "TrackColorApplyViaUiRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackColorApplyViaUiResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw_ui_profile"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.color.applyViaUi"
+  },
+  {
+    "id": "stripSilence.openViaUi",
+    "version": 1,
+    "kind": "command",
+    "domain": "stripSilence",
+    "visibility": "internal",
+    "description": "通过 UI 打开 Strip Silence",
+    "requestSchema": {
+      "name": "StripSilenceOpenViaUiRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "StripSilenceOpenViaUiResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw_ui_profile"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "stripSilence.openViaUi"
+  },
+  {
+    "id": "stripSilence.executeViaUi",
+    "version": 1,
+    "kind": "command",
+    "domain": "stripSilence",
+    "visibility": "internal",
+    "description": "通过 UI 执行 Strip Silence",
+    "requestSchema": {
+      "name": "StripSilenceExecuteViaUiRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "StripSilenceExecuteViaUiResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "mac_automation",
+      "daw_ui_profile"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "stripSilence.executeViaUi"
+  }
+]

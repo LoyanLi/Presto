@@ -1,0 +1,153 @@
+{
+  "pluginId": "official.import-workflow",
+  "extensionType": "workflow",
+  "version": "1.0.0",
+  "hostApiVersion": "0.1.0",
+  "supportedDaws": ["pro_tools"],
+  "uiRuntime": "react18",
+  "displayName": "Import Workflow",
+  "description": "Scan folders, classify files, batch-edit names, and run the import workflow from an official plugin package.",
+  "entry": "dist/entry.mjs",
+  "styleEntry": "dist/import-workflow.css",
+  "pages": [
+    {
+      "pageId": "import-workflow.page.main",
+      "path": "/plugins/import-workflow",
+      "title": "Import Workflow",
+      "mount": "workspace",
+      "componentExport": "ImportWorkflowPage"
+    }
+  ],
+  "settingsPages": [
+    {
+      "pageId": "import-workflow.page.settings",
+      "title": "Import Workflow",
+      "order": 30,
+      "storageKey": "settings.v1",
+      "loadExport": "loadImportWorkflowSettings",
+      "saveExport": "saveImportWorkflowSettings",
+      "defaults": {
+        "categories": [
+          { "id": "drums", "name": "Drums", "colorSlot": 3, "previewHex": "#7335DE" },
+          { "id": "bass", "name": "Bass", "colorSlot": 9, "previewHex": "#DE3535" },
+          { "id": "guitar", "name": "Guitar", "colorSlot": 13, "previewHex": "#DED935" },
+          { "id": "keys", "name": "Keys", "colorSlot": 18, "previewHex": "#35DE62" },
+          { "id": "lead_vox", "name": "LeadVox", "colorSlot": 23, "previewHex": "#3573DE" },
+          { "id": "bgv", "name": "BGV", "colorSlot": 28, "previewHex": "#631D9F" },
+          { "id": "fx", "name": "FX", "colorSlot": 33, "previewHex": "#9F1D1D" },
+          { "id": "other", "name": "Other", "colorSlot": 38, "previewHex": "#7D9F1D" }
+        ],
+        "silenceProfile": {
+          "thresholdDb": -48,
+          "minStripMs": 120,
+          "minSilenceMs": 120,
+          "startPadMs": 5,
+          "endPadMs": 20
+        },
+        "aiConfig": {
+          "enabled": true,
+          "baseUrl": "https://api.openai.com/v1",
+          "model": "gpt-4.1-mini",
+          "timeoutSeconds": 30,
+          "apiKey": "",
+          "prompt": "You normalize audio track names. Return strict JSON only. You must choose one best category_id from the provided categories for each item. Classify from filename semantics only; do not blindly keep defaults. Do not invent instrument meaning. Always output normalized_name in English; translate non-English words to concise natural English while preserving meaning. Use underscore style like Word_Word_Word. Remove noisy serial fragments. Use Title Case for each English token."
+        },
+        "ui": {
+          "analyzeCacheEnabled": true,
+          "stripAfterImport": true,
+          "autoSaveSession": true
+        }
+      },
+      "sections": [
+        {
+          "sectionId": "aiNaming",
+          "title": "AI naming",
+          "description": "This prompt, model, key, and timeout remain plugin-local.",
+          "fields": [
+            { "fieldId": "ai-enabled", "kind": "toggle", "label": "Enable AI naming", "path": "aiConfig.enabled" },
+            { "fieldId": "ai-timeout", "kind": "number", "label": "Timeout (seconds)", "path": "aiConfig.timeoutSeconds", "min": 1, "max": 600, "step": 1 },
+            { "fieldId": "ai-base-url", "kind": "text", "label": "Base URL", "path": "aiConfig.baseUrl" },
+            { "fieldId": "ai-model", "kind": "text", "label": "Model", "path": "aiConfig.model" },
+            { "fieldId": "ai-api-key", "kind": "password", "label": "API key", "path": "aiConfig.apiKey" },
+            { "fieldId": "ai-prompt", "kind": "textarea", "label": "Prompt", "path": "aiConfig.prompt" }
+          ]
+        },
+        {
+          "sectionId": "runDefaults",
+          "title": "Run defaults",
+          "fields": [
+            { "fieldId": "ui-strip-after-import", "kind": "toggle", "label": "Apply Strip Silence after import", "path": "ui.stripAfterImport" },
+            { "fieldId": "ui-auto-save", "kind": "toggle", "label": "Save session after run", "path": "ui.autoSaveSession" },
+            { "fieldId": "ui-analyze-cache", "kind": "toggle", "label": "Read and write .presto_ai_analyze.json cache files", "path": "ui.analyzeCacheEnabled" }
+          ]
+        },
+        {
+          "sectionId": "categories",
+          "title": "Categories and colors",
+          "description": "These categories drive classification, manual mapping, color application, and execution ordering.",
+          "fields": [
+            { "fieldId": "categories-editor", "kind": "categoryList", "label": "Categories", "path": "categories" }
+          ]
+        }
+      ]
+    }
+  ],
+  "navigationItems": [
+    {
+      "itemId": "import-workflow.nav.main",
+      "title": "Import Workflow",
+      "pageId": "import-workflow.page.main",
+      "section": "sidebar",
+      "order": 60
+    }
+  ],
+  "commands": [
+    {
+      "commandId": "import-workflow.open",
+      "title": "Open Import Workflow",
+      "pageId": "import-workflow.page.main"
+    }
+  ],
+  "requiredCapabilities": [
+    "import.run.start",
+    "jobs.get",
+    "jobs.cancel",
+    "track.listNames",
+    "track.rename",
+    "track.select",
+    "track.color.apply",
+    "clip.selectAllOnTrack",
+    "stripSilence.open",
+    "stripSilence.execute",
+    "session.save"
+  ],
+  "adapterModuleRequirements": [
+    { "moduleId": "import", "minVersion": "2025.10.0" },
+    { "moduleId": "jobs", "minVersion": "2025.10.0" },
+    { "moduleId": "track", "minVersion": "2025.10.0" },
+    { "moduleId": "clip", "minVersion": "2025.10.0" },
+    { "moduleId": "stripSilence", "minVersion": "2025.10.0" },
+    { "moduleId": "session", "minVersion": "2025.10.0" }
+  ],
+  "capabilityRequirements": [
+    { "capabilityId": "import.run.start", "minVersion": "2025.10.0" },
+    { "capabilityId": "jobs.get", "minVersion": "2025.10.0" },
+    { "capabilityId": "jobs.cancel", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.listNames", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.rename", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.select", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.color.apply", "minVersion": "2025.10.0" },
+    { "capabilityId": "clip.selectAllOnTrack", "minVersion": "2025.10.0" },
+    { "capabilityId": "stripSilence.open", "minVersion": "2025.10.0" },
+    { "capabilityId": "stripSilence.execute", "minVersion": "2025.10.0" },
+    { "capabilityId": "session.save", "minVersion": "2025.10.0" }
+  ],
+  "requiredRuntimeServices": [
+    "dialog.openFolder",
+    "fs.readFile",
+    "fs.writeFile",
+    "fs.ensureDir",
+    "fs.readdir",
+    "fs.stat"
+  ]
+}
