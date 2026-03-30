@@ -1,129 +1,212 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { spawn } from 'node:child_process'
-import fs from 'node:fs/promises'
-import http from 'node:http'
-import net from 'node:net'
+import { app, BrowserWindow } from 'electron'
+import { execFile } from 'node:child_process'
+import { createServer as createHttpServer } from 'node:http'
+import {
+  access,
+  mkdir,
+  readFile as readFileFs,
+  rm,
+  stat as statFs,
+  writeFile,
+} from 'node:fs/promises'
+import { networkInterfaces, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { resolveMobileLanHost } from './mobileLanHost.mjs'
-import { mapExportProgressForMobile } from './mobileProgressPayload.mjs'
-import {
-  clearMobileProgressSessions,
-  closeMobileProgressSession,
-  createMobileProgressSession,
-  getMobileProgressSession,
-  validateMobileProgressSession,
-} from './mobileProgressSession.mjs'
+import { createAutomationRuntime } from './runtime/automationRuntime.mjs'
+import { createAppLogStore } from './runtime/appLogStore.mjs'
+import { createMacAccessibilityRuntime } from './runtime/macAccessibilityRuntime.mjs'
+import { createMobileProgressServer } from './runtime/mobileProgressServer.mjs'
+import { buildMobileProgressPage } from './runtime/mobileProgressPage.mjs'
+import { registerRuntimeHandlers } from './runtime/registerRuntimeHandlers.mjs'
+import QRCode from 'qrcode'
+
+const SUPPORTED_DAW_TARGETS = new Set(['pro_tools'])
+
+async function loadBackendSupervisor() {
+  if (!backendSupervisor) {
+    const module = await import('./.stage1/backendSupervisor.mjs')
+    backendSupervisor = module.createBackendSupervisor({
+      targetDaw: currentDawTarget,
+      onLog(entry) {
+        appLogStore.append(entry)
+      },
+    })
+  }
+  return backendSupervisor
+}
+
+async function loadPluginHostService() {
+  if (!pluginHostService) {
+    const module = await import('./.stage1/pluginHostService.mjs')
+    pluginHostService = module.createPluginHostService({
+      managedPluginsRoot: path.join(app.getPath('userData'), 'extensions'),
+      currentDaw: currentDawTarget,
+      isHostApiVersionCompatible(hostApiVersion) {
+        return hostApiVersion === '0.1.0' || hostApiVersion === '1' || hostApiVersion === '1.0.0'
+      },
+    })
+    await pluginHostService.syncOfficialExtensions({
+      officialExtensionsRoot: path.resolve(currentDir, '../../plugins/official'),
+    })
+  }
+
+  return pluginHostService
+}
 
 let mainWindow = null
-let pythonApi = null
-let importPythonApi = null
-
-const API_HOST = '127.0.0.1'
-const API_GATEWAY_PORT = Number(process.env.PT_API_PORT || '8000')
-const CURRENT_FILE = fileURLToPath(import.meta.url)
-const CURRENT_DIR = path.dirname(CURRENT_FILE)
-
-const HTTP_TIMEOUT_MS = Number(process.env.PT_HTTP_TIMEOUT_MS || '30000')
-const HTTP_MAX_ATTEMPTS = Math.max(1, Number(process.env.PT_HTTP_MAX_ATTEMPTS || '3'))
-const HTTP_RETRY_DELAY_MS = Number(process.env.PT_HTTP_RETRY_DELAY_MS || '250')
-
-const BACKEND_STARTUP_TIMEOUT_MS = Number(process.env.PT_BACKEND_STARTUP_TIMEOUT_MS || '20000')
-const BACKEND_REQUEST_READY_TIMEOUT_MS = Number(process.env.PT_BACKEND_REQUEST_READY_TIMEOUT_MS || '10000')
-const BACKEND_HEARTBEAT_INTERVAL_MS = Number(process.env.PT_BACKEND_HEARTBEAT_INTERVAL_MS || '5000')
-const BACKEND_HEARTBEAT_TIMEOUT_MS = Number(process.env.PT_BACKEND_HEARTBEAT_TIMEOUT_MS || '1500')
-const BACKEND_HEARTBEAT_FAILURE_THRESHOLD = Math.max(1, Number(process.env.PT_BACKEND_HEARTBEAT_FAILURE_THRESHOLD || '3'))
-const BACKEND_AUTO_RESTART_DELAY_MS = Number(process.env.PT_BACKEND_AUTO_RESTART_DELAY_MS || '2000')
-const BACKEND_AUTO_RESTART_WINDOW_MS = Number(process.env.PT_BACKEND_AUTO_RESTART_WINDOW_MS || '60000')
-const BACKEND_AUTO_RESTART_MAX_IN_WINDOW = Math.max(1, Number(process.env.PT_BACKEND_AUTO_RESTART_MAX_IN_WINDOW || '5'))
-const BACKEND_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_BACKEND_PORT_SCAN_RANGE || '50'))
-
-const MAX_BACKEND_LOG_ENTRIES = Math.max(100, Number(process.env.PT_MAX_BACKEND_LOG_ENTRIES || '2000'))
-const MAX_BACKEND_WARNINGS = 100
-const LOG_DEDUP_WINDOW_MS = 60 * 1000
-const MOBILE_PROGRESS_DEFAULT_PORT = 18888
-const MOBILE_PROGRESS_PORT_SCAN_RANGE = Math.max(1, Number(process.env.PT_MOBILE_PROGRESS_PORT_SCAN_RANGE || '30'))
-const MOBILE_PROGRESS_POLL_MS = 1000
-const MOBILE_PROGRESS_HOST = '0.0.0.0'
-
-const RETRYABLE_FETCH_CODES = new Set([
-  'ECONNRESET',
-  'ECONNREFUSED',
-  'EPIPE',
-  'ETIMEDOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_SOCKET',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_BODY_TIMEOUT',
-])
-const PRESTO_API_ERROR_PREFIX = '__PRESTO_API_ERROR__'
+let backendSupervisor = null
+let pluginHostService = null
+let mobileProgressHttpServer = null
+let mobileProgressRuntime = null
+let mobileProgressOrigin = ''
+let bootPromise = null
+let currentDawTarget = 'pro_tools'
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+const packageJsonPath = path.resolve(currentDir, '../../package.json')
+const preloadPath = path.join(currentDir, '.stage1', 'preload.cjs')
+const rendererPath = path.join(currentDir, 'index.html')
+const smokeTarget = process.argv.find((entry) => entry.startsWith('--smoke-target='))?.split('=')[1] ?? null
+const macAccessibilityRuntime = createMacAccessibilityRuntime()
+const smokeImportAnalyzeFolderPath = path.join(tmpdir(), 'presto-import-analyze-smoke')
 const GITHUB_RELEASES_REPO = process.env.PRESTO_GITHUB_REPO || 'LoyanLi/Presto'
 const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_RELEASES_REPO}/releases/latest`
+const automationRuntime = createAutomationRuntime({
+  definitionsDir: path.join(currentDir, 'runtime', 'automation', 'definitions'),
+  scriptsDir: path.join(currentDir, 'runtime', 'automation', 'scripts'),
+  macAccessibilityRuntime,
+})
+const DEFAULT_APP_METADATA = Object.freeze({
+  applicationName: 'Presto',
+  version: '0.3.0-alpha.1',
+  author: 'Luminous Layers',
+  copyright: 'Copyright (c) 2026 Loyan Li',
+})
+let resolvedAppMetadataPromise = null
+const appLogStore = createAppLogStore({
+  logDir: path.join(app.getPath('userData'), 'logs'),
+})
 
-const IMPORT_ROUTE_RULE = {
-  pathPrefixes: ['/api/v1/import/'],
-  exactPaths: new Set([
-    '/api/v1/system/health',
-    '/api/v1/config',
-    '/api/v1/ai/key/status',
-    '/api/v1/ai/key',
-    '/api/v1/session/save',
-  ]),
+app.setName(DEFAULT_APP_METADATA.applicationName)
+
+function appendAppLog(level, source, message, details) {
+  try {
+    appLogStore.append({
+      level,
+      source,
+      message,
+      details: details ?? null,
+    })
+  } catch (error) {
+    console.error('[electron-main] failed to append app log:', error)
+  }
 }
 
-const EXPORT_ROUTE_RULE = {
-  pathPrefixes: ['/api/v1/export/', '/api/v1/session/', '/api/v1/connection/', '/api/v1/transport/', '/api/v1/files/'],
-  exactPaths: new Set(['/api/v1/tracks']),
+function normalizeErrorDetails(error) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack ?? null,
+      code: 'code' in error ? String(error.code ?? '') : undefined,
+    }
+  }
+
+  return {
+    value: String(error ?? 'unknown_error'),
+  }
 }
 
-const backendLogs = []
-const backendWarnings = []
+function summarizeCapabilityResult(response) {
+  if (!response || typeof response !== 'object') {
+    return { success: false }
+  }
 
-let logSequence = 0
-let heartbeatTimer = null
-let activatePromise = null
-let restartTimer = null
-let shuttingDown = false
-let plannedStopInProgress = false
-let autoRestartWindowStart = 0
-let autoRestartCount = 0
-
-let requestedPort = normalizePort(process.env.PT_API_PORT, API_GATEWAY_PORT)
-let runtimePort = requestedPort
-let activeMode = process.env.PT_BACKEND_MODE === 'import' ? 'import' : 'export'
-let activeProcess = null
-let activePid = null
-let activeReady = false
-let activeStatus = 'stopped'
-let activeHeartbeatFailures = 0
-let lastError = null
-let lastExit = null
-let restartCount = 0
-let developerModeLoggingEnabled = false
-
-let mobileProgressServer = null
-let mobileProgressPort = null
-let mobileProgressLanHost = null
-const logDedupState = new Map()
-
-function nowIso() {
-  return new Date().toISOString()
+  return {
+    success: response.success === true,
+    errorCode:
+      response.success === false && typeof response.error?.code === 'string'
+        ? response.error.code
+        : null,
+  }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+async function openLogInConsole(filePath) {
+  await new Promise((resolve, reject) => {
+    execFile('open', ['-a', 'Console', filePath], (error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(undefined)
+    })
+  })
+}
+
+async function loadAppMetadata() {
+  if (resolvedAppMetadataPromise) {
+    return resolvedAppMetadataPromise
+  }
+
+  resolvedAppMetadataPromise = (async () => {
+    try {
+      const raw = await readFileFs(packageJsonPath, 'utf8')
+      const parsed = JSON.parse(raw)
+      const author =
+        typeof parsed.author === 'string'
+          ? parsed.author
+          : typeof parsed.author?.name === 'string'
+            ? parsed.author.name
+            : DEFAULT_APP_METADATA.author
+      return {
+        applicationName:
+          typeof parsed.build?.productName === 'string' && parsed.build.productName.trim()
+            ? parsed.build.productName.trim()
+            : DEFAULT_APP_METADATA.applicationName,
+        version:
+          typeof parsed.version === 'string' && parsed.version.trim()
+            ? parsed.version.trim()
+            : DEFAULT_APP_METADATA.version,
+        author: author.trim() || DEFAULT_APP_METADATA.author,
+        copyright:
+          typeof parsed.copyright === 'string' && parsed.copyright.trim()
+            ? parsed.copyright.trim()
+            : DEFAULT_APP_METADATA.copyright,
+      }
+    } catch {
+      return DEFAULT_APP_METADATA
+    }
+  })()
+
+  return resolvedAppMetadataPromise
+}
+
+async function configureApplicationIdentity() {
+  const metadata = await loadAppMetadata()
+  app.setName(metadata.applicationName)
+  app.setAboutPanelOptions({
+    applicationName: metadata.applicationName,
+    applicationVersion: metadata.version,
+    version: metadata.version,
+    authors: [metadata.author],
+    copyright: metadata.copyright,
+  })
 }
 
 async function fetchLatestGithubRelease() {
-  const payload = await performHttpRequest(GITHUB_LATEST_RELEASE_URL, {
+  const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'Presto-App',
     },
   })
 
+  if (!response.ok) {
+    throw new Error(`github_release_fetch_failed:${response.status}`)
+  }
+
+  const payload = await response.json()
   if (!payload || typeof payload !== 'object') {
-    throw new Error('Invalid release payload from GitHub')
+    throw new Error('github_release_payload_invalid')
   }
 
   return {
@@ -137,1086 +220,570 @@ async function fetchLatestGithubRelease() {
   }
 }
 
-function normalizeLogLevel(level) {
-  const normalized = String(level || 'info').toLowerCase()
-  if (normalized === 'debug') return 'debug'
-  if (normalized === 'warn' || normalized === 'warning') return 'warn'
-  if (normalized === 'error') return 'error'
-  return 'info'
+function createMinimalWavBuffer() {
+  const sampleRate = 48000
+  const channels = 1
+  const bitsPerSample = 16
+  const samples = Buffer.alloc(16)
+  const dataSize = samples.length
+  const byteRate = sampleRate * channels * (bitsPerSample / 8)
+  const blockAlign = channels * (bitsPerSample / 8)
+  const buffer = Buffer.alloc(44 + dataSize)
+  buffer.write('RIFF', 0)
+  buffer.writeUInt32LE(36 + dataSize, 4)
+  buffer.write('WAVE', 8)
+  buffer.write('fmt ', 12)
+  buffer.writeUInt32LE(16, 16)
+  buffer.writeUInt16LE(1, 20)
+  buffer.writeUInt16LE(channels, 22)
+  buffer.writeUInt32LE(sampleRate, 24)
+  buffer.writeUInt32LE(byteRate, 28)
+  buffer.writeUInt16LE(blockAlign, 32)
+  buffer.writeUInt16LE(bitsPerSample, 34)
+  buffer.write('data', 36)
+  buffer.writeUInt32LE(dataSize, 40)
+  samples.copy(buffer, 44)
+  return buffer
 }
 
-function shouldDropLog(level) {
-  return normalizeLogLevel(level) === 'debug' && !developerModeLoggingEnabled
+let smokeImportAnalyzeFolderPromise = null
+
+async function ensureSmokeImportAnalyzeFolder() {
+  if (smokeImportAnalyzeFolderPromise) {
+    return smokeImportAnalyzeFolderPromise
+  }
+
+  smokeImportAnalyzeFolderPromise = (async () => {
+    const root = smokeImportAnalyzeFolderPath
+    const nested = path.join(root, 'nested')
+    const wavBuffer = createMinimalWavBuffer()
+    await rm(root, { recursive: true, force: true })
+    await mkdir(nested, { recursive: true })
+    await writeFile(path.join(root, 'Kick.wav'), wavBuffer)
+    await writeFile(path.join(root, 'Snare.wav'), wavBuffer)
+    await writeFile(path.join(nested, 'HiHat.wav'), wavBuffer)
+    return root
+  })()
+
+  return smokeImportAnalyzeFolderPromise
 }
 
-function pruneDedupState(oldestEntryId) {
-  for (const [key, state] of logDedupState.entries()) {
-    if (!state?.entry || state.entry.id < oldestEntryId) {
-      logDedupState.delete(key)
+function getRendererUrl(nextSmokeTarget) {
+  const baseUrl = pathToFileURL(rendererPath).href
+  if (!nextSmokeTarget) {
+    return baseUrl
+  }
+  const url = new URL(baseUrl)
+  url.searchParams.set('smokeTarget', nextSmokeTarget)
+  if (nextSmokeTarget === 'core-io-write') {
+    url.searchParams.set('smokeImportFolder', smokeImportAnalyzeFolderPath)
+  }
+  return url.href
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function pathExists(targetPath) {
+  try {
+    await access(targetPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readFsStat(targetPath) {
+  try {
+    const info = await statFs(targetPath)
+    return {
+      isFile: info.isFile(),
+      isDirectory: info.isDirectory(),
     }
+  } catch {
+    return null
   }
 }
 
-function localLog(source, level, message, meta = {}) {
-  const normalizedLevel = normalizeLogLevel(level)
-  if (shouldDropLog(normalizedLevel)) {
-    return
-  }
-
-  const lines = String(message)
-    .split(/\r?\n/g)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-
-  for (const line of lines) {
-    const dedupKey = JSON.stringify({
-      source,
-      level: normalizedLevel,
-      event: String(meta.event || ''),
-      code: String(meta.code || ''),
-      message: line,
-    })
-    const now = Date.now()
-    const dedupState = logDedupState.get(dedupKey)
-    if (dedupState && now - dedupState.lastAt < LOG_DEDUP_WINDOW_MS) {
-      dedupState.lastAt = now
-      dedupState.entry.repeatCount = Number(dedupState.entry.repeatCount || 1) + 1
-      continue
-    }
-
-    const entry = {
-      id: ++logSequence,
-      timestamp: nowIso(),
-      source,
-      level: normalizedLevel,
-      message: line,
-      service: 'electron-main',
-      event: typeof meta.event === 'string' ? meta.event : 'runtime.log',
-      code: typeof meta.code === 'string' ? meta.code : '',
-      requestId: typeof meta.requestId === 'string' ? meta.requestId : '',
-      taskId: typeof meta.taskId === 'string' ? meta.taskId : '',
-      runId: typeof meta.runId === 'string' ? meta.runId : '',
-      sessionId: typeof meta.sessionId === 'string' ? meta.sessionId : '',
-      ctx: meta.ctx && typeof meta.ctx === 'object' ? meta.ctx : undefined,
-      err: meta.err && typeof meta.err === 'object' ? meta.err : undefined,
-      repeatCount: 1,
-    }
-    backendLogs.push(entry)
-    logDedupState.set(dedupKey, { lastAt: now, entry })
-    if (backendLogs.length > MAX_BACKEND_LOG_ENTRIES) {
-      backendLogs.splice(0, backendLogs.length - MAX_BACKEND_LOG_ENTRIES)
-      const oldestEntryId = backendLogs[0]?.id ?? logSequence
-      pruneDedupState(oldestEntryId)
-    }
-
-    const rendered = `[${source}] ${line}\n`
-    if (normalizedLevel === 'error') {
-      process.stderr.write(rendered)
-    } else {
-      process.stdout.write(rendered)
-    }
-  }
-}
-
-function pushWarning(message) {
-  const record = `${nowIso()} ${message}`
-  backendWarnings.unshift(record)
-  if (backendWarnings.length > MAX_BACKEND_WARNINGS) {
-    backendWarnings.splice(MAX_BACKEND_WARNINGS)
-  }
-  localLog('backend-manager', 'warn', message, { event: 'backend.warning' })
-}
-
-function getProjectRoot() {
-  if (app.isPackaged) {
-    return process.resourcesPath
-  }
-  return path.resolve(CURRENT_DIR, '..', '..')
-}
-
-async function resolveDisplayVersion() {
-  const envVersion = String(process.env.PRESTO_APP_VERSION || '').trim()
-  if (envVersion) {
-    return envVersion
-  }
-
-  if (!app.isPackaged) {
-    try {
-      const packagePath = path.join(getProjectRoot(), 'frontend', 'package.json')
-      const raw = await fs.readFile(packagePath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed.version === 'string' && parsed.version.trim()) {
-        return parsed.version.trim()
+function resolveMobileProgressHost() {
+  const interfaces = networkInterfaces()
+  const candidates = []
+  for (const [name, entries] of Object.entries(interfaces)) {
+    for (const entry of entries ?? []) {
+      if (!entry || entry.family !== 'IPv4' || entry.internal || !entry.address) {
+        continue
       }
-    } catch {
-      // Fall back to Electron app version.
+      if (entry.address.startsWith('169.254.')) {
+        continue
+      }
+      if (name.startsWith('utun') || name.startsWith('bridge') || name === 'awdl0' || name === 'llw0') {
+        continue
+      }
+      if (entry.address === '198.18.0.1') {
+        continue
+      }
+      candidates.push({ name, address: entry.address })
     }
   }
 
-  return app.getVersion()
+  const preferred =
+    candidates.find((item) => item.name === 'en0') ??
+    candidates.find((item) => item.name.startsWith('en')) ??
+    candidates.find((item) => item.address.startsWith('192.168.')) ??
+    candidates.find((item) => item.address.startsWith('10.')) ??
+    candidates.find((item) => /^172\.(1[6-9]|2\d|3[0-1])\./.test(item.address)) ??
+    candidates[0]
+
+  return preferred?.address || '127.0.0.1'
 }
 
-function normalizePort(value, fallback) {
-  const numeric = Number(value)
-  if (!Number.isInteger(numeric) || numeric <= 0 || numeric > 65535) {
-    return fallback
-  }
-  return numeric
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
-function isAbortError(error) {
-  return Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')
-}
+function deriveMobileProgressJobView(job) {
+  const progress = job?.progress ?? {}
+  const metadata = job?.metadata ?? {}
+  const result = job?.result ?? {}
+  const terminalStatus =
+    typeof result.status === 'string'
+      ? result.status
+      : job?.state === 'succeeded'
+        ? 'completed'
+        : String(job?.state ?? 'queued')
 
-function readErrorCode(error) {
-  if (!error || typeof error !== 'object') {
-    return null
-  }
-
-  const directCode = error.code
-  if (typeof directCode === 'string') {
-    return directCode
-  }
-
-  const cause = error.cause
-  if (cause && typeof cause === 'object') {
-    const causeCode = cause.code
-    if (typeof causeCode === 'string') {
-      return causeCode
-    }
-  }
-
-  return null
-}
-
-function isRetryableFetchError(error) {
-  if (isAbortError(error)) {
-    return true
-  }
-
-  const errorCode = readErrorCode(error)
-  if (errorCode && RETRYABLE_FETCH_CODES.has(errorCode)) {
-    return true
-  }
-
-  if (error instanceof TypeError) {
-    return error.message.toLowerCase().includes('fetch failed')
-  }
-
-  return false
-}
-
-function formatFetchError(url, error) {
-  if (error instanceof Error && error.message.startsWith(PRESTO_API_ERROR_PREFIX)) {
-    return error
-  }
-
-  if (isAbortError(error)) {
-    return new Error(`Request timed out after ${HTTP_TIMEOUT_MS}ms: ${url}`)
-  }
-
-  const errorCode = readErrorCode(error)
-  const message = error instanceof Error ? error.message : String(error)
-  if (errorCode) {
-    return new Error(`Request failed (${errorCode}) for ${url}: ${message}`)
-  }
-  return new Error(`Request failed for ${url}: ${message}`)
-}
-
-function parseJsonResponse(body, url) {
-  if (!body) {
-    return null
-  }
-
-  try {
-    return JSON.parse(body)
-  } catch {
-    throw new Error(`Invalid JSON response from ${url}`)
+  return {
+    jobId: String(job?.jobId ?? ''),
+    state: String(job?.state ?? 'queued'),
+    terminalStatus,
+    progressPercent: Number(progress.percent ?? 0),
+    message: String(progress.message ?? ''),
+    currentSnapshot: Number(metadata.currentSnapshot ?? progress.current ?? 0),
+    totalSnapshots: Number(metadata.totalSnapshots ?? progress.total ?? 0),
+    currentSnapshotName: String(metadata.currentSnapshotName ?? ''),
+    etaSeconds:
+      metadata.etaSeconds === null || metadata.etaSeconds === undefined
+        ? null
+        : Number(metadata.etaSeconds),
+    exportedCount: Number(metadata.exportedCount ?? (Array.isArray(result.exportedFiles) ? result.exportedFiles.length : 0)),
+    exportedFiles: Array.isArray(result.exportedFiles) ? result.exportedFiles.map((value) => String(value)) : [],
+    failedSnapshots: Array.isArray(result.failedSnapshots) ? result.failedSnapshots.map((value) => String(value)) : [],
+    failedSnapshotDetails: Array.isArray(result.failedSnapshotDetails)
+      ? result.failedSnapshotDetails
+          .filter((value) => value && typeof value === 'object')
+          .map((value) => ({
+            snapshotName: String(value.snapshotName ?? ''),
+            error: String(value.error ?? ''),
+          }))
+          .filter((value) => value.snapshotName)
+      : [],
+    isTerminal: ['succeeded', 'failed', 'cancelled'].includes(String(job?.state ?? '')),
   }
 }
 
-function parseApiErrorBody(body) {
-  if (!body) {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(body)
-    if (parsed && typeof parsed === 'object' && parsed.success === false) {
-      return parsed
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
-function isLocalTarget(hostname) {
-  return hostname === API_HOST || hostname === 'localhost'
-}
-
-function inferModeFromPath(pathname) {
-  if (IMPORT_ROUTE_RULE.exactPaths.has(pathname) || IMPORT_ROUTE_RULE.pathPrefixes.some((prefix) => pathname.startsWith(prefix))) {
-    return 'import'
-  }
-  if (EXPORT_ROUTE_RULE.exactPaths.has(pathname) || EXPORT_ROUTE_RULE.pathPrefixes.some((prefix) => pathname.startsWith(prefix))) {
-    return 'export'
-  }
-  return activeMode
-}
-
-function resolveRequestUrl(rawUrl) {
-  try {
-    const parsed = new URL(rawUrl)
-    if (!isLocalTarget(parsed.hostname)) {
-      return rawUrl
-    }
-
-    const parsedPort = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
-    if (parsedPort === API_GATEWAY_PORT && runtimePort !== API_GATEWAY_PORT) {
-      parsed.hostname = API_HOST
-      parsed.port = String(runtimePort)
-      return parsed.toString()
-    }
-
-    return rawUrl
-  } catch {
-    return rawUrl
-  }
-}
-
-function healthPathForMode(mode) {
-  return mode === 'import' ? '/api/v1/system/health' : '/health'
-}
-
-async function isPortAvailable(port) {
-  return isPortAvailableOnHost(port, API_HOST)
-}
-
-async function isPortAvailableOnHost(port, host) {
-  return new Promise((resolve) => {
-    const server = net.createServer()
-    server.unref()
-
-    server.once('error', () => {
-      resolve(false)
-    })
-
-    server.once('listening', () => {
-      server.close(() => resolve(true))
-    })
-
-    server.listen({ host, port, exclusive: true })
+function json(response, statusCode, payload) {
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
   })
-}
-
-async function pickRuntimePort(preferredPort) {
-  if (await isPortAvailable(preferredPort)) {
-    return preferredPort
-  }
-
-  for (let offset = 1; offset <= BACKEND_PORT_SCAN_RANGE; offset += 1) {
-    const candidate = preferredPort + offset
-    if (candidate > 65535) {
-      continue
-    }
-    if (await isPortAvailable(candidate)) {
-      pushWarning(`Preferred port ${preferredPort} unavailable, using ${candidate}`)
-      return candidate
-    }
-  }
-
-  throw new Error(`No available port found near ${preferredPort}`)
-}
-
-async function pickMobileProgressPort(preferredPort) {
-  if (await isPortAvailableOnHost(preferredPort, MOBILE_PROGRESS_HOST)) {
-    return preferredPort
-  }
-
-  for (let offset = 1; offset <= MOBILE_PROGRESS_PORT_SCAN_RANGE; offset += 1) {
-    const candidate = preferredPort + offset
-    if (candidate > 65535) {
-      continue
-    }
-    if (await isPortAvailableOnHost(candidate, MOBILE_PROGRESS_HOST)) {
-      pushWarning(`Mobile progress preferred port ${preferredPort} unavailable, using ${candidate}`)
-      return candidate
-    }
-  }
-
-  throw new Error(`No available mobile progress port found near ${preferredPort}`)
-}
-
-function setNoCacheHeaders(response) {
-  response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-  response.setHeader('Pragma', 'no-cache')
-  response.setHeader('Expires', '0')
-}
-
-function sendJson(response, statusCode, payload) {
-  response.statusCode = statusCode
-  setNoCacheHeaders(response)
-  response.setHeader('Content-Type', 'application/json; charset=utf-8')
   response.end(JSON.stringify(payload))
 }
 
-function sendHtml(response, statusCode, html) {
-  response.statusCode = statusCode
-  setNoCacheHeaders(response)
-  response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(html)
+function html(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  })
+  response.end(body)
 }
 
-function sendNotFound(response) {
-  response.statusCode = 404
-  setNoCacheHeaders(response)
-  response.end('Not Found')
-}
+async function loadJobForMobileProgress(taskId) {
+  const supervisor = await loadBackendSupervisor()
+  const response = await supervisor.invokeCapability({
+    requestId: `mobile-progress-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    capability: 'jobs.get',
+    payload: {
+      jobId: String(taskId),
+    },
+    meta: {
+      clientName: 'mobile-progress',
+      clientVersion: '0.1.0',
+      sdkVersion: '0.1.0',
+    },
+  })
 
-function buildMobileViewUrl(sessionId, token) {
-  if (!mobileProgressPort) {
-    throw new Error('Mobile progress server is not ready')
+  if (!response.success) {
+    throw new Error(response.error?.message || response.error?.code || 'Failed to load progress.')
   }
-  const host = mobileProgressLanHost || resolveMobileLanHost() || '127.0.0.1'
-  return `http://${host}:${mobileProgressPort}/mobile/view/${encodeURIComponent(sessionId)}/${encodeURIComponent(token)}`
+
+  return response.data
 }
 
-function renderMobileViewerHtml(sessionId, token) {
-  const encodedSessionId = encodeURIComponent(sessionId)
-  const encodedToken = encodeURIComponent(token)
-  const apiPath = `/mobile/api/export-progress/${encodedSessionId}/${encodedToken}`
-  const pollMs = MOBILE_PROGRESS_POLL_MS
+async function loadDawAdapterSnapshot() {
+  const supervisor = await loadBackendSupervisor()
+  const metadata = await loadAppMetadata()
+  const response = await supervisor.invokeCapability({
+    requestId: `backend-daw-adapter-snapshot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    capability: 'daw.adapter.getSnapshot',
+    payload: {},
+    meta: {
+      clientName: 'electron-runtime',
+      clientVersion: metadata.version,
+      sdkVersion: '0.1.0',
+    },
+  })
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Presto Export Progress</title>
-    <style>
-      :root { color-scheme: light; }
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: linear-gradient(160deg, #f4f7fb, #eef4ff);
-        color: #1f2937;
-      }
-      .wrap {
-        max-width: 520px;
-        margin: 0 auto;
-        padding: 20px 16px 28px;
-      }
-      .card {
-        background: #ffffff;
-        border: 1px solid #dbe7ff;
-        border-radius: 14px;
-        padding: 16px;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-      }
-      .title {
-        margin: 0 0 6px;
-        font-size: 18px;
-        font-weight: 700;
-      }
-      .subtitle {
-        margin: 0 0 14px;
-        font-size: 12px;
-        color: #475569;
-      }
-      .row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        margin: 10px 0;
-      }
-      .label {
-        color: #64748b;
-        font-size: 12px;
-      }
-      .value {
-        color: #0f172a;
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .bar-wrap {
-        margin-top: 10px;
-        background: #e2e8f0;
-        border-radius: 999px;
-        overflow: hidden;
-        height: 10px;
-      }
-      .bar {
-        height: 10px;
-        width: 0%;
-        background: linear-gradient(90deg, #2563eb, #1d4ed8);
-        transition: width 250ms ease;
-      }
-      .hint {
-        margin-top: 12px;
-        font-size: 11px;
-        color: #64748b;
-      }
-      .error {
-        margin-top: 12px;
-        color: #b91c1c;
-        background: #fee2e2;
-        border: 1px solid #fecaca;
-        border-radius: 10px;
-        padding: 8px 10px;
-        font-size: 12px;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="wrap">
-      <section class="card">
-        <h1 class="title">Export Progress (Read-only)</h1>
-        <p class="subtitle">This page is read-only and refreshes automatically.</p>
-        <div class="row"><span class="label">Status</span><span class="value" id="status">Loading...</span></div>
-        <div class="row"><span class="label">Snapshot</span><span class="value" id="snapshot">-</span></div>
-        <div class="row"><span class="label">Current</span><span class="value" id="current">-</span></div>
-        <div class="row"><span class="label">ETA</span><span class="value" id="eta">-</span></div>
-        <div class="row"><span class="label">Estimated Finish</span><span class="value" id="etaTarget">-</span></div>
-        <div class="row"><span class="label">Updated</span><span class="value" id="updated">-</span></div>
-        <div class="bar-wrap"><div class="bar" id="bar"></div></div>
-        <div class="hint">Keep desktop app open and stay on the same Wi-Fi network.</div>
-        <div class="error" id="error" style="display:none;"></div>
-      </section>
-    </main>
-    <script>
-      const statusNode = document.getElementById('status');
-      const snapshotNode = document.getElementById('snapshot');
-      const currentNode = document.getElementById('current');
-      const etaNode = document.getElementById('eta');
-      const etaTargetNode = document.getElementById('etaTarget');
-      const updatedNode = document.getElementById('updated');
-      const barNode = document.getElementById('bar');
-      const errorNode = document.getElementById('error');
-      const endpoint = ${JSON.stringify(apiPath)};
-      const pollInterval = ${pollMs};
-      let stopped = false;
+  if (!response.success) {
+    throw new Error(response.error?.message || response.error?.code || 'Failed to load DAW adapter snapshot.')
+  }
 
-      function setError(message) {
-        errorNode.style.display = 'block';
-        errorNode.textContent = message;
-      }
-
-      function clearError() {
-        errorNode.style.display = 'none';
-        errorNode.textContent = '';
-      }
-
-      function render(payload) {
-        const progress = Number(payload.progress || 0);
-        const etaSeconds = typeof payload.eta_seconds === 'number' ? Math.max(0, payload.eta_seconds) : null;
-        statusNode.textContent = String(payload.status || 'unknown');
-        snapshotNode.textContent = String(Math.max(0, Number(payload.current_snapshot || 0))) + ' / ' + String(Math.max(0, Number(payload.total_snapshots || 0)));
-        currentNode.textContent = payload.current_snapshot_name || '-';
-        etaNode.textContent = etaSeconds == null ? '-' : (etaSeconds + 's');
-        etaTargetNode.textContent = payload.eta_target_at ? new Date(payload.eta_target_at).toLocaleTimeString() : '-';
-        updatedNode.textContent = payload.updated_at ? new Date(payload.updated_at).toLocaleTimeString() : '-';
-        barNode.style.width = Math.max(0, Math.min(100, progress)) + '%';
-      }
-
-      async function poll() {
-        if (stopped) {
-          return;
-        }
-        try {
-          const response = await fetch(endpoint + '?_ts=' + Date.now(), { cache: 'no-store' });
-          if (response.status === 404) {
-            stopped = true;
-            setError('Link expired or closed.');
-            return;
-          }
-          if (!response.ok) {
-            throw new Error('HTTP ' + response.status);
-          }
-          const payload = await response.json();
-          clearError();
-          render(payload);
-        } catch (error) {
-          setError('Connection lost. Retrying...');
-        } finally {
-          if (!stopped) {
-            setTimeout(poll, pollInterval);
-          }
-        }
-      }
-
-      poll();
-    </script>
-  </body>
-</html>`
+  return response.data
 }
 
-async function handleMobileProgressRequest(request, response) {
-  try {
-    const parsed = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`)
-    const pathName = parsed.pathname
+async function setBackendDeveloperMode(enabled) {
+  const supervisor = await loadBackendSupervisor()
+  const metadata = await loadAppMetadata()
+  const runtimeMeta = {
+    clientName: 'electron-runtime',
+    clientVersion: metadata.version,
+    sdkVersion: '0.1.0',
+  }
+  const resolvedEnabled = Boolean(enabled)
+  const requestIdSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const getConfigResponse = await supervisor.invokeCapability({
+    requestId: `backend-set-developer-mode-get-${requestIdSuffix}`,
+    capability: 'config.get',
+    payload: {},
+    meta: runtimeMeta,
+  })
 
-    const viewMatch = pathName.match(/^\/mobile\/view\/([^/]+)\/([^/]+)$/)
-    if (viewMatch) {
-      const sessionId = decodeURIComponent(viewMatch[1] || '')
-      const token = decodeURIComponent(viewMatch[2] || '')
-      const session = validateMobileProgressSession(sessionId, token)
-      if (!session) {
-        sendNotFound(response)
+  if (!getConfigResponse.success) {
+    throw new Error(getConfigResponse.error?.message || getConfigResponse.error?.code || 'Failed to load config.')
+  }
+
+  const currentConfigCandidate = getConfigResponse.data?.config
+  if (!currentConfigCandidate || typeof currentConfigCandidate !== 'object') {
+    throw new Error('Invalid config payload.')
+  }
+
+  const currentUiPreferences =
+    currentConfigCandidate.uiPreferences && typeof currentConfigCandidate.uiPreferences === 'object'
+      ? currentConfigCandidate.uiPreferences
+      : {}
+  const nextConfig = {
+    ...currentConfigCandidate,
+    uiPreferences: {
+      ...currentUiPreferences,
+      developerModeEnabled: resolvedEnabled,
+    },
+  }
+  const updateConfigResponse = await supervisor.invokeCapability({
+    requestId: `backend-set-developer-mode-update-${requestIdSuffix}`,
+    capability: 'config.update',
+    payload: {
+      config: nextConfig,
+    },
+    meta: runtimeMeta,
+  })
+
+  if (!updateConfigResponse.success) {
+    throw new Error(updateConfigResponse.error?.message || updateConfigResponse.error?.code || 'Failed to save config.')
+  }
+
+  return { ok: true, enabled: resolvedEnabled }
+}
+
+async function ensureMobileProgressRuntime() {
+  if (mobileProgressRuntime && mobileProgressHttpServer && mobileProgressOrigin) {
+    return {
+      origin: mobileProgressOrigin,
+      runtime: mobileProgressRuntime,
+    }
+  }
+
+  const host = resolveMobileProgressHost()
+  mobileProgressHttpServer = createHttpServer(async (request, response) => {
+    try {
+      const requestUrl = new URL(request.url || '/', mobileProgressOrigin || 'http://127.0.0.1')
+      const pageMatch = requestUrl.pathname.match(/^\/mobile-progress\/([^/]+)$/)
+      const apiMatch = requestUrl.pathname.match(/^\/mobile-progress-api\/([^/]+)$/)
+
+      if (!pageMatch && !apiMatch) {
+        html(response, 404, '<h1>Not Found</h1>')
         return
       }
 
-      sendHtml(response, 200, renderMobileViewerHtml(session.sessionId, session.token))
-      return
-    }
-
-    const apiMatch = pathName.match(/^\/mobile\/api\/export-progress\/([^/]+)\/([^/]+)$/)
-    if (apiMatch) {
-      const sessionId = decodeURIComponent(apiMatch[1] || '')
-      const token = decodeURIComponent(apiMatch[2] || '')
-      const session = validateMobileProgressSession(sessionId, token)
-      if (!session) {
-        sendNotFound(response)
+      const sessionId = decodeURIComponent((pageMatch || apiMatch)?.[1] ?? '')
+      const token = String(requestUrl.searchParams.get('token') ?? '')
+      const session = mobileProgressRuntime?.getSession(sessionId) ?? null
+      if (!session || token !== session.token) {
+        if (apiMatch) {
+          json(response, 403, { ok: false, error: 'Session not found.' })
+          return
+        }
+        html(response, 403, '<h1>Session not found.</h1>')
         return
       }
 
-      const statusResponse = await performHttpRequest(
-        `http://${API_HOST}:${API_GATEWAY_PORT}/api/v1/export/status/${encodeURIComponent(session.taskId)}`,
-      )
-      sendJson(response, 200, mapExportProgressForMobile(statusResponse))
-      return
+      if (pageMatch) {
+        html(response, 200, buildMobileProgressPage(sessionId, token))
+        return
+      }
+
+      const jobView = session.latestJobView
+        ? session.latestJobView
+        : deriveMobileProgressJobView(await loadJobForMobileProgress(session.taskId))
+      json(response, 200, {
+        ok: true,
+        session,
+        jobView,
+      })
+    } catch (error) {
+      json(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
-
-    sendNotFound(response)
-  } catch (error) {
-    localLog('mobile-progress', 'error', `request failed: ${error instanceof Error ? error.message : String(error)}`)
-    sendJson(response, 500, {
-      status: 'error',
-      progress: 0,
-      current_snapshot: 0,
-      total_snapshots: 0,
-      current_snapshot_name: '',
-      updated_at: nowIso(),
-    })
-  }
-}
-
-async function startMobileProgressServer() {
-  if (mobileProgressServer && mobileProgressPort) {
-    return
-  }
-
-  const preferredPort = normalizePort(process.env.PT_MOBILE_PROGRESS_PORT, MOBILE_PROGRESS_DEFAULT_PORT)
-  const selectedPort = await pickMobileProgressPort(preferredPort)
-  const server = http.createServer((request, response) => {
-    void handleMobileProgressRequest(request, response)
   })
 
   await new Promise((resolve, reject) => {
-    const onError = (error) => {
-      server.off('listening', onListening)
-      reject(error)
-    }
-    const onListening = () => {
-      server.off('error', onError)
+    mobileProgressHttpServer.once('error', reject)
+    mobileProgressHttpServer.listen(0, '0.0.0.0', () => {
+      mobileProgressHttpServer.off('error', reject)
       resolve()
-    }
-
-    server.once('error', onError)
-    server.once('listening', onListening)
-    server.listen({ host: MOBILE_PROGRESS_HOST, port: selectedPort })
+    })
   })
 
-  mobileProgressServer = server
-  mobileProgressPort = selectedPort
-  mobileProgressLanHost = resolveMobileLanHost()
-  localLog(
-    'mobile-progress',
-    'info',
-    `mobile server ready on ${MOBILE_PROGRESS_HOST}:${selectedPort} (lan=${mobileProgressLanHost || 'unresolved'})`,
-  )
+  const address = mobileProgressHttpServer.address()
+  const port = typeof address === 'object' && address ? address.port : 0
+  mobileProgressOrigin = `http://${host}:${port}`
+  mobileProgressRuntime = createMobileProgressServer({
+    buildViewUrl(sessionId, token) {
+      return `${mobileProgressOrigin}/mobile-progress/${encodeURIComponent(sessionId)}?token=${encodeURIComponent(token)}`
+    },
+  })
+
+  return {
+    origin: mobileProgressOrigin,
+    runtime: mobileProgressRuntime,
+  }
 }
 
-async function stopMobileProgressServer() {
-  clearMobileProgressSessions()
-  mobileProgressLanHost = null
-
-  if (!mobileProgressServer) {
-    mobileProgressPort = null
-    return
+async function decorateMobileProgressResult(result) {
+  if (!result?.ok || !result.url) {
+    return result
   }
 
-  const server = mobileProgressServer
-  mobileProgressServer = null
-  mobileProgressPort = null
+  return {
+    ...result,
+    qrSvg: await QRCode.toString(result.url, {
+      type: 'svg',
+      width: 220,
+      margin: 1,
+      color: {
+        dark: '#181a20',
+        light: '#ffffff',
+      },
+    }),
+  }
+}
 
+async function closeMobileProgressRuntime() {
+  mobileProgressRuntime?.clearSessions?.()
+  mobileProgressRuntime = null
+  mobileProgressOrigin = ''
+  if (!mobileProgressHttpServer) {
+    return
+  }
+  const server = mobileProgressHttpServer
+  mobileProgressHttpServer = null
   await new Promise((resolve) => {
     server.close(() => resolve())
   })
 }
 
-function clearHeartbeatMonitor() {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer)
-    heartbeatTimer = null
-  }
-}
+async function waitForRendererText(win, expectedText, timeoutMs = 20000) {
+  const startedAt = Date.now()
+  let lastText = ''
 
-async function stopProcess(proc) {
-  if (!proc || proc.killed) {
-    return
-  }
-
-  await new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      try {
-        proc.kill('SIGKILL')
-      } catch {
-        // Ignore forced-kill failures.
-      }
-      resolve()
-    }, 3000)
-
-    proc.once('exit', () => {
-      clearTimeout(timer)
-      resolve()
-    })
-
+  while (Date.now() - startedAt < timeoutMs) {
     try {
-      proc.kill('SIGTERM')
-    } catch {
-      clearTimeout(timer)
-      resolve()
+      lastText = await win.webContents.executeJavaScript('document.body.innerText')
+      if (typeof lastText === 'string' && lastText.includes(expectedText)) {
+        return lastText
+      }
+    } catch (_error) {
+      // Retry until the renderer is fully initialized.
     }
-  })
+
+    await sleep(250)
+  }
+
+  throw new Error(`smoke text not found: ${expectedText}\n--- last renderer text ---\n${lastText}`)
 }
 
-async function stopActiveBackend() {
-  clearHeartbeatMonitor()
-  plannedStopInProgress = true
-  activeStatus = 'stopping'
-  activeReady = false
-
-  const proc = activeProcess
-  await stopProcess(proc)
-
-  activeProcess = null
-  activePid = null
-  activeReady = false
-  activeStatus = 'stopped'
-  activeHeartbeatFailures = 0
-  pythonApi = null
-  importPythonApi = null
-
-  plannedStopInProgress = false
+async function clickRendererButton(win, label) {
+  await win.webContents.executeJavaScript(
+    `(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      const target = buttons.find((button) => button.textContent && button.textContent.includes(${JSON.stringify(label)}))
+      if (!target) {
+        throw new Error('button not found: ' + ${JSON.stringify(label)})
+      }
+      target.click()
+    })()`,
+  )
 }
 
-function updateLegacyProcessPointers(mode, proc) {
-  if (mode === 'export') {
-    pythonApi = proc
-    importPythonApi = null
-  } else {
-    importPythonApi = proc
-    pythonApi = null
+async function clickFirstMatchingRendererButton(win, labels) {
+  await win.webContents.executeJavaScript(
+    `(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      const labels = ${JSON.stringify(labels)}
+      const target = buttons.find((button) =>
+        labels.some((label) => button.textContent && button.textContent.includes(label))
+      )
+      if (!target) {
+        throw new Error('button not found: ' + labels.join(' | '))
+      }
+      target.click()
+    })()`,
+  )
+}
+
+async function assertRendererBridge(win) {
+  const hasBridge = await win.webContents.executeJavaScript(
+    'Boolean(window.__PRESTO_PLUGIN_SHARED__)',
+  )
+  if (!hasBridge) {
+    throw new Error('preload bridge is missing')
   }
 }
 
-function attachActiveProcessHandlers(mode, proc) {
-  const source = `python-api:${mode}`
-  activeProcess = proc
-  activePid = proc.pid ?? null
-  activeReady = false
-  activeStatus = 'starting'
-  activeHeartbeatFailures = 0
-  lastError = null
-  updateLegacyProcessPointers(mode, proc)
+function configureSmokeEnvironment(target) {
+  if (target === 'track-write') {
+    process.env.PRESTO_MAIN_BACKEND_PORT = '18516'
+  }
 
-  proc.stdout.on('data', (chunk) => {
-    localLog(source, 'info', chunk.toString(), { event: `${mode}.process.stdout` })
-  })
+  if (target === 'developer-read') {
+    process.env.PRESTO_MAIN_BACKEND_PORT = '18511'
+  }
 
-  proc.stderr.on('data', (chunk) => {
-    localLog(source, 'error', chunk.toString(), { event: `${mode}.process.stderr` })
-  })
+  if (target === 'developer-write') {
+    process.env.PRESTO_MAIN_BACKEND_PORT = '18512'
+  }
 
-  proc.on('error', (error) => {
-    lastError = error instanceof Error ? error.message : String(error)
-    localLog(source, 'error', `spawn error: ${lastError}`, { event: `${mode}.process.spawn_failed` })
-  })
+  if (target === 'strip-silence') {
+    process.env.PRESTO_MAIN_BACKEND_PORT = '18513'
+  }
 
-  proc.on('exit', (code, signal) => {
-    lastExit = {
-      code: code ?? null,
-      signal: signal ?? null,
-      timestamp: nowIso(),
-      mode,
-    }
-    localLog(source, 'warn', `exited (code=${code}, signal=${signal})`, { event: `${mode}.process.exited` })
-
-    activeProcess = null
-    activePid = null
-    activeReady = false
-    updateLegacyProcessPointers(mode, null)
-
-    if (shuttingDown || plannedStopInProgress) {
-      activeStatus = 'stopped'
-      return
-    }
-
-    activeStatus = 'crashed'
-    lastError = `Process exited (code=${code}, signal=${signal})`
-    scheduleAutoRestart(`${mode} backend exited unexpectedly`)
-  })
-}
-
-function resetAutoRestartWindowIfNeeded() {
-  const now = Date.now()
-  if (autoRestartWindowStart === 0 || now - autoRestartWindowStart > BACKEND_AUTO_RESTART_WINDOW_MS) {
-    autoRestartWindowStart = now
-    autoRestartCount = 0
+  if (target === 'core-io-write') {
+    process.env.PRESTO_MAIN_BACKEND_PORT = '18514'
   }
 }
 
-function scheduleAutoRestart(reason) {
-  if (shuttingDown || plannedStopInProgress) {
+async function runSmokeChecks(win, supervisor, target) {
+  await assertRendererBridge(win)
+
+  if (target === 'developer-read') {
+    await waitForRendererText(win, 'Core Console')
+    await waitForRendererText(win, 'system.health :: success')
+    await waitForRendererText(win, 'config.get :: success')
+    await waitForRendererText(win, 'daw.connection.getStatus :: success')
+    await waitForRendererText(win, 'transport.getStatus :: success')
+    await waitForRendererText(win, 'session.getInfo :: success')
+    await waitForRendererText(win, 'track.list :: success')
     return
   }
 
-  resetAutoRestartWindowIfNeeded()
-
-  if (autoRestartCount >= BACKEND_AUTO_RESTART_MAX_IN_WINDOW) {
-    pushWarning(`Auto-restart limit reached. Last reason: ${reason}`)
-    return
-  }
-
-  if (restartTimer) {
-    localLog('backend-manager', 'warn', `Auto-restart already scheduled. Reason: ${reason}`, {
-      event: 'backend.autorestart.already_scheduled',
-    })
-    return
-  }
-
-  autoRestartCount += 1
-  localLog('backend-manager', 'warn', `Scheduling auto-restart #${autoRestartCount}: ${reason}`, {
-    event: 'backend.autorestart.scheduled',
-    ctx: { autoRestartCount },
-  })
-
-  restartTimer = setTimeout(() => {
-    restartTimer = null
-    void activateMode(activeMode, `auto-restart: ${reason}`, { forceRestart: true, countRestart: true })
-  }, BACKEND_AUTO_RESTART_DELAY_MS)
-}
-
-async function checkActiveHealth(timeoutMs = BACKEND_HEARTBEAT_TIMEOUT_MS) {
-  if (!activeProcess || activeProcess.killed) {
-    return false
-  }
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  const url = `http://${API_HOST}:${runtimePort}${healthPathForMode(activeMode)}`
-
-  try {
-    const response = await fetch(url, { signal: controller.signal })
-    return response.ok
-  } catch {
-    return false
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function waitForActiveReady(timeoutMs = BACKEND_STARTUP_TIMEOUT_MS) {
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() < deadline) {
-    if (shuttingDown) {
-      return false
-    }
-
-    const healthy = await checkActiveHealth()
-    if (healthy) {
-      activeReady = true
-      activeStatus = 'ready'
-      activeHeartbeatFailures = 0
-      lastError = null
-      return true
-    }
-
-    if (!activeProcess || activeProcess.killed) {
-      activeReady = false
-      activeStatus = 'crashed'
-      lastError = lastError || 'Process is not running'
-      return false
-    }
-
-    await sleep(300)
-  }
-
-  activeReady = false
-  activeStatus = 'degraded'
-  lastError = `Health check timed out after ${timeoutMs}ms`
-  return false
-}
-
-function startHeartbeatMonitor() {
-  clearHeartbeatMonitor()
-
-  heartbeatTimer = setInterval(() => {
-    void (async () => {
-      if (!activeProcess || activeProcess.killed) {
-        return
-      }
-
-      const healthy = await checkActiveHealth()
-      if (healthy) {
-        if (!activeReady || activeStatus !== 'ready') {
-          localLog('backend-manager', 'info', `${activeMode} backend is healthy`, {
-            event: 'backend.heartbeat.recovered',
-            ctx: { mode: activeMode },
-          })
-        }
-        activeReady = true
-        activeStatus = 'ready'
-        activeHeartbeatFailures = 0
-        return
-      }
-
-      activeReady = false
-      if (activeStatus === 'ready') {
-        localLog('backend-manager', 'warn', `${activeMode} backend heartbeat degraded`, {
-          event: 'backend.heartbeat.degraded',
-          ctx: { mode: activeMode },
-        })
-      }
-      activeStatus = activeStatus === 'crashed' ? 'crashed' : 'degraded'
-      activeHeartbeatFailures += 1
-      lastError = `Heartbeat failed (${activeHeartbeatFailures}/${BACKEND_HEARTBEAT_FAILURE_THRESHOLD})`
-
-      if (activeHeartbeatFailures >= BACKEND_HEARTBEAT_FAILURE_THRESHOLD) {
-        pushWarning(`${activeMode} backend heartbeat failed repeatedly; scheduling restart`)
-        activeHeartbeatFailures = 0
-        scheduleAutoRestart(`${activeMode} heartbeat failures`)
-      }
-    })()
-  }, BACKEND_HEARTBEAT_INTERVAL_MS)
-
-  if (typeof heartbeatTimer.unref === 'function') {
-    heartbeatTimer.unref()
-  }
-}
-
-async function spawnBackendForMode(mode) {
-  const projectRoot = getProjectRoot()
-  const backendRoot = app.isPackaged ? projectRoot : path.join(projectRoot, 'backend')
-  const exportBackendPath = path.join(backendRoot, 'export', 'main.py')
-  const importBackendRoot = path.join(backendRoot, 'import')
-  const defaultAppSupportDir = app.isPackaged ? undefined : path.join(projectRoot, '.presto')
-  const python = process.env.PT_API_PYTHON || 'python3'
-  const baseEnv = {
-    ...process.env,
-    PYTHONUNBUFFERED: '1',
-    DEBUG: process.env.DEBUG || 'false',
-    ...(process.env.PRESTO_APP_SUPPORT_DIR
-      ? {}
-      : defaultAppSupportDir
-        ? { PRESTO_APP_SUPPORT_DIR: defaultAppSupportDir }
-        : {}),
-  }
-
-  let proc
-
-  if (mode === 'export') {
-    proc = spawn(python, [exportBackendPath], {
-      cwd: path.dirname(exportBackendPath),
-      env: {
-        ...baseEnv,
-        HOST: API_HOST,
-        PORT: String(runtimePort),
+  if (target === 'developer-write') {
+    const trackList = await supervisor.invokeCapability({
+      requestId: 'developer-smoke-track-list-write',
+      capability: 'track.list',
+      payload: {},
+      meta: {
+        clientName: 'developer-smoke-write',
+        clientVersion: '0.1.0',
+        sdkVersion: '0.1.0',
       },
-      stdio: 'pipe',
     })
-  } else {
-    proc = spawn(python, ['-m', 'presto.main_api', '--host', API_HOST, '--port', String(runtimePort)], {
-      cwd: importBackendRoot,
-      env: {
-        ...baseEnv,
-        HOST: API_HOST,
-        PORT: String(runtimePort),
-      },
-      stdio: 'pipe',
-    })
-  }
-
-  attachActiveProcessHandlers(mode, proc)
-}
-
-async function activateMode(nextMode, reason = 'manual', options = {}) {
-  const targetMode = nextMode === 'import' ? 'import' : 'export'
-
-  if (activatePromise) {
-    await activatePromise
-  }
-
-  activatePromise = (async () => {
-    const forceRestart = Boolean(options.forceRestart)
-    const countRestart = Boolean(options.countRestart)
-
-    const shouldRestart =
-      forceRestart ||
-      !activeProcess ||
-      activeProcess.killed ||
-      activeMode !== targetMode
-
-    if (!shouldRestart && activeReady) {
-      return getBackendStatusPayload()
+    if (!trackList.success) {
+      throw new Error(`track.list failed for developer write smoke: ${trackList.error.code}`)
+    }
+    const firstTrackName = trackList.data.tracks[0]?.name
+    if (!firstTrackName) {
+      throw new Error('track.list returned no tracks for developer write smoke')
     }
 
-    localLog('backend-manager', 'info', `Activating mode '${targetMode}' (${reason})`)
-
-    if (activeProcess) {
-      await stopActiveBackend()
-    }
-
-    requestedPort = normalizePort(requestedPort, API_GATEWAY_PORT)
-    runtimePort = await pickRuntimePort(requestedPort)
-
-    activeMode = targetMode
-    activeStatus = 'starting'
-
-    if (countRestart) {
-      restartCount += 1
-    }
-
-    await spawnBackendForMode(targetMode)
-
-    const ready = await waitForActiveReady(BACKEND_STARTUP_TIMEOUT_MS)
-    if (!ready) {
-      pushWarning(`Mode '${targetMode}' startup incomplete on port ${runtimePort}`)
-    }
-
-    startHeartbeatMonitor()
-
-    return getBackendStatusPayload()
-  })()
-
-  try {
-    return await activatePromise
-  } finally {
-    activatePromise = null
-  }
-}
-
-async function ensureModeAndReadinessForRequest(rawUrl) {
-  const parsed = new URL(rawUrl)
-  const expectedMode = inferModeFromPath(parsed.pathname)
-
-  if (expectedMode !== activeMode || !activeProcess || activeProcess.killed) {
-    await activateMode(expectedMode, 'request routing')
-  }
-
-  if (activeReady) {
+    await waitForRendererText(win, 'Core Console')
+    await waitForRendererText(win, 'config.get :: success')
+    await waitForRendererText(win, 'config.update :: success')
+    await waitForRendererText(win, 'daw.connection.connect :: success')
+    await waitForRendererText(win, 'daw.connection.getStatus :: success')
+    await waitForRendererText(win, 'transport.getStatus :: success')
+    await waitForRendererText(win, 'session.save :: success')
+    await waitForRendererText(win, 'track.rename :: success')
+    await waitForRendererText(win, 'track.select :: success')
+    await waitForRendererText(win, 'track.color.apply :: success')
+    await waitForRendererText(win, 'clip.selectAllOnTrack :: success')
+    await waitForRendererText(win, 'track.mute.set :: success')
+    await waitForRendererText(win, 'track.solo.set :: success')
+    await waitForRendererText(win, 'transport.play :: success')
+    await waitForRendererText(win, 'transport.stop :: success')
+    await waitForRendererText(win, 'transport.record :: success')
+    await waitForRendererText(win, 'daw.connection.disconnect :: success')
     return
   }
 
-  const ready = await waitForActiveReady(BACKEND_REQUEST_READY_TIMEOUT_MS)
-  if (!ready) {
-    const details = lastError ? ` ${lastError}` : ''
-    throw new Error(`Backend '${activeMode}' is not ready.${details} Open Home -> Backend Diagnostics to inspect logs and restart services.`)
-  }
-}
-
-async function performHttpRequest(url, init = undefined) {
-  const targetUrl = resolveRequestUrl(url)
-  await ensureModeAndReadinessForRequest(targetUrl)
-
-  let lastRequestError = null
-
-  for (let attempt = 1; attempt <= HTTP_MAX_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS)
-
-    try {
-      const res = await fetch(targetUrl, { ...init, signal: controller.signal })
-      const body = await res.text()
-      if (!res.ok) {
-        const parsedApiError = parseApiErrorBody(body)
-        if (parsedApiError) {
-          throw new Error(`${PRESTO_API_ERROR_PREFIX}${JSON.stringify(parsedApiError)}`)
-        }
-        throw new Error(body || `HTTP ${res.status}`)
-      }
-      return parseJsonResponse(body, targetUrl)
-    } catch (error) {
-      lastRequestError = error
-      const retryable = isRetryableFetchError(error)
-      if (retryable && attempt < HTTP_MAX_ATTEMPTS) {
-        const retryDelay = HTTP_RETRY_DELAY_MS * attempt
-        localLog(
-          'backend-http',
-          'warn',
-          `Transient HTTP error for ${targetUrl}; retrying in ${retryDelay}ms (${attempt}/${HTTP_MAX_ATTEMPTS})`,
-        )
-        await sleep(retryDelay)
-        continue
-      }
-      throw formatFetchError(targetUrl, error)
-    } finally {
-      clearTimeout(timeout)
-    }
+  if (target === 'track-write') {
+    await waitForRendererText(win, 'Core Console')
+    await waitForRendererText(win, 'track.list :: success')
+    await waitForRendererText(win, 'track.color.apply :: success')
+    return
   }
 
-  throw formatFetchError(targetUrl, lastRequestError)
-}
-
-function getBackendStatusPayload() {
-  const running = Boolean(activeProcess && !activeProcess.killed)
-
-  return {
-    running,
-    ready: activeReady,
-    mode: activeMode,
-    pid: activePid,
-    requestedPort,
-    port: runtimePort,
-    status: activeStatus,
-    heartbeatFailures: activeHeartbeatFailures,
-    restarts: restartCount,
-    lastError,
-    lastExit,
-    baseUrl: `http://${API_HOST}:${runtimePort}`,
-    importBaseUrl: `http://${API_HOST}:${runtimePort}`,
-    warnings: [...backendWarnings],
-    logsCount: backendLogs.length,
-    debugLoggingEnabled: developerModeLoggingEnabled,
+  if (target === 'strip-silence') {
+    await waitForRendererText(win, 'Core Console')
+    await waitForRendererText(win, 'track.select :: success')
+    await waitForRendererText(win, 'clip.selectAllOnTrack :: success')
+    await waitForRendererText(win, 'stripSilence.open :: success')
+    await waitForRendererText(win, 'stripSilence.execute :: success')
+    return
   }
+
+  if (target === 'core-io-write') {
+    await waitForRendererText(win, 'Core Console')
+    await waitForRendererText(win, 'import.run.start :: success')
+    await waitForRendererText(win, 'export.range.set :: success')
+    await waitForRendererText(win, 'export.start :: success')
+    await waitForRendererText(win, 'export.direct.start :: success')
+    await waitForRendererText(win, 'jobs.create :: success')
+    await waitForRendererText(win, 'jobs.update :: success')
+    await waitForRendererText(win, 'jobs.list :: success')
+    await waitForRendererText(win, 'jobs.get :: success')
+    await waitForRendererText(win, 'jobs.cancel :: success')
+    await waitForRendererText(win, 'jobs.delete :: success')
+    return
+  }
+
+  throw new Error(`unsupported smoke target: ${target}`)
 }
 
-function formatLogExport() {
-  const headerLines = [
-    '# Presto Unified Runtime Logs',
-    'schema=v1-lite',
-    `generated_at=${nowIso()}`,
-    `project_root=${getProjectRoot()}`,
-    `status=${JSON.stringify(getBackendStatusPayload(), null, 2)}`,
-    '',
-    '# entries(jsonl)',
-  ]
-
-  const entries = backendLogs.map((entry) => JSON.stringify(entry))
-
-  return [...headerLines, ...entries, ''].join('\n')
-}
-
-function createMainWindow() {
-  const preloadPath = path.join(CURRENT_DIR, 'preload.cjs')
+function createRuntimeWindow() {
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1180,
-    minHeight: 760,
+    width: 1180,
+    height: 800,
+    minWidth: 960,
+    minHeight: 640,
     show: false,
     title: 'Presto',
+    backgroundColor: '#0f172a',
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -1225,44 +792,10 @@ function createMainWindow() {
     },
   })
 
-  if (app.isPackaged) {
-    const indexPath = path.join(CURRENT_DIR, '..', 'dist', 'index.html')
-    void win.loadURL(pathToFileURL(indexPath).toString())
-  } else {
-    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
-    void win.loadURL(devServerUrl)
-  }
+  void win.loadURL(getRendererUrl(smokeTarget))
 
   win.once('ready-to-show', () => {
     win.show()
-  })
-
-  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
-    localLog('electron-main', 'error', `renderer failed to load (code=${errorCode}) ${errorDescription} url=${validatedUrl}`)
-  })
-
-  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    const mappedLevel = level >= 2 ? 'error' : level === 1 ? 'warn' : 'info'
-    const location = sourceId ? `${sourceId}:${line}` : `line:${line}`
-    localLog('renderer-console', mappedLevel, `${location} ${message}`)
-  })
-
-  win.webContents.on('render-process-gone', (_event, details) => {
-    const reason = details?.reason || 'unknown'
-    const exitCode = typeof details?.exitCode === 'number' ? details.exitCode : 'unknown'
-    const message = `renderer process gone (reason=${reason}, exitCode=${exitCode})`
-    localLog('electron-main', 'error', message)
-    pushWarning(message)
-  })
-
-  win.on('unresponsive', () => {
-    const message = 'renderer became unresponsive'
-    localLog('electron-main', 'warn', message)
-    pushWarning(message)
-  })
-
-  win.on('responsive', () => {
-    localLog('electron-main', 'info', 'renderer recovered responsiveness')
   })
 
   win.on('closed', () => {
@@ -1274,274 +807,81 @@ function createMainWindow() {
   return win
 }
 
-function registerIpcHandlers() {
-  ipcMain.handle('http:get', async (_event, url) => {
-    return performHttpRequest(url)
-  })
+async function ensureWindow() {
+  if (!mainWindow) {
+    mainWindow = createRuntimeWindow()
+  }
 
-  ipcMain.handle('http:post', async (_event, url, data) => {
-    return performHttpRequest(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: data === undefined ? undefined : JSON.stringify(data),
-    })
-  })
-
-  ipcMain.handle('http:put', async (_event, url, data) => {
-    return performHttpRequest(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: data === undefined ? undefined : JSON.stringify(data),
-    })
-  })
-
-  ipcMain.handle('http:delete', async (_event, url) => {
-    return performHttpRequest(url, { method: 'DELETE' })
-  })
-
-  ipcMain.handle('dialog:open', async (_event, options) => {
-    const targetWindow = BrowserWindow.getFocusedWindow() || mainWindow || undefined
-    return dialog.showOpenDialog(targetWindow, options)
-  })
-
-  ipcMain.handle('shell:open-path', async (_event, targetPath) => {
-    return shell.openPath(targetPath)
-  })
-
-  ipcMain.handle('shell:open-external', async (_event, url) => {
-    await shell.openExternal(String(url))
-    return true
-  })
-
-  ipcMain.handle('window:toggle-always-on-top', async () => {
-    if (!mainWindow) {
-      return false
-    }
-    const next = !mainWindow.isAlwaysOnTop()
-    mainWindow.setAlwaysOnTop(next)
-    return next
-  })
-
-  ipcMain.handle('window:get-always-on-top', async () => {
-    if (!mainWindow) {
-      return false
-    }
-    return mainWindow.isAlwaysOnTop()
-  })
-
-  ipcMain.handle('window:set-always-on-top', async (_event, enabled) => {
-    if (!mainWindow) {
-      return false
-    }
-    mainWindow.setAlwaysOnTop(Boolean(enabled))
-    return mainWindow.isAlwaysOnTop()
-  })
-
-  ipcMain.handle('app:get-version', async () => resolveDisplayVersion())
-  ipcMain.handle('app:get-latest-release', async () => fetchLatestGithubRelease())
-
-  ipcMain.handle('backend:get-status', async () => getBackendStatusPayload())
-
-  ipcMain.handle('backend:set-developer-mode', async (_event, enabled) => {
-    developerModeLoggingEnabled = Boolean(enabled)
-    localLog('backend-manager', 'info', `developer mode logging ${developerModeLoggingEnabled ? 'enabled' : 'disabled'}`, {
-      event: 'logging.developer_mode.updated',
-      ctx: { enabled: developerModeLoggingEnabled },
-    })
-    return { ok: true, enabled: developerModeLoggingEnabled }
-  })
-
-  ipcMain.handle('backend:activate-mode', async (_event, mode) => {
-    const status = await activateMode(mode, 'frontend requested mode switch')
-    return { ok: true, status }
-  })
-
-  ipcMain.handle('backend:restart', async () => {
-    const status = await activateMode(activeMode, 'manual restart', { forceRestart: true, countRestart: true })
-    return { ok: true, status }
-  })
-
-  ipcMain.handle('backend:update-ports', async (_event, config) => {
-    const next = config && typeof config === 'object' ? config : {}
-
-    if ('port' in next) {
-      requestedPort = normalizePort(next.port, API_GATEWAY_PORT)
-    }
-    if ('exportPort' in next) {
-      requestedPort = normalizePort(next.exportPort, API_GATEWAY_PORT)
-    }
-    if ('importPort' in next) {
-      requestedPort = normalizePort(next.importPort, API_GATEWAY_PORT)
-    }
-
-    const status = await activateMode(activeMode, 'port configuration updated', { forceRestart: true, countRestart: true })
-    return { ok: true, status, requestedPort, runtimePort }
-  })
-
-  ipcMain.handle('backend:get-logs', async (_event, limit = 200) => {
-    const normalized = Math.max(1, Math.min(5000, Number(limit) || 200))
-    return backendLogs.slice(Math.max(0, backendLogs.length - normalized))
-  })
-
-  ipcMain.handle('backend:export-logs', async () => {
-    const logsDir = path.join(app.getPath('home'), '.presto', 'logs')
-    await fs.mkdir(logsDir, { recursive: true })
-
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const filePath = path.join(logsDir, `presto-runtime-${stamp}.log`)
-    await fs.writeFile(filePath, formatLogExport(), 'utf-8')
-
-    return { ok: true, filePath, count: backendLogs.length }
-  })
-
-  ipcMain.handle('export-mobile:create-session', async (_event, taskId) => {
-    const normalizedTaskId = typeof taskId === 'string' ? taskId.trim() : ''
-    if (!normalizedTaskId) {
-      return { ok: false, error: 'Task ID is required.' }
-    }
-
-    await startMobileProgressServer()
-    const created = createMobileProgressSession(normalizedTaskId)
-    return {
-      ok: true,
-      sessionId: created.sessionId,
-      url: buildMobileViewUrl(created.sessionId, created.token),
-    }
-  })
-
-  ipcMain.handle('export-mobile:close-session', async (_event, sessionId) => {
-    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : ''
-    if (!normalizedSessionId) {
-      return { ok: false }
-    }
-    return { ok: closeMobileProgressSession(normalizedSessionId) }
-  })
-
-  ipcMain.handle('export-mobile:get-view-url', async (_event, sessionId) => {
-    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : ''
-    if (!normalizedSessionId) {
-      return { ok: false, error: 'Session ID is required.' }
-    }
-
-    const session = getMobileProgressSession(normalizedSessionId)
-    if (!session || !session.active) {
-      return { ok: false, error: 'Session is not active.' }
-    }
-
-    await startMobileProgressServer()
-    return {
-      ok: true,
-      sessionId: session.sessionId,
-      url: buildMobileViewUrl(session.sessionId, session.token),
-    }
-  })
-
-  ipcMain.handle('fs:read-file', async (_event, filePath) => {
-    try {
-      return await fs.readFile(filePath, 'utf-8')
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle('fs:write-file', async (_event, filePath, content) => {
-    await fs.writeFile(filePath, content, 'utf-8')
-    return true
-  })
-
-  ipcMain.handle('fs:ensure-dir', async (_event, dirPath) => {
-    await fs.mkdir(dirPath, { recursive: true })
-    return true
-  })
-
-  ipcMain.handle('fs:get-home-path', async () => app.getPath('home'))
-
-  ipcMain.handle('fs:exists', async (_event, targetPath) => {
-    try {
-      await fs.access(targetPath)
-      return true
-    } catch {
-      return false
-    }
-  })
-
-  ipcMain.handle('fs:stat', async (_event, targetPath) => {
-    try {
-      const stat = await fs.stat(targetPath)
-      return {
-        isFile: stat.isFile(),
-        isDirectory: stat.isDirectory(),
-      }
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle('fs:readdir', async (_event, targetPath) => {
-    try {
-      return await fs.readdir(targetPath)
-    } catch {
-      return []
-    }
-  })
-
-  ipcMain.handle('fs:mkdir', async (_event, targetPath) => {
-    await fs.mkdir(targetPath, { recursive: true })
-    return true
-  })
-
-  ipcMain.handle('fs:unlink', async (_event, targetPath) => {
-    try {
-      await fs.unlink(targetPath)
-      return true
-    } catch {
-      return false
-    }
-  })
-
-  ipcMain.handle('fs:rmdir', async (_event, targetPath) => {
-    try {
-      await fs.rmdir(targetPath, { recursive: true })
-      return true
-    } catch {
-      return false
-    }
-  })
-
-  ipcMain.handle('fs:delete-file', async (_event, targetPath) => {
-    try {
-      await fs.unlink(targetPath)
-      return true
-    } catch {
-      return false
-    }
-  })
+  return mainWindow
 }
 
-void app
-  .whenReady()
-  .then(async () => {
-    registerIpcHandlers()
-    localLog('backend-manager', 'info', 'App ready, starting backend supervisor')
+async function applyDawTarget(nextTarget) {
+  const resolvedTarget = typeof nextTarget === 'string' ? nextTarget : ''
+  if (!SUPPORTED_DAW_TARGETS.has(resolvedTarget)) {
+    throw new Error(`unsupported_daw_target:${resolvedTarget || 'unknown'}`)
+  }
 
-    try {
-      await activateMode(activeMode, 'app startup')
-    } catch (error) {
-      pushWarning(`Backend startup failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
+  currentDawTarget = resolvedTarget
+  if (backendSupervisor) {
+    await backendSupervisor.stop()
+    backendSupervisor = null
+  }
+  pluginHostService = null
+  const supervisor = await loadBackendSupervisor()
+  await supervisor.start()
+  await supervisor.health()
+  return currentDawTarget
+}
 
-    mainWindow = createMainWindow()
+async function bootstrapShell() {
+  if (bootPromise) {
+    return bootPromise
+  }
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow()
-      }
+  bootPromise = (async () => {
+    configureSmokeEnvironment(smokeTarget)
+    registerRuntimeHandlers({
+      app,
+      appLogStore,
+      appendAppLog,
+      applyDawTarget,
+      automationRuntime,
+      decorateMobileProgressResult,
+      ensureMobileProgressRuntime,
+      ensureSmokeImportAnalyzeFolder,
+      ensureWindow,
+      fetchLatestGithubRelease,
+      getCurrentDawTarget: () => currentDawTarget,
+      loadAppMetadata,
+      loadBackendSupervisor,
+      loadDawAdapterSnapshot,
+      loadPluginHostService,
+      macAccessibilityRuntime,
+      normalizeErrorDetails,
+      openLogInConsole,
+      pathExists,
+      readFsStat,
+      setBackendDeveloperMode,
+      smokeTarget,
+      summarizeCapabilityResult,
     })
-  })
-  .catch((error) => {
-    localLog('electron-main', 'error', `failed to initialize: ${String(error)}`)
-    app.quit()
-  })
+    if (smokeTarget === 'core-io-write' || smokeTarget === 'developer-write') {
+      await ensureSmokeImportAnalyzeFolder()
+    }
+    const supervisor = await loadBackendSupervisor()
+    await supervisor.start()
+    await supervisor.health()
+    mainWindow = createRuntimeWindow()
+    if (smokeTarget) {
+      await runSmokeChecks(mainWindow, supervisor, smokeTarget)
+      await supervisor.stop()
+      app.exit(0)
+    }
+    return supervisor.getStatus()
+  })()
+
+  return bootPromise
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -1549,8 +889,32 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    void ensureWindow().catch((error) => {
+      appendAppLog('error', 'electron.main', 'restore_runtime_window_failed', normalizeErrorDetails(error))
+      console.error('[electron-main] failed to restore runtime window:', error)
+    })
+  }
+})
+
 app.on('before-quit', () => {
-  shuttingDown = true
-  void stopActiveBackend()
-  void stopMobileProgressServer()
+  void backendSupervisor?.stop().catch((error) => {
+    appendAppLog('error', 'electron.main', 'stop_backend_supervisor_failed', normalizeErrorDetails(error))
+    console.error('[electron-main] failed to stop backend supervisor:', error)
+  })
+  void closeMobileProgressRuntime().catch((error) => {
+    appendAppLog('error', 'electron.main', 'stop_mobile_progress_runtime_failed', normalizeErrorDetails(error))
+    console.error('[electron-main] failed to stop mobile progress runtime:', error)
+  })
+})
+
+app.whenReady().then(() => {
+  void configureApplicationIdentity()
+    .then(() => bootstrapShell())
+    .catch((error) => {
+    appendAppLog('error', 'electron.main', 'runtime_shell_bootstrap_failed', normalizeErrorDetails(error))
+    console.error('[electron-main] runtime shell bootstrap failed:', error)
+    app.exit(1)
+  })
 })

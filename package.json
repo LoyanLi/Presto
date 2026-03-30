@@ -1,0 +1,81 @@
+{
+  "name": "presto",
+  "version": "0.3.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "description": "Desktop shell for Presto Pro Tools workflows",
+  "main": "frontend/electron/main.mjs",
+  "author": "Luminous Layers",
+  "copyright": "Copyright (c) 2026 Loyan Li",
+  "scripts": {
+    "stage1:build": "node frontend/electron/build-stage1.mjs",
+    "stage1:start": "npm run stage1:build && electron frontend/electron/main.mjs",
+    "sync:icon": "bash scripts/prepare_icon.sh",
+    "package:mac:prepare": "npm run sync:icon && PRESTO_STAGE1_SOURCEMAP=0 PRESTO_STAGE1_MINIFY=1 npm run stage1:build",
+    "package:mac:dmg:arm64": "electron-builder --mac dmg --arm64 -c.mac.identity=null",
+    "package:mac:dmg:x64": "electron-builder --mac dmg --x64 -c.mac.identity=null",
+    "package:mac:dmg": "npm run package:mac:prepare && npm run package:mac:dmg:arm64 && npm run package:mac:dmg:x64",
+    "developer:smoke:read": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=developer-read",
+    "developer:smoke:write": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=developer-write",
+    "developer:smoke:strip-silence": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=strip-silence",
+    "developer:smoke:core-io": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=core-io-write",
+    "stage1:smoke:track-write": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=track-write",
+    "stage1:smoke:core-io": "npm run developer:smoke:core-io",
+    "stage1:smoke": "npm run developer:smoke:read && npm run developer:smoke:write && npm run stage1:smoke:core-io && npm run developer:smoke:strip-silence && npm run stage1:smoke:track-write"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-is": "^18.3.1"
+  },
+  "build": {
+    "appId": "com.loyan.presto",
+    "productName": "Presto",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "package.json",
+      "frontend/electron/**",
+      "frontend/build/**",
+      "frontend/host/**",
+      "frontend/ui/**",
+      "backend/**",
+      "host-plugin-runtime/**",
+      "packages/**",
+      "plugins/**",
+      "assets/**",
+      "!**/test{,s}/**",
+      "!**/*.test.*",
+      "!**/__pycache__/**",
+      "!**/.pytest_cache/**",
+      "!**/*.map",
+      "!docs/**",
+      "!scripts/**",
+      "!node_modules/.cache/**"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend"
+      }
+    ],
+    "mac": {
+      "icon": "frontend/build/App.icon",
+      "category": "public.app-category.music",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.25.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "protools.splitStereoToMono",
+  "title": "Split Stereo To Mono",
+  "app": "pro_tools",
+  "description": "Split the selected stereo track into mono and keep the chosen channel.",
+  "scriptFile": "protoolsSplitStereoToMono.applescript",
+  "inputKeys": ["trackName"]
+}

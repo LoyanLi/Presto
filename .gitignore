@@ -1,124 +1,31 @@
-# =========================
-# OS generated files
-# =========================
+# macOS / local
 .DS_Store
-.AppleDouble
-.LSOverride
-._*
-Thumbs.db
-Desktop.ini
+.codex/
+.worktrees/
+.tmp-*
 
-# =========================
-# Editor / IDE
-# =========================
-.idea/
-.vscode/
-*.swp
-*.swo
+# Node / frontend
+node_modules/
+dist/
+build/
+release/
+coverage/
+*.tsbuildinfo
+frontend/electron/.stage1/
+frontend/electron/index.html
 
-# =========================
-# Python artifacts
-# =========================
-__pycache__/
-*.py[cod]
-*.so
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.pyre/
-.hypothesis/
-.tox/
-.nox/
-.coverage
-.coverage.*
-htmlcov/
-.eggs/
-*.egg
-*.egg-info/
-pip-wheel-metadata/
+# Python / backend
+**/__pycache__/
+**/.pytest_cache/
+*.pyc
 .venv/
 venv/
-env/
-ENV/
-.python-version
-.ipynb_checkpoints/
 
-# =========================
-# Node / Electron artifacts
-# =========================
-node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/release/
-frontend/build/
-frontend/coverage/
-*.tsbuildinfo
+# Local docs / planning
+docs/plans/
+
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-
-# =========================
-# Build outputs
-# =========================
-build/
-dist/
-
-# =========================
-# Runtime output / logs
-# =========================
-*.log
-logs/
-tmp/
-temp/
-output/
-.presto/
-backend/export/logs/
-backend/export/output/
-backend/export/temp/
-backend/export/test_output/
-
-# =========================
-# Environment files (keep templates)
-# =========================
-.env
-.env.*
-!.env.example
-!backend/export/.env.example
-
-# =========================
-# Local vendored / reference dirs
-# =========================
-vendor/
-.vendor/
-/Track2Do/
-
-# =========================
-# Third-party SDK artifacts (do not commit)
-# =========================
-**/AvidSDK/
-**/Avid-SDK/
-**/Avid_SDK/
-**/PTSLSDK/
-**/PTSL-SDK/
-**/PTSL_SDK/
-**/ProToolsSDK/
-**/ProTools-SDK/
-**/ProTools_SDK/
-**/Avid*SDK*.zip
-**/PTSL*SDK*.zip
-
-# Team-local docs/workspace (keep local, do not track)
-docs/*
-docs/releases/
-!docs/TECHNICAL_ARCHITECTURE.md
-.obsidian/
-
-# =========================
-# Local process/planning files
-# =========================
-task_plan.md
-findings.md
-progress.md
-docs/plans/
