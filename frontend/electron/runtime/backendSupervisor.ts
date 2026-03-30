@@ -53,10 +53,10 @@ export function resolveBackendRoot({
   resourcesPath?: string
 } = {}): string {
   if (isPackaged) {
-    return path.resolve(resourcesPath, 'backend/import/presto')
+    return path.resolve(resourcesPath, 'backend/presto')
   }
 
-  return path.resolve(resolvedCurrentDir, '../../../backend/import/presto')
+  return path.resolve(resolvedCurrentDir, '../../../backend/presto')
 }
 
 const backendRoot = resolveBackendRoot()

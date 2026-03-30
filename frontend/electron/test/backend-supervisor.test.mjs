@@ -232,7 +232,7 @@ test('resolveBackendRoot points to unpacked backend in packaged mode', async () 
       isPackaged: true,
       resourcesPath: '/tmp/Presto.app/Contents/Resources',
     }),
-    '/tmp/Presto.app/Contents/Resources/backend/import/presto',
+    '/tmp/Presto.app/Contents/Resources/backend/presto',
   )
 })
 
@@ -245,6 +245,6 @@ test('resolveBackendRoot points to repo backend in development mode', async () =
       isPackaged: false,
       resourcesPath: '/ignored',
     }),
-    '/worktree/backend/import/presto',
+    '/worktree/backend/presto',
   )
 })

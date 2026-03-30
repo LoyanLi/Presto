@@ -15,7 +15,7 @@ test('package.json exposes Presto 0.3.0-alpha.1 release metadata', async () => {
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.build?.productName, 'Presto')
   assert.equal(packageJson.build?.appId, 'com.loyan.presto')
-  assert.equal(packageJson.build?.mac?.icon, 'frontend/build/App.icon')
+  assert.equal(packageJson.build?.mac?.icon, 'frontend/build/icon.png')
   assert.match(buildStage1Source, /'assets', 'App\.icon'/)
   assert.match(buildStage1Source, /frontend', 'build'/)
   assert.match(buildStage1Source, /cp\(/)
@@ -28,7 +28,7 @@ test('electron main wires about metadata, app icon root, and metadata-backed app
     'utf8',
   )
   const adapterSource = await readFile(
-    path.join(repoRoot, 'backend/import/presto/integrations/daw/protools_adapter.py'),
+    path.join(repoRoot, 'backend/presto/integrations/daw/protools_adapter.py'),
     'utf8',
   )
 
@@ -57,6 +57,8 @@ test('package.json defines split mac installer packaging with minimal file input
     packageJson.scripts?.['package:mac:dmg'],
     'npm run package:mac:prepare && npm run package:mac:dmg:arm64 && npm run package:mac:dmg:x64',
   )
+  assert.equal(packageJson.build?.mac?.icon, 'frontend/build/icon.png')
+  assert.doesNotMatch(packageJson.build?.mac?.icon, /\.icon$/)
   assert.equal(packageJson.build?.asar, true)
   assert.equal(packageJson.dependencies?.electron, undefined)
   assert.equal(packageJson.devDependencies?.electron, '^37.0.0')

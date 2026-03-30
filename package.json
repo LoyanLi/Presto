@@ -68,7 +68,7 @@
       }
     ],
     "mac": {
-      "icon": "frontend/build/App.icon",
+      "icon": "frontend/build/icon.png",
       "category": "public.app-category.music",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
