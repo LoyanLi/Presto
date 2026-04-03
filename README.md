@@ -99,7 +99,7 @@ Node sidecar runtime
 
 ## 本地开发
 
-最小开发路径按当前脚本应为：
+最小开发路径：
 
 ```bash
 npm install
@@ -111,6 +111,27 @@ npm run tauri:dev
 ```bash
 npm test
 ```
+
+## 打包
+
+默认打包：
+
+```bash
+npm run tauri:build
+```
+
+按架构分别打包：
+
+```bash
+npm run tauri:build:arm64
+npm run tauri:build:x64
+```
+
+当前产物目录：
+
+- `src-tauri/target/aarch64-apple-darwin/release/bundle/`
+- `src-tauri/target/x86_64-apple-darwin/release/bundle/`
+- 默认本机目标仍输出到 `src-tauri/target/release/bundle/`
 
 ## 项目级约束
 

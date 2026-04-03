@@ -2,26 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.3.0-alpha.2] - 2026-03-31
+## [0.3.0-alpha.1] - 2026-04-03
 
 ### Added
-- 引入以 `packages/contracts`、`packages/contracts-manifest`、`packages/sdk-core`、`packages/sdk-runtime` 为中心的统一契约层，供 Electron 宿主、Python 后端与插件运行时共用。
-- 引入正式的官方插件结构与宿主插件运行时，当前仓库已包含 `official.import-workflow`、`official.export-workflow` 与 `official.split-stereo-to-mono-automation`。
-- macOS 安装包改为分架构产物，分别输出 `arm64` 与 `x64` 的独立 DMG。
+- workflow 插件执行边界正式收口到 `sidecar -> backend`，前端只提交声明式 workflow 输入。
+- 建立 `Tauri + Node sidecar + Python FastAPI` 的正式桌面主线。
+- 引入 `packages/contracts`、`packages/contracts-manifest`、`packages/sdk-core`、`packages/sdk-runtime` 组成的统一契约层。
+- Host UI 接入全局浅色 / 深色主题切换。
+- macOS 安装包支持独立的 `arm64` 与 `x64` 目标构建。
 
 ### Changed
-- 运行时边界被重整为“桌面宿主 / 本地后端 / 插件扩展”三层模型，能力调用统一经 `/api/v1` 与 capability envelope 进入后端。
-- 后端根目录语义收敛为 `backend/presto/`，不再继续挂在失真的 `backend/import/` 路径下。
-- 发布打包改为 `asar + maximum compression + minimal file inputs`，并通过 `extraResources/backend` 装配后端资源，减小安装包体积。
-- About 面板、应用版本展示与 GitHub Release 元数据读取统一绑定到 `package.json` 中的 Presto 版本信息。
+- 桌面宿主正式切换到 `src-tauri/`、`frontend/tauri/` 与 `frontend/sidecar/` 这条运行链。
+- 文档入口重组为 `docs/kernel-development/` 与 `docs/plugin-development/` 两块主入口。
+- 打包链改为 `renderer + sidecar + runtime resources + tauri bundle` 三段式构建。
+- sidecar 内置 Node 改为按目标架构裁剪并去符号，安装包资源只携带运行时必需内容。
 
 ### Fixed
-- 修复打包态下后端根路径解析，确保应用从安装包内正确定位 `backend/presto` 资源。
-- 修复 macOS 图标打包链路，避免 `.icon` 输入触发 `actool` 资产编译失败。
-- 移除 Dock 图标覆写路径，修复应用启动后图标回跳问题。
+- 修复 Tauri 主线下 workflow definition / allowedCapabilities 宿主装配缺失问题。
+- 修复 import / export workflow 的输入命名与 payload 对齐问题。
+- 修复 workflow 页面下拉、文件夹选择、导入扫描与列表样式不一致问题。
+- 修复启动 splash 与主窗口白屏感知问题。
+- 修复打包态下后端、插件和 automation 资源路径定位。
+- 修复 macOS 图标打包输入，统一到新的 PNG -> icns 资源链路。
 
 ### Docs
-- 重写并同步 `README.md`、前端架构、后端架构、通信架构、SDK 开发与版本支持文档，使文档描述与当前代码边界一致。
+- 重写并同步 `README.md`、`docs/releases/v0.3.0-alpha.1-release.md` 与开发文档索引，使文档描述与当前 Tauri 主线一致。
 
 ## [0.2.2] - 2026-03-15
 
