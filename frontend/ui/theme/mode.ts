@@ -11,6 +11,44 @@ let preference: PrestoThemePreference | null = null
 let effectiveMode: PrestoThemeMode | null = null
 let systemMediaQueryList: MediaQueryList | null = null
 
+function getStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  const candidate =
+    globalThis.localStorage ??
+    (typeof window !== 'undefined' ? window.localStorage : undefined)
+  if (
+    candidate &&
+    typeof candidate.getItem === 'function' &&
+    typeof candidate.setItem === 'function'
+  ) {
+    return candidate
+  }
+
+  return null
+}
+
+function getMatchMedia():
+  | ((query: string) => Pick<MediaQueryList, 'matches' | 'addEventListener' | 'removeEventListener' | 'addListener' | 'removeListener'>)
+  | null {
+  if (typeof globalThis.matchMedia === 'function') {
+    return globalThis.matchMedia.bind(globalThis)
+  }
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia.bind(window)
+  }
+  return null
+}
+
+function getThemeDocument(): Document | null {
+  const candidate =
+    globalThis.document ??
+    (typeof window !== 'undefined' ? window.document : undefined)
+  if (candidate?.documentElement) {
+    return candidate
+  }
+
+  return null
+}
+
 function normalizePreference(value: unknown): PrestoThemePreference {
   if (value === 'light' || value === 'dark' || value === 'system') {
     return value
@@ -19,20 +57,22 @@ function normalizePreference(value: unknown): PrestoThemePreference {
 }
 
 function readStoredPreference(): PrestoThemePreference {
-  if (typeof window === 'undefined') {
+  const storage = getStorage()
+  if (!storage) {
     return 'system'
   }
 
   try {
-    return normalizePreference(window.localStorage.getItem(STORAGE_KEY))
+    return normalizePreference(storage.getItem(STORAGE_KEY))
   } catch {
     return 'system'
   }
 }
 
 function resolveSystemMode(): PrestoThemeMode {
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    return window.matchMedia(SYSTEM_DARK_QUERY).matches ? 'dark' : 'light'
+  const matchMedia = getMatchMedia()
+  if (matchMedia) {
+    return matchMedia(SYSTEM_DARK_QUERY).matches ? 'dark' : 'light'
   }
 
   if (systemMediaQueryList) {
@@ -51,15 +91,16 @@ function resolveEffectiveMode(selectedPreference: PrestoThemePreference): Presto
 }
 
 function applyThemeAttribute(mode: PrestoThemeMode): void {
-  if (typeof document === 'undefined') {
+  const documentValue = getThemeDocument()
+  if (!documentValue) {
     return
   }
 
-  if (document.documentElement.dataset) {
-    document.documentElement.dataset.prestoTheme = mode
+  if (documentValue.documentElement.dataset) {
+    documentValue.documentElement.dataset.prestoTheme = mode
   }
-  if (typeof document.documentElement.setAttribute === 'function') {
-    document.documentElement.setAttribute(THEME_ATTRIBUTE, mode)
+  if (typeof documentValue.documentElement.setAttribute === 'function') {
+    documentValue.documentElement.setAttribute(THEME_ATTRIBUTE, mode)
   }
 }
 
@@ -72,12 +113,13 @@ function getThemePreferenceState(): PrestoThemePreference {
 }
 
 function persistPreference(selectedPreference: PrestoThemePreference): void {
-  if (typeof window === 'undefined') {
+  const storage = getStorage()
+  if (!storage) {
     return
   }
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, selectedPreference)
+    storage.setItem(STORAGE_KEY, selectedPreference)
   } catch {
     // Ignore storage write failures and keep runtime theme state.
   }
@@ -120,11 +162,12 @@ function onSystemThemeChange(): void {
 }
 
 function ensureSystemThemeSubscription(): void {
-  if (systemMediaQueryList || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+  const matchMedia = getMatchMedia()
+  if (systemMediaQueryList || !matchMedia) {
     return
   }
 
-  systemMediaQueryList = window.matchMedia(SYSTEM_DARK_QUERY)
+  systemMediaQueryList = matchMedia(SYSTEM_DARK_QUERY)
   if (typeof systemMediaQueryList.addEventListener === 'function') {
     systemMediaQueryList.addEventListener('change', onSystemThemeChange)
   } else if (typeof systemMediaQueryList.addListener === 'function') {

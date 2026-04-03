@@ -37,11 +37,17 @@ export interface UiPreferences {
   developerModeEnabled: boolean
 }
 
+export interface HostPreferences {
+  language: 'system' | 'zh-CN' | 'en'
+  dawTarget: DawTarget
+}
+
 export interface AppConfig {
   categories: CategoryTemplate[]
   silenceProfile: SilenceProfile
   aiNaming: AiNamingConfig
   uiPreferences: UiPreferences
+  hostPreferences: HostPreferences
 }
 
 export interface SessionInfo {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+import threading
+import time
 from pathlib import Path
 import pytest
 
@@ -34,6 +36,32 @@ def test_coerce_session_length_seconds_handles_drop_frame_rate() -> None:
     seconds = adapter._coerce_session_length_seconds("00:01:00:02", 4)
 
     assert round(seconds, 3) == 60.06
+
+
+def test_connect_honors_timeout_seconds_when_host_ready_check_hangs(monkeypatch: pytest.MonkeyPatch) -> None:
+    release_event = threading.Event()
+
+    class BlockingEngine:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = dict(kwargs)
+
+        def host_ready_check(self) -> None:
+            release_event.wait(timeout=1.0)
+
+    monkeypatch.setattr(protools_adapter_module, "Engine", BlockingEngine)
+    adapter = _adapter()
+
+    started_at = time.monotonic()
+    with pytest.raises(PrestoError) as exc_info:
+        adapter.connect(timeout_seconds=0.01)
+    elapsed = time.monotonic() - started_at
+    release_event.set()
+
+    exc = exc_info.value
+    assert exc.code == "PTSL_CONNECT_FAILED"
+    assert exc.capability == "daw.connection.connect"
+    assert exc.details["timeout_seconds"] == 0.01
+    assert elapsed < 0.5
 
 
 class FakeSelectionEngine:

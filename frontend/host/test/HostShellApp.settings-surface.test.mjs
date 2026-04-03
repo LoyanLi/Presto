@@ -231,23 +231,24 @@ function sliceAfterMatch(input, pattern, length = 4000) {
 
 test('settings surface renders second-level navigation with required entries', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
-  globalThis.window = {
-    localStorage: {
-      getItem() {
-        return JSON.stringify({
-          language: 'system',
-          developerMode: false,
-          dawTarget: 'pro_tools',
-        })
-      },
-      setItem() {},
+  globalThis.localStorage = {
+    getItem() {
+      return JSON.stringify({
+        language: 'system',
+        developerMode: false,
+        dawTarget: 'pro_tools',
+      })
     },
-    navigator: {
+    setItem() {},
+  }
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
       languages: ['en-US'],
       language: 'en-US',
     },
-    matchMedia: () => ({ matches: false }),
-  }
+    configurable: true,
+  })
+  globalThis.matchMedia = () => ({ matches: false })
   const markup = renderToStaticMarkup(
     React.createElement(HostShellApp, {
       state: createHostShellState('settings'),
@@ -438,23 +439,24 @@ test('general and workflow settings reuse the shared ui Select used by automatio
 
 test('general settings markup keeps shared select styling for language and DAW controls', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
-  globalThis.window = {
-    localStorage: {
-      getItem() {
-        return JSON.stringify({
-          language: 'system',
-          developerMode: false,
-          dawTarget: 'pro_tools',
-        })
-      },
-      setItem() {},
+  globalThis.localStorage = {
+    getItem() {
+      return JSON.stringify({
+        language: 'system',
+        developerMode: false,
+        dawTarget: 'pro_tools',
+      })
     },
-    navigator: {
+    setItem() {},
+  }
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
       languages: ['en-US'],
       language: 'en-US',
     },
-    matchMedia: () => ({ matches: false }),
-  }
+    configurable: true,
+  })
+  globalThis.matchMedia = () => ({ matches: false })
 
   const markup = renderToStaticMarkup(
     React.createElement(HostShellApp, {
@@ -468,6 +470,14 @@ test('general settings markup keeps shared select styling for language and DAW c
   assert.match(markup, /ui-select/)
   assert.match(markup, /Follow System/)
   assert.match(markup, /Pro Tools/)
+})
+
+test.afterEach(() => {
+  Reflect.deleteProperty(globalThis, 'window')
+  Reflect.deleteProperty(globalThis, 'document')
+  Reflect.deleteProperty(globalThis, 'localStorage')
+  Reflect.deleteProperty(globalThis, 'matchMedia')
+  Reflect.deleteProperty(globalThis, 'navigator')
 })
 
 test('workflow settings page keeps save actions floating without reserving inline footer space', async () => {

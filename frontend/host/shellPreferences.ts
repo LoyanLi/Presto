@@ -18,6 +18,21 @@ const defaultPreferences: HostShellPreferences = {
   dawTarget: 'pro_tools',
 }
 
+function getStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  const candidate =
+    globalThis.localStorage ??
+    (typeof window !== 'undefined' ? window.localStorage : undefined)
+  if (
+    candidate &&
+    typeof candidate.getItem === 'function' &&
+    typeof candidate.setItem === 'function'
+  ) {
+    return candidate
+  }
+
+  return null
+}
+
 function normalizePreferences(value: unknown): HostShellPreferences {
   const candidate = value && typeof value === 'object' ? (value as Partial<HostShellPreferences>) : {}
 
@@ -32,11 +47,12 @@ function normalizePreferences(value: unknown): HostShellPreferences {
 }
 
 export function getHostShellPreferences(): HostShellPreferences {
-  if (typeof window === 'undefined') {
+  const storage = getStorage()
+  if (!storage) {
     return defaultPreferences
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const raw = storage.getItem(STORAGE_KEY)
   if (!raw) {
     return defaultPreferences
   }
@@ -57,8 +73,9 @@ export function setHostShellPreferences(
     ...nextPreferences,
   })
 
-  if ((options?.persist ?? true) && typeof window !== 'undefined') {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(resolved))
+  const storage = getStorage()
+  if ((options?.persist ?? true) && storage) {
+    storage.setItem(STORAGE_KEY, JSON.stringify(resolved))
   }
 
   listeners.forEach((listener) => listener(resolved))

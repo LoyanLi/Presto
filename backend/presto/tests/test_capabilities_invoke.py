@@ -287,6 +287,10 @@ class FakeConfigStore:
                 "followSystemTheme": True,
                 "developerModeEnabled": True,
             },
+            "hostPreferences": {
+                "language": "system",
+                "dawTarget": "pro_tools",
+            },
         }
 
     def load(self):

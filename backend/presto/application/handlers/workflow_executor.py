@@ -141,6 +141,7 @@ def _should_run_step(step: dict[str, Any], context: dict[str, Any]) -> bool:
 
 def _await_child_job(
     services: ServiceContainer,
+    parent_job_id: str,
     child_job_id: str,
     *,
     cancel_event: threading.Event,
@@ -154,6 +155,18 @@ def _await_child_job(
             raise PrestoError("WORKFLOW_CANCELLED", "Workflow execution cancelled.", capability="workflow.run.start")
 
         child_job = services.job_manager.get(child_job_id)
+        parent_job = services.job_manager.get(parent_job_id)
+        if parent_job.state in {"queued", "running"}:
+            parent_job.state = "running"
+            parent_job.started_at = parent_job.started_at or _utc_now()
+            parent_job.progress = JobProgress(
+                phase="running",
+                current=child_job.progress.current,
+                total=child_job.progress.total,
+                percent=child_job.progress.percent,
+                message=child_job.progress.message,
+            )
+            services.job_manager.upsert(parent_job)
         if child_job.state == "succeeded":
             return _job_record_payload(child_job)
         if child_job.state == "failed":
@@ -166,6 +179,7 @@ def _await_child_job(
 
 def _execute_steps(
     services: ServiceContainer,
+    parent_job_id: str,
     steps: list[dict[str, Any]],
     *,
     context: dict[str, Any],
@@ -194,6 +208,7 @@ def _execute_steps(
                 context[item_name] = item
                 _execute_steps(
                     services,
+                    parent_job_id,
                     [nested_step for nested_step in nested_steps if isinstance(nested_step, dict)],
                     context=context,
                     invoke_capability=invoke_capability,
@@ -214,7 +229,7 @@ def _execute_steps(
         if step.get("awaitJob") is True:
             if not isinstance(result, dict) or not isinstance(result.get("jobId"), str):
                 raise _validation_error("awaitJob steps must return a jobId.", field="definition")
-            result = _await_child_job(services, result["jobId"], cancel_event=cancel_event)
+            result = _await_child_job(services, parent_job_id, result["jobId"], cancel_event=cancel_event)
 
         save_as = str(step.get("saveAs", "")).strip()
         if save_as:
@@ -256,6 +271,7 @@ def _run_workflow_job(
         }
         final_context = _execute_steps(
             services,
+            job_id,
             [step for step in definition["steps"] if isinstance(step, dict)],
             context=context,
             invoke_capability=invoke_capability,
