@@ -5,7 +5,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 import type { DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
-import { getThemeMode, subscribeThemeMode } from '../ui'
+import { getThemeMode, getThemePreference, setThemePreference, subscribeThemeMode, subscribeThemePreference } from '../ui'
 import { md3ColorSchemes, md3Shape, md3Typography } from '../ui/tokens'
 import { useDawStatusPolling } from './hooks/useDawStatusPolling'
 import { HostDeveloperSurface } from './HostDeveloperSurface'
@@ -79,6 +79,7 @@ export function HostShellApp({
   const initialPreferences = getHostShellPreferences()
   const [surface, setSurface] = useState<HostShellViewId>(() => state.shellViewId)
   const [themeMode, setThemeModeState] = useState<'light' | 'dark'>(() => getThemeMode())
+  const [themePreference, setThemePreferenceState] = useState(() => getThemePreference())
   const [preferences, setPreferencesState] = useState(() => initialPreferences)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
@@ -107,6 +108,7 @@ export function HostShellApp({
   }, [state.shellViewId])
 
   useEffect(() => subscribeThemeMode((mode) => setThemeModeState(mode)), [])
+  useEffect(() => subscribeThemePreference((preferenceMode) => setThemePreferenceState(preferenceMode)), [])
   useEffect(() => subscribeHostShellPreferences((nextPreferences) => setPreferencesState(nextPreferences)), [])
 
   const muiTheme = useMemo(() => createHostMuiTheme(themeMode), [themeMode])
@@ -247,6 +249,7 @@ export function HostShellApp({
     <GeneralSettingsPage
       locale={resolvedLocale}
       preferences={preferences}
+      themePreference={themePreference}
       dawStatus={dawStatus}
       checkingConnection={checkingDawConnection}
       runtime={developerRuntime as GeneralSettingsPageProps['runtime']}
@@ -254,6 +257,9 @@ export function HostShellApp({
         setHostShellPreferences({
           developerMode: selected,
         })
+      }}
+      onThemePreferenceChange={(preferenceMode) => {
+        setThemePreference(preferenceMode)
       }}
       onLanguageChange={(language) => {
         setHostShellPreferences({

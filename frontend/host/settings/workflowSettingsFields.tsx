@@ -1,6 +1,7 @@
 import type { CSSProperties, ChangeEvent, MutableRefObject } from 'react'
 
 import type { WorkflowSettingsFieldDefinition } from '@presto/contracts'
+import { Select } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
@@ -409,18 +410,12 @@ export function WorkflowSettingsFieldList({
             <label key={field.fieldId} style={fieldStackStyle}>
               <span style={labelStyle}>{field.label}</span>
               {field.description ? <span style={descriptionStyle}>{field.description}</span> : null}
-              <select
+              <Select
                 aria-label={field.label}
-                value={typeof fieldValue === 'string' ? fieldValue : ''}
+                value={typeof fieldValue === 'string' ? fieldValue : field.options[0]?.value ?? ''}
                 onChange={(event) => onChange(field.path, event.target.value)}
-                style={inputStyle}
-              >
-                {field.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={field.options}
+              />
             </label>
           )
         }

@@ -7,6 +7,26 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 let pluginModulePromise = null
 
+function createSharedUiMock() {
+  return {
+    Select({ label, options = [], className, children, selectProps: _selectProps, startAdornment: _startAdornment, endAdornment: _endAdornment, ...props }) {
+      return React.createElement(
+        'label',
+        { className: ['ui-select', className].filter(Boolean).join(' ') },
+        label ? React.createElement('span', null, label) : null,
+        React.createElement(
+          'select',
+          props,
+          children ??
+            options.map((option) =>
+              React.createElement('option', { key: option.value, value: option.value }, option.label),
+            ),
+        ),
+      )
+    },
+  }
+}
+
 function createSampleSnapshot(overrides = {}) {
   return {
     id: 'snapshot-1',
@@ -147,6 +167,7 @@ async function loadPluginModule() {
     globalThis.window = {
       __PRESTO_PLUGIN_SHARED__: {
         React,
+        ui: createSharedUiMock(),
       },
     }
 
@@ -180,6 +201,7 @@ async function loadPageModuleWithStateOverrides(overrides) {
   globalThis.window = {
     __PRESTO_PLUGIN_SHARED__: {
       React,
+      ui: createSharedUiMock(),
     },
   }
 
@@ -196,6 +218,105 @@ async function loadPageModuleWithStateOverrides(overrides) {
       globalThis.window = previousWindow
     }
   }
+}
+
+async function loadPageModuleWithHookHarness(overrides = {}) {
+  const previousWindow = globalThis.window
+  const originals = {
+    useState: React.useState,
+    useRef: React.useRef,
+    useMemo: React.useMemo,
+    useCallback: React.useCallback,
+    useEffect: React.useEffect,
+  }
+  let stateCallIndex = 0
+  const stateUpdates = []
+
+  React.useState = (initialValue) => {
+    stateCallIndex += 1
+    const currentIndex = stateCallIndex
+    const resolvedInitialValue = typeof initialValue === 'function' ? initialValue() : initialValue
+    const resolvedValue = Object.prototype.hasOwnProperty.call(overrides, currentIndex)
+      ? overrides[currentIndex]
+      : resolvedInitialValue
+    const setter = (nextValue) => {
+      stateUpdates.push({
+        index: currentIndex,
+        value: nextValue,
+      })
+    }
+    return [resolvedValue, setter]
+  }
+  React.useRef = (initialValue) => ({ current: initialValue })
+  React.useMemo = (factory) => factory()
+  React.useCallback = (callback) => callback
+  React.useEffect = () => {}
+
+  globalThis.window = {
+    __PRESTO_PLUGIN_SHARED__: {
+      React,
+      ui: createSharedUiMock(),
+    },
+  }
+
+  const restore = () => {
+    React.useState = originals.useState
+    React.useRef = originals.useRef
+    React.useMemo = originals.useMemo
+    React.useCallback = originals.useCallback
+    React.useEffect = originals.useEffect
+    if (previousWindow === undefined) {
+      delete globalThis.window
+    } else {
+      globalThis.window = previousWindow
+    }
+  }
+
+  try {
+    const pageUrl = new URL('../dist/ExportWorkflowPage.mjs', import.meta.url)
+    pageUrl.searchParams.set('test', String(Date.now()))
+    pageUrl.searchParams.set('scenario', Math.random().toString(36).slice(2))
+    const pageModule = await import(pageUrl.href)
+    return { pageModule, stateUpdates, restore }
+  } catch (error) {
+    restore()
+    throw error
+  }
+}
+
+function getElementText(node) {
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return ''
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+  if (Array.isArray(node)) {
+    return node.map((child) => getElementText(child)).join('')
+  }
+  return getElementText(node?.props?.children)
+}
+
+function findElement(node, predicate) {
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElement(child, predicate)
+      if (match) {
+        return match
+      }
+    }
+    return null
+  }
+  if (typeof node !== 'object') {
+    return null
+  }
+  if (predicate(node)) {
+    return node
+  }
+  return findElement(node?.props?.children, predicate)
 }
 
 test('plugin module exports manifest and page export', async () => {
@@ -492,11 +613,7 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
   assert.match(idleMarkup, /ew-mix-source-row/)
   assert.doesNotMatch(idleMarkup, /Output Mix Source Name/)
   assert.doesNotMatch(idleMarkup, /Output Mix Source Type/)
-  assert.match(idleMarkup, /<optgroup label="Physical Out">/)
-  assert.match(idleMarkup, /<option value="physicalOut::All BV \(Stereo\)">All BV \(Stereo\)<\/option>/)
   assert.match(idleMarkup, /All BV \(Stereo\)/)
-  assert.match(idleMarkup, /<option value="physicalOut::All BV\.L \(Mono\)">All BV\.L \(Mono\)<\/option>/)
-  assert.match(idleMarkup, /<option value="physicalOut::All BV\.R \(Mono\)">All BV\.R \(Mono\)<\/option>/)
   assert.match(idleMarkup, /LV SC \(Mono\)/)
   assert.doesNotMatch(idleMarkup, /\\u00A0\\u00A0\\u00A0/)
   assert.doesNotMatch(idleMarkup, /Mix Source Type/)
@@ -526,6 +643,80 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
   assert.match(idleMarkup, /ew-selection-check/)
   assert.match(idleMarkup, />Start Export</)
   assert.doesNotMatch(idleMarkup, /snapshot-1/)
+  assert.match(idleMarkup, /ui-select/)
+  assert.doesNotMatch(idleMarkup, /<select class="ew-select"/)
+})
+
+test('export page source reuses plugin shared WorkflowSelect for source and naming controls', async () => {
+  const source = await readFile('plugins/official/export-workflow/dist/ExportWorkflowPage.mjs', 'utf8')
+
+  assert.match(source, /WorkflowSelect/)
+  assert.doesNotMatch(source, /h\(\s*'select'/)
+  assert.match(source, /renderValue/)
+})
+
+test('step 3 browse action uses host folder picking to update the output path', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: 3,
+    4: [createSampleSnapshot()],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_prefix: 'Demo Session_',
+      output_path: '',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+  const pickFolderCalls = []
+
+  try {
+    const tree = pageModule.ExportWorkflowPage({
+      context: createPluginContext(),
+      host: {
+        pickFolder: async () => {
+          pickFolderCalls.push('called')
+          return {
+            canceled: false,
+            paths: ['/Chosen/Exports'],
+          }
+        },
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const browseButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Browse',
+    )
+
+    assert.ok(browseButton, 'expected export settings to render a Browse action')
+    await browseButton.props.onClick()
+    assert.equal(pickFolderCalls.length, 1)
+
+    const settingsUpdate = stateUpdates.find((update) => update.index === 10)
+    assert.ok(settingsUpdate, 'expected output path browse action to update export settings state')
+    assert.equal(typeof settingsUpdate.value, 'function')
+
+    const nextSettings = settingsUpdate.value({
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_prefix: 'Demo Session_',
+      output_path: '',
+    })
+
+    assert.equal(nextSettings.output_path, '/Chosen/Exports')
+  } finally {
+    restore()
+  }
 })
 
 test('step 3 progress panel stays backend-driven and omits mobile-progress runtime ui', async () => {
@@ -692,11 +883,13 @@ test('export page source preserves current export workflow labels and modal surf
   assert.match(source, /page\.label\.mixSource/)
   assert.match(source, /MIX_SOURCE_GROUP_ORDER/)
   assert.match(source, /page\.option\.mixSourceGroup\.\$\{group\}/)
-  assert.match(source, /optgroup/)
+  assert.match(source, /group:\s*groupLabel/)
   assert.doesNotMatch(source, /\\u00A0\\u00A0\\u00A0/)
   assert.doesNotMatch(source, /page\.label\.mixSourceGroup/)
   assert.match(source, /page\.label\.filePrefix/)
   assert.match(source, /page\.label\.outputPath/)
+  assert.match(source, /host\.pickFolder\(\)/)
+  assert.match(source, /page\.button\.browse/)
   assert.match(source, /page\.label\.onlineExport/)
   assert.match(source, /page\.button\.startExport/)
   assert.match(source, /page\.button\.stopExport/)

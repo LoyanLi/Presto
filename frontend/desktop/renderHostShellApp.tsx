@@ -31,13 +31,33 @@ function getInitialShellViewId(searchParams: URLSearchParams): 'home' | 'setting
   return 'home'
 }
 
+function renderStartupShell(container: HTMLElement): void {
+  const isDark = document.documentElement.getAttribute('data-presto-theme') === 'dark'
+  const background = isDark ? '#0c0e17' : '#f7f8fc'
+  const foreground = isDark ? '#e2e6f3' : '#171a24'
+  const detail = isDark ? '#c2c7d9' : '#525b71'
+  container.innerHTML = `
+    <div
+      aria-label="Presto startup shell"
+      style="display:grid;place-items:center;min-height:100vh;padding:32px;background:${background};color:${foreground};font-family:'Inter','Segoe UI',sans-serif;"
+    >
+      <div style="display:grid;gap:10px;justify-items:center;text-align:center;">
+        <div style="font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.72;">Launching Presto</div>
+        <div style="font-size:13px;line-height:1.5;color:${detail};">Preparing desktop runtime…</div>
+      </div>
+    </div>
+  `
+}
+
 export function renderHostShellApp({
   client,
   runtime,
+  onReady,
   searchParams = new URLSearchParams(window.location.search),
 }: {
   client: PrestoClient
   runtime: PrestoRuntime
+  onReady?: () => void
   searchParams?: URLSearchParams
 }) {
   ensureMaterialWebRegistered()
@@ -85,6 +105,7 @@ export function renderHostShellApp({
             messages: {},
           },
           presto: client,
+          runtime,
         })
         setAutomationEntries(loaded.automationEntries)
         setPluginHomeEntries(loaded.homeEntries)
@@ -114,6 +135,10 @@ export function renderHostShellApp({
         }))
       }
     }
+
+    useEffect(() => {
+      onReady?.()
+    }, [])
 
     useEffect(() => {
       return subscribeHostShellPreferences((preferences) => {
@@ -225,6 +250,7 @@ export function renderHostShellApp({
     throw new Error('Missing #root container')
   }
 
+  renderStartupShell(container)
   createRoot(container).render(<App />)
 }
 

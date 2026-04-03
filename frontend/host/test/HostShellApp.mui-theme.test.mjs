@@ -74,16 +74,9 @@ function installDomStub(mode = 'dark') {
   }
 }
 
-test.afterEach(() => {
-  delete globalThis.window
-  delete globalThis.document
-})
-
-test('host shell provides an MUI css baseline derived from shared theme mode', async () => {
-  const { HostShellApp, createHostShellState } = await loadHostModule()
-  installDomStub('dark')
-
-  const markup = renderToStaticMarkup(
+function renderHostMarkup(HostShellApp, createHostShellState, mode) {
+  installDomStub(mode)
+  return renderToStaticMarkup(
     React.createElement(HostShellApp, {
       state: createHostShellState('home'),
       developerPresto: {},
@@ -98,9 +91,36 @@ test('host shell provides an MUI css baseline derived from shared theme mode', a
       },
     }),
   )
+}
 
-  assert.match(markup, /data-emotion="css-global/)
-  assert.doesNotMatch(markup, /background-color:#0c0e17/)
-  assert.match(markup, /background-color:/)
-  assert.match(markup, /font-family:/)
+function getCssBaselineRuleSet(markup) {
+  const match = markup.match(/<style data-emotion="css-global[^"]*">([\s\S]*?)<\/style>/)
+  assert.ok(match, 'Expected css-global baseline style tag in rendered markup')
+  return match[1]
+}
+
+function getBodyBackgroundColor(cssRuleSet) {
+  const match = cssRuleSet.match(/body\{[^}]*background-color:([^;]+);/)
+  assert.ok(match, 'Expected body background-color declaration in css baseline')
+  return match[1].trim()
+}
+
+test.afterEach(() => {
+  delete globalThis.window
+  delete globalThis.document
+})
+
+test('host shell provides an MUI css baseline derived from shared theme mode', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const darkMarkup = renderHostMarkup(HostShellApp, createHostShellState, 'dark')
+  const lightMarkup = renderHostMarkup(HostShellApp, createHostShellState, 'light')
+  const darkCssBaseline = getCssBaselineRuleSet(darkMarkup)
+  const lightCssBaseline = getCssBaselineRuleSet(lightMarkup)
+
+  assert.match(darkMarkup, /data-emotion="css-global/)
+  assert.match(darkCssBaseline, /color-scheme:dark/)
+  assert.match(lightCssBaseline, /color-scheme:light/)
+  assert.notEqual(getBodyBackgroundColor(darkCssBaseline), getBodyBackgroundColor(lightCssBaseline))
+  assert.notEqual(getBodyBackgroundColor(darkCssBaseline), '#f7f8fc')
+  assert.match(darkCssBaseline, /font-family:/)
 })

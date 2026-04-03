@@ -223,6 +223,12 @@ function countMatches(input, pattern) {
   return [...input.matchAll(pattern)].length
 }
 
+function sliceAfterMatch(input, pattern, length = 4000) {
+  const start = input.search(pattern)
+  assert.notEqual(start, -1, `Expected to find pattern: ${String(pattern)}`)
+  return input.slice(start, start + length)
+}
+
 test('settings surface renders second-level navigation with required entries', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   globalThis.window = {
@@ -276,9 +282,7 @@ test('settings surface renders second-level navigation with required entries', a
   assert.doesNotMatch(markup, /Recovery Snapshot Location/)
   assert.match(markup, /DAW/)
   assert.match(markup, /Language/)
-  assert.match(markup, /Follow System/)
-  assert.match(markup, /简体中文/)
-  assert.match(markup, /English/)
+  assert.match(markup, /ui-select/)
   assert.match(markup, /Pro Tools/)
   assert.match(markup, /Check Connection/)
   assert.match(markup, /Current version: -/)
@@ -293,7 +297,8 @@ test('settings surface renders second-level navigation with required entries', a
   assert.doesNotMatch(markup, />Reset</)
   assert.doesNotMatch(markup, /Restore Defaults/)
   assert.doesNotMatch(markup, />Save Changes</)
-  assert.doesNotMatch(markup, />Theme</)
+  const themeSelectorRegion = sliceAfterMatch(markup, /aria-label="Theme"/, 20000)
+  assert.match(themeSelectorRegion, />System</)
 })
 
 test('settings keeps log access inside general settings instead of opening a dedicated host page', async () => {
@@ -411,6 +416,60 @@ test('settings surface renders declarative workflow settings through shared host
   assert.doesNotMatch(exportMarkup, /Export Workflow Settings Page/)
 })
 
+test('general and workflow settings reuse the shared ui Select used by automation cards', async () => {
+  const [generalSource, workflowFieldsSource] = await Promise.all([
+    readFile(path.join(repoRoot, 'frontend/host/settings/GeneralSettingsPage.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/settings/workflowSettingsFields.tsx'), 'utf8'),
+  ])
+
+  assert.match(generalSource, /from '\.\.\/\.\.\/ui'/)
+  assert.match(workflowFieldsSource, /from '\.\.\/\.\.\/ui'/)
+  assert.match(generalSource, /Select/)
+  assert.match(workflowFieldsSource, /Select/)
+  assert.doesNotMatch(generalSource, /HostSelect/)
+  assert.doesNotMatch(workflowFieldsSource, /HostSelect/)
+  assert.match(generalSource, /general\.language\.followSystem/)
+  assert.match(generalSource, /general\.language\.zh-CN/)
+  assert.match(generalSource, /general\.language\.en/)
+  assert.match(generalSource, /general\.theme\.system/)
+  assert.match(generalSource, /general\.theme\.light/)
+  assert.match(generalSource, /general\.theme\.dark/)
+})
+
+test('general settings markup keeps shared select styling for language and DAW controls', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  globalThis.window = {
+    localStorage: {
+      getItem() {
+        return JSON.stringify({
+          language: 'system',
+          developerMode: false,
+          dawTarget: 'pro_tools',
+        })
+      },
+      setItem() {},
+    },
+    navigator: {
+      languages: ['en-US'],
+      language: 'en-US',
+    },
+    matchMedia: () => ({ matches: false }),
+  }
+
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...createPluginProps(),
+    }),
+  )
+
+  assert.match(markup, /ui-select/)
+  assert.match(markup, /Follow System/)
+  assert.match(markup, /Pro Tools/)
+})
+
 test('workflow settings page keeps save actions floating without reserving inline footer space', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/settings/WorkflowSettingsPage.tsx'), 'utf8')
 
@@ -463,6 +522,16 @@ test('host shell settings surfaces share centralized host color tokens', async (
   assert.match(homeSource, /from '\.\/hostShellColors'/)
 })
 
+test('host shell color tokens stay theme-reactive through css variables', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/hostShellColors.ts'), 'utf8')
+
+  assert.match(source, /canvas:\s*'var\(--md-sys-color-background\)'/)
+  assert.match(source, /surface:\s*'var\(--md-sys-color-surface-container-lowest\)'/)
+  assert.match(source, /surfaceMuted:\s*'var\(--md-sys-color-surface-container-low\)'/)
+  assert.match(source, /text:\s*'var\(--md-sys-color-on-surface\)'/)
+  assert.match(source, /accent:\s*'var\(--md-sys-color-primary\)'/)
+})
+
 test('settings surface no longer renders a dedicated framed topbar header', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostSettingsSurface.tsx'), 'utf8')
 
@@ -475,4 +544,15 @@ test('host shell does not force-jump plugin settings routes back to general when
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
 
   assert.doesNotMatch(source, /setSettingsRoute\(\{\s*kind:\s*'builtin',\s*pageId:\s*'general'\s*\}\)/)
+})
+
+test('host shell settings wires theme preference through runtime mode helpers instead of shell preferences storage', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /getThemePreference/)
+  assert.match(source, /setThemePreference/)
+  assert.match(source, /subscribeThemePreference/)
+  assert.match(source, /onThemePreferenceChange=/)
+  assert.match(source, /setThemePreference\(/)
+  assert.doesNotMatch(source, /setHostShellPreferences\(\{\s*theme/)
 })

@@ -12,22 +12,43 @@ async function readStyles() {
   return readFile(stylesPath, 'utf8')
 }
 
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function getRuleBlock(styles, selector) {
+  const pattern = new RegExp(`${escapeForRegExp(selector)}\\s*\\{([\\s\\S]*?)\\}`, 'm')
+  const match = styles.match(pattern)
+  assert.ok(match, `Expected selector block: ${selector}`)
+  return match[1]
+}
+
 test('shared styles use Inter-forward fonts and halo shell surfaces', async () => {
   const styles = await readStyles()
+  const shellSurfaceBlock = getRuleBlock(styles, '.presto-shell-surface')
 
+  assert.doesNotMatch(styles, /fonts\.googleapis\.com/)
+  assert.doesNotMatch(styles, /@import\s+url?\(/)
   assert.match(styles, /--presto-font-body:\s*'Inter'/)
   assert.match(styles, /--presto-font-label:\s*'Inter'/)
-  assert.match(styles, /\.presto-shell-surface\s*\{[\s\S]*background:\s*var\(--md-sys-color-background\)/)
+  assert.match(shellSurfaceBlock, /(^|\n)\s*background:\s*var\(--md-sys-color-background\)/)
   assert.match(styles, /--md-sys-color-primary:\s*#5b4ed6/)
 })
 
-test('shared styles remove dark-mode branches and heavy effects', async () => {
+test('shared styles define theme-scoped variables and a dark-mode branch', async () => {
   const styles = await readStyles()
+  const rootBlock = getRuleBlock(styles, ':root')
 
   assert.doesNotMatch(styles, /radial-gradient\(/)
   assert.doesNotMatch(styles, /linear-gradient\(/)
   assert.doesNotMatch(styles, /backdrop-filter:\s*blur\(/)
-  assert.doesNotMatch(styles, /:root\[data-presto-theme='dark'\]/)
+  assert.match(rootBlock, /(^|\n)\s*color-scheme:\s*light;/)
+  assert.match(rootBlock, /(^|\n)\s*--presto-logo-filter:\s*none;/)
+  const darkRootBlock = getRuleBlock(styles, ":root[data-presto-theme='dark']")
+  assert.match(darkRootBlock, /(^|\n)\s*color-scheme:\s*dark;/)
+  assert.match(darkRootBlock, /(^|\n)\s*--md-sys-color-background:\s*#0c0e17;/)
+  assert.match(darkRootBlock, /(^|\n)\s*--presto-logo-filter:\s*invert\(1\);/)
+  assert.match(darkRootBlock, /(^|\n)\s*--presto-panel-surface:\s*var\(--md-sys-color-surface-container-low\);/)
 })
 
 test('workflow stepper styles define a compact frameless row with shorter pills', async () => {

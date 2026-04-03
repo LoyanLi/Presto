@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { DawTarget } from '@presto/contracts'
 import type { AppViewLogResult } from '@presto/sdk-runtime/clients/app'
 
-import { Switch } from '../../ui'
+import { Select, Switch, type PrestoThemePreference } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
@@ -51,6 +51,7 @@ const actionButtonStyle: CSSProperties = {
 export interface GeneralSettingsPageProps {
   locale: HostLocale
   preferences: HostShellPreferences
+  themePreference: PrestoThemePreference
   dawStatus: {
     connected: boolean
     targetLabel: string
@@ -78,6 +79,7 @@ export interface GeneralSettingsPageProps {
     }
   }
   onDeveloperModeChange(selected: boolean): void
+  onThemePreferenceChange(preference: PrestoThemePreference): void
   onLanguageChange(language: HostShellPreferences['language']): void
   onDawTargetChange(target: DawTarget): void
   onCheckConnection(): void
@@ -119,10 +121,12 @@ function isLatestVersionNewer(currentRaw: string, latestRaw: string): boolean {
 export function GeneralSettingsPage({
   locale,
   preferences,
+  themePreference,
   dawStatus,
   checkingConnection,
   runtime,
   onDeveloperModeChange,
+  onThemePreferenceChange,
   onLanguageChange,
   onDawTargetChange,
   onCheckConnection,
@@ -210,51 +214,49 @@ export function GeneralSettingsPage({
   return (
     <div style={stackStyle}>
       <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>{translateHost(locale, 'general.theme')}</h2>
+        <label style={{ display: 'grid', gap: 8 }}>
+          <span style={sectionDescriptionStyle}>{translateHost(locale, 'general.theme')}</span>
+          <Select
+            aria-label={translateHost(locale, 'general.theme')}
+            value={themePreference}
+            onChange={(event) => onThemePreferenceChange(event.target.value as PrestoThemePreference)}
+            options={[
+              { value: 'system', label: translateHost(locale, 'general.theme.system') },
+              { value: 'light', label: translateHost(locale, 'general.theme.light') },
+              { value: 'dark', label: translateHost(locale, 'general.theme.dark') },
+            ]}
+          />
+        </label>
+      </section>
+      <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>{translateHost(locale, 'general.language')}</h2>
         <label style={{ display: 'grid', gap: 8 }}>
           <span style={sectionDescriptionStyle}>{translateHost(locale, 'general.language')}</span>
-          <select
+          <Select
             aria-label={translateHost(locale, 'general.language')}
             value={preferences.language}
             onChange={(event) => onLanguageChange(event.target.value as HostShellPreferences['language'])}
-            style={{
-              minHeight: 44,
-              padding: '0 14px',
-              borderRadius: 14,
-              border: `1px solid ${hostShellColors.border}`,
-              background: hostShellColors.surface,
-              color: hostShellColors.text,
-              fontSize: 14,
-              fontWeight: 500,
-            }}
-          >
-            <option value="system">{translateHost(locale, 'general.language.followSystem')}</option>
-            <option value="zh-CN">{translateHost(locale, 'general.language.zh-CN')}</option>
-            <option value="en">{translateHost(locale, 'general.language.en')}</option>
-          </select>
+            options={[
+              { value: 'system', label: translateHost(locale, 'general.language.followSystem') },
+              { value: 'zh-CN', label: translateHost(locale, 'general.language.zh-CN') },
+              { value: 'en', label: translateHost(locale, 'general.language.en') },
+            ]}
+          />
         </label>
       </section>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>{translateHost(locale, 'general.daw')}</h2>
         <label style={{ display: 'grid', gap: 8 }}>
           <span style={sectionDescriptionStyle}>{translateHost(locale, 'general.adapter')}</span>
-          <select
+          <Select
             aria-label="DAW"
             value={preferences.dawTarget}
             onChange={(event) => onDawTargetChange(event.target.value as DawTarget)}
-            style={{
-              minHeight: 44,
-              padding: '0 14px',
-              borderRadius: 14,
-              border: `1px solid ${hostShellColors.border}`,
-              background: hostShellColors.surface,
-              color: hostShellColors.text,
-              fontSize: 14,
-              fontWeight: 500,
-            }}
-          >
-            <option value="pro_tools">Pro Tools</option>
-          </select>
+            options={[
+              { value: 'pro_tools', label: 'Pro Tools' },
+            ]}
+          />
         </label>
         <div style={{ display: 'grid', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

@@ -53,16 +53,17 @@ async function loadDesignTokensModule() {
   return designTokensModulePromise
 }
 
-test('theme tokens are halo light-only even when dark mode keys exist', async () => {
+test('theme tokens define a real dark palette instead of cloning light values', async () => {
   const { md3ColorSchemes } = await loadThemeModule()
 
   assert.equal(md3ColorSchemes.light.primary, '#5b4ed6')
   assert.equal(md3ColorSchemes.light.background, '#f7f8fc')
   assert.equal(md3ColorSchemes.light.surfaceContainerHigh, '#e9ebf4')
   assert.equal(md3ColorSchemes.light.surfaceContainerHighest, '#e2e5f0')
-  assert.equal(md3ColorSchemes.dark.primary, md3ColorSchemes.light.primary)
-  assert.equal(md3ColorSchemes.dark.background, md3ColorSchemes.light.background)
-  assert.equal(md3ColorSchemes.dark.surfaceContainerHighest, md3ColorSchemes.light.surfaceContainerHighest)
+  assert.equal(md3ColorSchemes.dark.background, '#0c0e17')
+  assert.notEqual(md3ColorSchemes.dark.primary, md3ColorSchemes.light.primary)
+  assert.notEqual(md3ColorSchemes.dark.surfaceContainerHigh, md3ColorSchemes.light.surfaceContainerHigh)
+  assert.notEqual(md3ColorSchemes.dark.surfaceContainerHighest, md3ColorSchemes.light.surfaceContainerHighest)
 })
 
 test('typography and spatial tokens use the halo scale', async () => {

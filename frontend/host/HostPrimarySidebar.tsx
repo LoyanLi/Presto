@@ -73,6 +73,7 @@ const collapsedBrandIconStyle: CSSProperties = {
   objectFit: 'contain',
   display: 'block',
   flexShrink: 0,
+  filter: 'var(--presto-logo-filter, none)',
 }
 
 const navStackStyle = (collapsed: boolean): CSSProperties => ({

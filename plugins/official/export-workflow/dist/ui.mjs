@@ -100,18 +100,23 @@ export function WorkflowInput({ label, hint, error, className, startAdornment, e
   )
 }
 
-export function WorkflowSelect({ label, hint, error, options, className, startAdornment, endAdornment, ...props }) {
+export function WorkflowSelect({ label, hint, error, options, children, selectProps, className, startAdornment, endAdornment, ...props }) {
   if (typeof sharedUi.Select === 'function') {
-    return h(sharedUi.Select, {
-      ...props,
-      label,
-      hint,
-      error,
-      options,
-      startAdornment,
-      endAdornment,
-      className: ['ew-field-control', className].filter(Boolean).join(' '),
-    })
+    return h(
+      sharedUi.Select,
+      {
+        ...props,
+        label,
+        hint,
+        error,
+        options,
+        startAdornment,
+        endAdornment,
+        selectProps,
+        className: ['ew-field-control', className].filter(Boolean).join(' '),
+      },
+      children,
+    )
   }
 
   return h(
@@ -124,7 +129,7 @@ export function WorkflowSelect({ label, hint, error, options, className, startAd
         ...props,
         className: 'ew-select',
       },
-      (Array.isArray(options) ? options : []).map((option) =>
+      children ?? (Array.isArray(options) ? options : []).map((option) =>
         h('option', { key: option.value, value: option.value }, option.label),
       ),
     ),

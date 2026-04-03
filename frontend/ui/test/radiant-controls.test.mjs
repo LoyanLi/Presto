@@ -115,6 +115,17 @@ test('shared workflow stepper renders a compact row without an outer track shell
   assert.match(markup, /Export settings/)
 })
 
+test('shared select source supports custom children for grouped workflow dropdowns', async () => {
+  const source = await import('node:fs/promises').then(({ readFile }) =>
+    readFile(path.join(repoRoot, 'frontend/ui/primitives/Select.tsx'), 'utf8'),
+  )
+
+  assert.match(source, /children/)
+  assert.match(source, /children\s*\?\?\s*options\.map/)
+  assert.match(source, /selectProps/)
+  assert.match(source, /SelectProps=\{selectProps\}/)
+})
+
 test('dense control sources keep tabs and textarea defaults compact for desktop tool surfaces', async () => {
   const [tabsSource, textareaSource] = await Promise.all([
     import('node:fs/promises').then(({ readFile }) =>

@@ -468,3 +468,15 @@ test('home keeps workflow plugin rows out of the host overview surface', async (
   assert.doesNotMatch(markup, /Open extension -&gt;/)
   assert.doesNotMatch(markup, /Export Workflow/)
 })
+
+test('desktop host renderer seeds a startup shell before the app mounts', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/desktop/renderHostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /Launching Presto/)
+  assert.match(source, /Preparing desktop runtime/)
+  assert.match(source, /container\.innerHTML =/)
+  assert.match(source, /data-presto-theme/)
+  assert.match(source, /'#0c0e17'/)
+  assert.match(source, /'#f7f8fc'/)
+  assert.doesNotMatch(source, /background:var\(--md-sys-color-background\)/)
+})

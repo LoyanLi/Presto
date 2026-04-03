@@ -21,6 +21,7 @@ import {
   WorkflowActionBar,
   WorkflowButton,
   WorkflowCard,
+  WorkflowSelect,
   WorkflowStepper,
 } from './ui.mjs'
 import { formatImport, tImport } from './i18n.mjs'
@@ -51,11 +52,31 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function parseSourceFolderInput(value) {
-  return String(value ?? '')
-    .split(/[\n,]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
+function toErrorMessage(error, fallbackMessage = 'Unexpected import workflow error.') {
+  if (error instanceof Error && typeof error.message === 'string' && error.message.trim()) {
+    return error.message.trim()
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim()
+  }
+  if (error && typeof error === 'object') {
+    if (typeof error.message === 'string' && error.message.trim()) {
+      return error.message.trim()
+    }
+    if ('error' in error) {
+      const nestedMessage = toErrorMessage(error.error, '')
+      if (nestedMessage) {
+        return nestedMessage
+      }
+    }
+    if ('cause' in error) {
+      const nestedMessage = toErrorMessage(error.cause, '')
+      if (nestedMessage) {
+        return nestedMessage
+      }
+    }
+  }
+  return fallbackMessage
 }
 
 function shouldIgnoreRowSelection(target) {
@@ -149,23 +170,6 @@ function sortRowsForDisplay(rows, categories) {
   })
 }
 
-function mergeRows(previousRows, nextRows, cachedRows, categories) {
-  const byPath = new Map(nextRows.map((row) => [row.filePath, { ...row }]))
-  for (const row of cachedRows) {
-    byPath.set(row.filePath, {
-      ...(byPath.get(row.filePath) ?? {}),
-      ...row,
-    })
-  }
-  for (const row of previousRows) {
-    byPath.set(row.filePath, {
-      ...(byPath.get(row.filePath) ?? {}),
-      ...row,
-    })
-  }
-  return Array.from(byPath.values())
-}
-
 function statSummary(rows) {
   return {
     pending: rows.filter((row) => row.status === 'pending').length,
@@ -254,11 +258,10 @@ function overallRunPercent({ stageKeys, stageKey, current, total, percent }) {
   return Math.max(0, Math.min(100, Math.round(((safeStageIndex + itemFraction) / stageKeys.length) * 100)))
 }
 
-export function ImportWorkflowPage({ context }) {
+export function ImportWorkflowPage({ context, host }) {
   const [settings, setSettings] = React.useState(() => createDefaultImportWorkflowSettings())
   const [rows, setRows] = React.useState([])
   const [sourceFolders, setSourceFolders] = React.useState([])
-  const [sourceFolderInput, setSourceFolderInput] = React.useState('')
   const [step, setStep] = React.useState(1)
   const [busy, setBusy] = React.useState(true)
   const [, setBanner] = React.useState('')
@@ -319,7 +322,7 @@ export function ImportWorkflowPage({ context }) {
         sourceFolders,
         rows: nextRows,
       }).catch((error) => {
-        appendLog(`Analyze cache write failed: ${error instanceof Error ? error.message : String(error)}`, 'warn')
+        appendLog(`Analyze cache write failed: ${toErrorMessage(error)}`, 'warn')
       })
     },
     [appendLog, context.presto.import.cache, settings.ui.analyzeCacheEnabled, sourceFolders],
@@ -338,7 +341,7 @@ export function ImportWorkflowPage({ context }) {
         setErrorMessage('')
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(error instanceof Error ? error.message : String(error))
+          setErrorMessage(toErrorMessage(error))
         }
       } finally {
         if (!cancelled) {
@@ -387,66 +390,87 @@ export function ImportWorkflowPage({ context }) {
     [persistCache],
   )
 
-  const onSourceFolderChange = React.useCallback((event) => {
-    const value = String(event?.target?.value ?? '')
-    setSourceFolderInput(value)
-    setSourceFolders(parseSourceFolderInput(value))
-  }, [])
+  const analyzeSourceFolders = React.useCallback(
+    async (nextSourceFolders) => {
+      if (!Array.isArray(nextSourceFolders) || nextSourceFolders.length === 0) {
+        setErrorMessage(tImport(context, 'page.error.import.noSource'))
+        return
+      }
 
-  const onPickFolders = React.useCallback(async () => {
-    if (sourceFolders.length === 0) {
-      setErrorMessage(tImport(context, 'page.error.import.noSource'))
+      setBusy(true)
+      setErrorMessage('')
+      try {
+        const response = await context.presto.import.analyze({
+          sourceFolders: nextSourceFolders,
+          categories: settings.categories.map((category) => ({ id: category.id, name: category.name })),
+          analyzeCacheEnabled: settings.ui.analyzeCacheEnabled,
+        })
+        const analyzedFolders = Array.isArray(response?.folderPaths) ? response.folderPaths : nextSourceFolders
+        const orderedFilePaths = Array.isArray(response?.orderedFilePaths) ? response.orderedFilePaths : []
+        const analyzedRows = Array.isArray(response?.rows) ? response.rows : []
+        const cacheStats = response?.cache ?? { files: 0, hits: 0 }
+        replaceRows(analyzedRows, false)
+        setSourceFolders(analyzedFolders)
+        setSelectedPaths(new Set())
+        setSelectionAnchor(null)
+        setStep(1)
+        setStripOpened(false)
+        setStripReady(false)
+        setRunState({
+          phase: 'idle',
+          stageKey: 'idle',
+          stageKeys: [],
+          jobId: '',
+          current: 0,
+          total: 0,
+          percent: 0,
+          message: '',
+        })
+
+        const cacheSuffix =
+          cacheStats.hits > 0
+            ? formatImport(context, 'page.banner.cache.hits', { count: cacheStats.hits })
+            : cacheStats.files > 0
+              ? tImport(context, 'page.banner.cache.foundNone')
+              : ''
+        const preparedMessage = formatImport(context, 'page.banner.prepared', { count: orderedFilePaths.length })
+        setBanner(`${preparedMessage}${cacheSuffix}`)
+        appendLog(`Prepared ${orderedFilePaths.length} row(s).`)
+        setBanner(
+          formatImport(context, 'page.banner.scanned', {
+            folders: analyzedFolders.length,
+            files: orderedFilePaths.length,
+          }),
+        )
+        appendLog(`Scanned folder: ${analyzedFolders.join(', ')}`)
+      } catch (error) {
+        setErrorMessage(toErrorMessage(error))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [appendLog, context, replaceRows, settings.categories, settings.ui.analyzeCacheEnabled],
+  )
+
+  const onBrowseFolders = React.useCallback(async () => {
+    if (!host || typeof host.pickFolder !== 'function') {
       return
     }
-    setBusy(true)
-    setErrorMessage('')
-    try {
-      const response = await context.presto.import.analyze({
-        sourceFolders,
-        categories: settings.categories.map((category) => ({ id: category.id, name: category.name })),
-        analyzeCacheEnabled: settings.ui.analyzeCacheEnabled,
-      })
-      const analyzedFolders = Array.isArray(response?.folderPaths) ? response.folderPaths : []
-      const orderedFilePaths = Array.isArray(response?.orderedFilePaths) ? response.orderedFilePaths : []
-      const analyzedRows = Array.isArray(response?.rows) ? response.rows : []
-      const cacheStats = response?.cache ?? { files: 0, hits: 0 }
-      replaceRows((previous) => mergeRows(previous, analyzedRows, [], settings.categories), false)
-      setSourceFolders(analyzedFolders)
-      setSourceFolderInput(analyzedFolders.join('\n'))
-      setStep(1)
-      setStripOpened(false)
-      setStripReady(false)
-      setRunState({
-        phase: 'idle',
-        jobId: '',
-        current: 0,
-        total: 0,
-        percent: 0,
-        message: '',
-      })
 
-      const cacheSuffix =
-        cacheStats.hits > 0
-          ? formatImport(context, 'page.banner.cache.hits', { count: cacheStats.hits })
-          : cacheStats.files > 0
-            ? tImport(context, 'page.banner.cache.foundNone')
-            : ''
-      const preparedMessage = formatImport(context, 'page.banner.prepared', { count: orderedFilePaths.length })
-      setBanner(`${preparedMessage}${cacheSuffix}`)
-      appendLog(`Prepared ${orderedFilePaths.length} row(s).`)
-      setBanner(
-        formatImport(context, 'page.banner.scanned', {
-          folders: analyzedFolders.length,
-          files: orderedFilePaths.length,
-        }),
-      )
-      appendLog(`Scanned folder: ${analyzedFolders.join(', ')}`)
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
+    setErrorMessage('')
+    const selection = await host.pickFolder()
+    if (selection?.canceled) {
+      setBanner(tImport(context, 'page.banner.folderCancelled'))
+      return
     }
-  }, [appendLog, context.presto.import, replaceRows, settings.categories, settings.ui.analyzeCacheEnabled, sourceFolders])
+
+    const nextSourceFolders = Array.isArray(selection?.paths) ? selection.paths.filter((value) => String(value ?? '').trim()) : []
+    if (nextSourceFolders.length === 0) {
+      return
+    }
+
+    await analyzeSourceFolders(nextSourceFolders)
+  }, [analyzeSourceFolders, context, host])
 
   const onAnalyze = React.useCallback(async () => {
     if (rows.length === 0) {
@@ -477,7 +501,7 @@ export function ImportWorkflowPage({ context }) {
         appendLog('AI analyze completed.')
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error)
       setErrorMessage(message)
       appendLog(`AI analyze failed: ${message}`, 'error')
     } finally {
@@ -494,7 +518,6 @@ export function ImportWorkflowPage({ context }) {
   const clearWorkflow = React.useCallback(() => {
     setRows([])
     setSourceFolders([])
-    setSourceFolderInput('')
     setSelectedPaths(new Set())
     setSelectionAnchor(null)
     setStep(1)
@@ -568,7 +591,7 @@ export function ImportWorkflowPage({ context }) {
       setBanner(tImport(context, 'page.banner.stripOpened'))
       appendLog('Strip Silence opened.')
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error)
       setErrorMessage(message)
       appendLog(`Strip Silence open failed: ${message}`, 'error')
     } finally {
@@ -628,7 +651,7 @@ export function ImportWorkflowPage({ context }) {
         })
         setErrorMessage(job.error?.message || `Import job ended with state ${job.state}.`)
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error)
         setRunState({
           phase: 'failed',
           stageKey: 'failed',
@@ -711,7 +734,7 @@ export function ImportWorkflowPage({ context }) {
       appendLog(`Import job started: ${response.jobId}`)
       await pollJob(response.jobId, finalized.executionRows, stageKeys)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error)
       setErrorMessage(message)
       setRunState({
         phase: 'failed',
@@ -747,7 +770,7 @@ export function ImportWorkflowPage({ context }) {
       setBanner(tImport(context, 'page.banner.cancelRequested'))
       appendLog(`Cancel requested for ${runState.jobId}`)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toErrorMessage(error)
       setErrorMessage(message)
       appendLog(`Cancel failed: ${message}`, 'error')
     } finally {
@@ -792,17 +815,13 @@ export function ImportWorkflowPage({ context }) {
       return h(
         'td',
         cellProps,
-        h(
-          'select',
-          {
-            className: 'iw-select',
-            value: row.categoryId,
-            onChange: (event) => updateRowCategory(row.filePath, event.target.value),
-          },
-          categories.map((option) =>
-            h('option', { key: option.id, value: option.id }, option.name),
-          ),
-        ),
+        h(WorkflowSelect, {
+          className: 'iw-table-select',
+          'aria-label': tImport(context, 'page.column.category'),
+          value: row.categoryId,
+          options: categories.map((option) => ({ value: option.id, label: option.name })),
+          onChange: (event) => updateRowCategory(row.filePath, event.target.value),
+        }),
       )
     }
 
@@ -839,27 +858,30 @@ export function ImportWorkflowPage({ context }) {
   const preparedFilesActions = h(
     'div',
     { className: 'iw-table-actions' },
-    h('label', { className: 'iw-source-label', htmlFor: 'iw-source-folders' }, 'Source folders'),
-    h('textarea', {
-      id: 'iw-source-folders',
-      className: 'iw-source-folders',
-      value: sourceFolderInput,
-      rows: 2,
-      placeholder: 'Paste one folder path per line',
-      onChange: onSourceFolderChange,
-    }),
+    h('div', { className: 'iw-source-summary' }, [
+      h('span', { key: 'label', className: 'iw-source-label' }, tImport(context, 'page.label.sourceFolders')),
+      sourceFolders.length > 0
+        ? h(
+            'div',
+            { key: 'folders', className: 'iw-source-folder-list' },
+            sourceFolders.map((folderPath) =>
+              h('div', { key: folderPath, className: 'iw-source-folder-pill', title: folderPath }, folderPath),
+            ),
+          )
+        : h('p', { key: 'empty', className: 'iw-source-empty' }, tImport(context, 'page.empty.sourceFolders')),
+    ]),
     h(
       WorkflowButton,
       {
         type: 'button',
-        variant: 'primary',
+        variant: 'secondary',
         disabled: busy,
         small: true,
         onClick: () => {
-          void onPickFolders()
+          void onBrowseFolders()
         },
       },
-      tImport(context, 'page.button.scan'),
+      tImport(context, 'page.button.browse'),
     ),
     h(
       WorkflowButton,

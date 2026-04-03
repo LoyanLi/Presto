@@ -247,7 +247,9 @@ export function buildExportRunPayload({ snapshots, settings }) {
         })),
       }
     }),
-    export_settings: normalizedSettings,
+    exportSettings: normalizedSettings,
+    startTime: null,
+    endTime: null,
   }
 }
 
