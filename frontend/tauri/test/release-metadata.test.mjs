@@ -22,21 +22,31 @@ test('package.json exposes Presto release metadata through the Tauri build chain
 
   assert.equal(packageJson.version, '0.3.0-alpha.1')
   assert.equal(packageJson.author, 'Luminous Layers')
+  assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
   assert.equal(packageJson.scripts?.['tauri:build:frontend'], 'node scripts/build-tauri-frontend.mjs')
   assert.equal(packageJson.scripts?.['tauri:build:sidecar'], 'node scripts/build-tauri-sidecar.mjs')
   assert.equal(
     packageJson.scripts?.['tauri:build'],
-    'npm run tauri:build:frontend && npm run tauri:build:sidecar && tauri build',
+    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && tauri build',
+  )
+  assert.equal(
+    packageJson.scripts?.['tauri:dev'],
+    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && tauri dev',
   )
   assert.equal(tauriConfig.productName, 'Presto')
   assert.equal(tauriConfig.identifier, 'com.loyan.presto')
   assert.deepEqual(tauriConfig.bundle?.targets, ['app', 'dmg'])
+  assert.deepEqual(tauriConfig.bundle?.icon, [
+    'icons/32x32.png',
+    'icons/128x128.png',
+    'icons/128x128@2x.png',
+    'icons/icon.icns',
+  ])
   assert.deepEqual(tauriConfig.bundle?.resources, [
     '../build/sidecar',
-    '../backend',
-    '../plugins/official',
-    '../frontend/runtime/automation',
-    '../assets/App.icon',
+    '../build/runtime-resources/backend',
+    '../build/runtime-resources/plugins',
+    '../build/runtime-resources/frontend',
   ])
 })
 
