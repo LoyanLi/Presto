@@ -129,6 +129,8 @@ npm run tauri:build:x64
 
 当前产物目录：
 
+- `release/tauri/arm64/`
+- `release/tauri/x64/`
 - `src-tauri/target/aarch64-apple-darwin/release/bundle/`
 - `src-tauri/target/x86_64-apple-darwin/release/bundle/`
 - 默认本机目标仍输出到 `src-tauri/target/release/bundle/`

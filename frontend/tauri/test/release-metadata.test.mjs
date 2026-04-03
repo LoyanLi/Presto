@@ -27,7 +27,7 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   assert.equal(packageJson.scripts?.['tauri:build:sidecar'], 'node scripts/build-tauri-sidecar.mjs')
   assert.equal(
     packageJson.scripts?.['tauri:build'],
-    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && tauri build',
+    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && node scripts/package-tauri-build.mjs',
   )
   assert.equal(
     packageJson.scripts?.['tauri:dev'],
@@ -35,11 +35,11 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   )
   assert.equal(
     packageJson.scripts?.['tauri:build:arm64'],
-    'PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=aarch64-apple-darwin npx tauri build --target aarch64-apple-darwin',
+    'PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=aarch64-apple-darwin node scripts/package-tauri-build.mjs',
   )
   assert.equal(
     packageJson.scripts?.['tauri:build:x64'],
-    'PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=x86_64-apple-darwin npx tauri build --target x86_64-apple-darwin',
+    'PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=x86_64-apple-darwin node scripts/package-tauri-build.mjs',
   )
   assert.equal(tauriConfig.productName, 'Presto')
   assert.equal(tauriConfig.identifier, 'com.loyan.presto')
