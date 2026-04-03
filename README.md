@@ -165,11 +165,11 @@ npm run tauri:build:x64
 
 微信：
 
-![微信赞赏码](assets/wx.jpg)
+<img src="assets/wx.jpg" alt="微信赞赏码" width="220" />
 
 支付宝：
 
-![支付宝收款码](assets/zfb.jpg)
+<img src="assets/zfb.jpg" alt="支付宝收款码" width="220" />
 
 ## 项目级约束
 
