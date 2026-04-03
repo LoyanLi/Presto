@@ -22,27 +22,28 @@ test('package.json exposes Presto release metadata through the Tauri build chain
 
   assert.equal(packageJson.version, '0.3.0-alpha.2')
   assert.equal(packageJson.author, 'Luminous Layers')
+  assert.equal(packageJson.scripts?.['tauri:prepare:python'], 'node scripts/prepare-tauri-python.mjs')
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
+  assert.equal(
+    packageJson.scripts?.['tauri:prepare:all'],
+    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:python && npm run tauri:prepare:resources',
+  )
   assert.equal(packageJson.scripts?.['tauri:build:frontend'], 'node scripts/build-tauri-frontend.mjs')
   assert.equal(packageJson.scripts?.['tauri:build:sidecar'], 'node scripts/build-tauri-sidecar.mjs')
-  assert.equal(
-    packageJson.scripts?.['tauri:build'],
-    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && node scripts/package-tauri-build.mjs',
-  )
-  assert.equal(
-    packageJson.scripts?.['tauri:dev'],
-    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources && tauri dev',
-  )
-  assert.equal(
-    packageJson.scripts?.['tauri:build:arm64'],
-    'PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=aarch64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=aarch64-apple-darwin node scripts/package-tauri-build.mjs',
-  )
-  assert.equal(
-    packageJson.scripts?.['tauri:build:x64'],
-    'PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:frontend && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:build:sidecar && PRESTO_TAURI_TARGET=x86_64-apple-darwin npm run tauri:prepare:resources && PRESTO_TAURI_TARGET=x86_64-apple-darwin node scripts/package-tauri-build.mjs',
-  )
+  assert.equal(packageJson.scripts?.['tauri:build'], 'node scripts/package-tauri-build.mjs')
+  assert.equal(packageJson.scripts?.['tauri:dev'], 'tauri dev')
+  assert.equal(packageJson.scripts?.['tauri:build:arm64'], 'PRESTO_TAURI_TARGET=aarch64-apple-darwin node scripts/package-tauri-build.mjs')
+  assert.equal(packageJson.scripts?.['tauri:build:x64'], 'PRESTO_TAURI_TARGET=x86_64-apple-darwin node scripts/package-tauri-build.mjs')
   assert.equal(tauriConfig.productName, 'Presto')
   assert.equal(tauriConfig.identifier, 'com.loyan.presto')
+  assert.equal(
+    tauriConfig.build?.beforeBuildCommand,
+    'npm run tauri:prepare:all',
+  )
+  assert.equal(
+    tauriConfig.build?.beforeDevCommand,
+    'npm run tauri:prepare:all',
+  )
   assert.deepEqual(tauriConfig.bundle?.targets, ['app', 'dmg'])
   assert.deepEqual(tauriConfig.bundle?.icon, [
     'icons/32x32.png',
@@ -50,12 +51,31 @@ test('package.json exposes Presto release metadata through the Tauri build chain
     'icons/128x128@2x.png',
     'icons/icon.icns',
   ])
-  assert.deepEqual(tauriConfig.bundle?.resources, [
-    '../build/sidecar',
-    '../build/runtime-resources/backend',
-    '../build/runtime-resources/plugins',
-    '../build/runtime-resources/frontend',
-  ])
+  assert.deepEqual(tauriConfig.bundle?.resources, {
+    'resources/build/': 'build/',
+    'resources/backend/': 'backend/',
+    'resources/plugins/': 'plugins/',
+    'resources/frontend/': 'frontend/',
+  })
+})
+
+test('bundled python metadata tracks runtime requirements only', async () => {
+  const runtimeMetadata = JSON.parse(
+    await readFile(path.join(repoRoot, 'src-tauri/resources/backend/python-runtime.json'), 'utf8'),
+  )
+  const runtimeRequirementsFile = await readFile(path.join(repoRoot, 'backend/requirements-runtime.txt'), 'utf8')
+  const devRequirementsFile = await readFile(path.join(repoRoot, 'backend/requirements-dev.txt'), 'utf8')
+
+  assert.deepEqual(
+    runtimeMetadata.requirements,
+    runtimeRequirementsFile
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#')),
+  )
+  assert.match(devRequirementsFile, /pytest/)
+  assert.doesNotMatch(runtimeRequirementsFile, /pytest/)
+  assert.doesNotMatch(runtimeRequirementsFile, /flake8/)
 })
 
 test('package.json no longer exposes Electron build and packaging scripts', async () => {

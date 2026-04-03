@@ -75,16 +75,6 @@ export type PublicCapabilityId =
   | 'jobs.delete'
 
 export type InternalCapabilityId =
-  | 'session.requireOpen'
-  | 'track.requireAnySelected'
-  | 'daw.requireMinimumVersion'
-  | 'trackColor.requireSupport'
-  | 'audio.importOne'
-  | 'audio.importBatch'
-  | 'export.cancel'
-  | 'export.isCancelled'
-  | 'mac.preflightAccessibility'
-  | 'track.color.applyViaUi'
   | 'stripSilence.openViaUi'
   | 'stripSilence.executeViaUi'
 
