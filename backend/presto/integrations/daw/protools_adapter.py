@@ -7,6 +7,7 @@ from ctypes.util import find_library
 import math
 import re
 import subprocess
+import threading
 import time
 import uuid
 
@@ -173,12 +174,36 @@ class ProToolsDawAdapter:
             )
 
         try:
-            engine = Engine(
-                company_name=self.company_name,
-                application_name=self.application_name,
-                address=address,
-            )
-            engine.host_ready_check()
+            if timeout_seconds is not None and timeout_seconds > 0:
+                connection_result: dict[str, Any] = {}
+
+                def _connect_engine() -> None:
+                    try:
+                        engine = Engine(
+                            company_name=self.company_name,
+                            application_name=self.application_name,
+                            address=address,
+                        )
+                        engine.host_ready_check()
+                        connection_result["engine"] = engine
+                    except Exception as exc:  # pragma: no cover - exercised through caller assertions
+                        connection_result["error"] = exc
+
+                worker = threading.Thread(target=_connect_engine, name="presto-ptsl-connect", daemon=True)
+                worker.start()
+                worker.join(float(timeout_seconds))
+                if worker.is_alive():
+                    raise TimeoutError(f"Timed out after {timeout_seconds} seconds while connecting to Pro Tools.")
+                if "error" in connection_result:
+                    raise connection_result["error"]
+                engine = connection_result["engine"]
+            else:
+                engine = Engine(
+                    company_name=self.company_name,
+                    application_name=self.application_name,
+                    address=address,
+                )
+                engine.host_ready_check()
         except Exception as exc:
             self._engine = None
             self._connected = False

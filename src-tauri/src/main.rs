@@ -29,9 +29,64 @@ struct SidecarProcess {
     stdout: BufReader<ChildStdout>,
 }
 
+enum SidecarCallError {
+    Recoverable(String),
+    Fatal(String),
+}
+
 struct SidecarState {
+    app: AppHandle,
     process: Mutex<SidecarProcess>,
     next_id: Mutex<u64>,
+}
+
+fn recoverable_sidecar_error(message: impl Into<String>) -> SidecarCallError {
+    SidecarCallError::Recoverable(message.into())
+}
+
+fn execute_sidecar_call(
+    process: &mut SidecarProcess,
+    request_id: &str,
+    operation: &str,
+    args: &[Value],
+) -> Result<Value, SidecarCallError> {
+    let payload = json!({
+        "id": request_id,
+        "operation": operation,
+        "args": args,
+    });
+
+    writeln!(process.stdin, "{}", payload)
+        .map_err(|error| recoverable_sidecar_error(format!("sidecar_stdin_write_failed:{error}")))?;
+    process
+        .stdin
+        .flush()
+        .map_err(|error| recoverable_sidecar_error(format!("sidecar_stdin_flush_failed:{error}")))?;
+
+    let mut line = String::new();
+    process
+        .stdout
+        .read_line(&mut line)
+        .map_err(|error| recoverable_sidecar_error(format!("sidecar_stdout_read_failed:{error}")))?;
+    if line.trim().is_empty() {
+        return Err(recoverable_sidecar_error("sidecar_stdout_eof"));
+    }
+
+    let response: SidecarResponse = serde_json::from_str(&line)
+        .map_err(|error| recoverable_sidecar_error(format!("sidecar_invalid_response:{error}")))?;
+    if response.id != request_id {
+        return Err(recoverable_sidecar_error("sidecar_response_id_mismatch"));
+    }
+    if response.ok {
+        Ok(response.result.unwrap_or(Value::Null))
+    } else {
+        Err(SidecarCallError::Fatal(
+            response
+                .error
+                .map(|error| error.message)
+                .unwrap_or_else(|| "sidecar_request_failed".to_string()),
+        ))
+    }
 }
 
 impl SidecarState {
@@ -41,32 +96,19 @@ impl SidecarState {
         let request_id = format!("req-{}", *id_guard);
         drop(id_guard);
 
-        let payload = json!({
-            "id": request_id,
-            "operation": operation,
-            "args": args,
-        });
-
         let mut process = self.process.lock().map_err(|_| "sidecar_lock_failed".to_string())?;
-        writeln!(process.stdin, "{}", payload).map_err(|error| error.to_string())?;
-        process.stdin.flush().map_err(|error| error.to_string())?;
-
-        let mut line = String::new();
-        process
-            .stdout
-            .read_line(&mut line)
-            .map_err(|error| error.to_string())?;
-        let response: SidecarResponse = serde_json::from_str(&line).map_err(|error| error.to_string())?;
-        if response.id != request_id {
-            return Err("sidecar_response_id_mismatch".to_string());
-        }
-        if response.ok {
-            Ok(response.result.unwrap_or(Value::Null))
-        } else {
-            Err(response
-                .error
-                .map(|error| error.message)
-                .unwrap_or_else(|| "sidecar_request_failed".to_string()))
+        match execute_sidecar_call(&mut process, &request_id, operation, &args) {
+            Ok(result) => Ok(result),
+            Err(SidecarCallError::Fatal(message)) => Err(message),
+            Err(SidecarCallError::Recoverable(message)) => {
+                *process = spawn_sidecar(&self.app)?;
+                execute_sidecar_call(&mut process, &request_id, operation, &args).map_err(|retry_error| {
+                    let retry_message = match retry_error {
+                        SidecarCallError::Recoverable(detail) | SidecarCallError::Fatal(detail) => detail,
+                    };
+                    format!("retry_after_sidecar_respawn:{message}:{retry_message}")
+                })
+            }
         }
     }
 }
@@ -382,6 +424,7 @@ fn main() {
         .setup(|app| {
             let process = spawn_sidecar(&app.handle())?;
             app.manage(Arc::new(SidecarState {
+                app: app.handle().clone(),
                 process: Mutex::new(process),
                 next_id: Mutex::new(0),
             }));

@@ -62,16 +62,8 @@ async function loadHostModule() {
 
 function installDomStub(mode = 'dark') {
   const storage = new MemoryStorage()
-  globalThis.window = {
-    localStorage: storage,
-    matchMedia: () => ({ matches: mode === 'dark' }),
-  }
-  globalThis.document = {
-    documentElement: {
-      getAttribute: (name) => (name === 'data-presto-theme' ? mode : null),
-      setAttribute: () => {},
-    },
-  }
+  globalThis.localStorage = storage
+  globalThis.matchMedia = () => ({ matches: mode === 'dark' })
 }
 
 function renderHostMarkup(HostShellApp, createHostShellState, mode) {
@@ -106,8 +98,10 @@ function getBodyBackgroundColor(cssRuleSet) {
 }
 
 test.afterEach(() => {
-  delete globalThis.window
-  delete globalThis.document
+  Reflect.deleteProperty(globalThis, 'window')
+  Reflect.deleteProperty(globalThis, 'document')
+  Reflect.deleteProperty(globalThis, 'localStorage')
+  Reflect.deleteProperty(globalThis, 'matchMedia')
 })
 
 test('host shell provides an MUI css baseline derived from shared theme mode', async () => {

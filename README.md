@@ -60,7 +60,7 @@ Node sidecar runtime
 
 ## 当前成立的边界
 
-- 应用版本基线是 `0.3.0-alpha.1`。
+- 应用版本基线是 `0.3.0-alpha.2`。
 - 当前实际支持的 DAW 目标是 `pro_tools`。
 - 插件能力边界由 manifest 和 capability 白名单共同决定。
 - `packages/contracts` 是跨 TypeScript、Python、插件运行时共享的协议面。

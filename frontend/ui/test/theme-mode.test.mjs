@@ -230,3 +230,29 @@ test('subscribeThemePreference emits preference changes even when effective mode
 
   assert.deepEqual(observedPreferences, ['system', 'dark'])
 })
+
+test('theme mode resolves from global runtime shims without window during server-side rendering', async () => {
+  const attributes = new Map()
+  const storage = new MemoryStorage()
+  storage.setItem(STORAGE_KEY, 'system')
+  const { matchMedia } = createMatchMediaStub(true)
+
+  globalThis.localStorage = storage
+  globalThis.matchMedia = matchMedia
+  globalThis.document = {
+    documentElement: {
+      getAttribute(name) {
+        return attributes.has(name) ? attributes.get(name) : null
+      },
+      setAttribute(name, value) {
+        attributes.set(name, String(value))
+      },
+      dataset: {},
+    },
+  }
+
+  const { getThemeMode } = await loadThemeModeModule()
+
+  assert.equal(getThemeMode(), 'dark')
+  assert.equal(attributes.get('data-presto-theme'), 'dark')
+})
