@@ -106,6 +106,11 @@ npm install
 npm run tauri:dev
 ```
 
+开发态补充说明：
+
+- `tauri:dev` 下 sidecar 现在直接使用仓库根目录作为运行时资源根路径，官方插件 `dist/` 和 workflow definition 修改在重启开发进程后会直接生效，不再依赖 `src-tauri/target/debug/resources` 里的旧快照。
+- 首次打包或手动执行 `tauri:prepare:python` 时，会为 bundled backend Python runtime 安装 `backend/requirements-runtime.txt`，因此会看到 `fastapi`、`uvicorn`、`pydantic`、`py-ptsl` 等运行时依赖下载输出。
+
 测试：
 
 ```bash
@@ -119,6 +124,11 @@ npm test
 ```bash
 npm run tauri:build
 ```
+
+打包前提：
+
+- 构建链会执行 `tauri:prepare:all`，其中包含前端构建、sidecar 构建、bundled Python runtime 准备和资源筛选复制。
+- `tauri:build` 默认为当前主机架构生成 `.app` 和 `.dmg`，并同步复制到 `release/tauri/<arch>/`。
 
 按架构分别打包：
 
