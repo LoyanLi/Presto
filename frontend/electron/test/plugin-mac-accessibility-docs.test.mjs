@@ -12,37 +12,25 @@ async function readDoc(relativePath) {
 }
 
 test('plugin docs mark mac accessibility as formal runtime service in plugin SDK', async () => {
-  const contractsDoc = await readDoc('docs/presto-platform/2026-03-19-plugin-contracts-file-structure.zh-CN.md')
-  const systemDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-system-design.zh-CN.md')
-  const guideDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-development-guide.zh-CN.md')
+  const guideDoc = await readDoc('docs/third-party-plugin-development.md')
 
-  assert.match(contractsDoc, /插件正式 SDK/)
-  assert.match(systemDoc, /runtime service 提供/)
-  assert.match(guideDoc, /插件正式 SDK 的 runtime service，不是 capability/)
+  assert.match(guideDoc, /插件开发规范与流程/)
+  assert.match(guideDoc, /当前真实有效的插件协议/)
+  assert.match(guideDoc, /插件负责定义，不负责直接执行宿主或外部系统操作/)
 })
 
 test('plugin docs list mac accessibility runtime service names', async () => {
-  const systemDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-system-design.zh-CN.md')
-  const guideDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-development-guide.zh-CN.md')
+  const guideDoc = await readDoc('docs/third-party-plugin-development.md')
 
-  for (const service of [
-    'macAccessibility.preflight',
-    'macAccessibility.runScript',
-    'macAccessibility.runFile',
-  ]) {
-    assert.match(systemDoc, new RegExp(service.replace('.', '\\.')))
-    assert.match(guideDoc, new RegExp(service.replace('.', '\\.')))
-  }
+  assert.match(guideDoc, /插件不能直接控制外部 app/)
+  assert.match(guideDoc, /插件不能使用 `context\.runtime`/)
+  assert.match(guideDoc, /插件不能依赖 `shell\.openPath`、`dialog\.openFolder`、`fs\.\*`、`mobileProgress\.\*`/)
 })
 
 test('plugin docs keep raw runtime/backend boundaries closed', async () => {
-  const contractsDoc = await readDoc('docs/presto-platform/2026-03-19-plugin-contracts-file-structure.zh-CN.md')
-  const systemDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-system-design.zh-CN.md')
-  const guideDoc = await readDoc('docs/presto-platform/2026-03-19-workflow-plugin-development-guide.zh-CN.md')
+  const guideDoc = await readDoc('docs/third-party-plugin-development.md')
 
-  for (const token of ['原始 Electron IPC', 'PTSL', 'backend/presto/**', 'backend DAW adapter internals']) {
-    assert.match(contractsDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    assert.match(systemDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    assert.match(guideDoc, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-  }
+  assert.match(guideDoc, /插件不能直接控制外部 app/)
+  assert.match(guideDoc, /不能直接访问宿主私有 runtime/)
+  assert.match(guideDoc, /直接调用 Electron、Node 文件系统或系统 shell/)
 })

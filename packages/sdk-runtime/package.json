@@ -1,0 +1,20 @@
+{
+  "name": "@presto/sdk-runtime",
+  "version": "0.3.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./createPrestoRuntime": "./createPrestoRuntime.ts",
+    "./clients/app": "./clients/app.ts",
+    "./clients/automation": "./clients/automation.ts",
+    "./clients/backend": "./clients/backend.ts",
+    "./clients/dialog": "./clients/dialog.ts",
+    "./clients/fs": "./clients/fs.ts",
+    "./clients/macAccessibility": "./clients/macAccessibility.ts",
+    "./clients/mobileProgress": "./clients/mobileProgress.ts",
+    "./clients/plugins": "./clients/plugins.ts",
+    "./clients/shell": "./clients/shell.ts",
+    "./clients/window": "./clients/window.ts"
+  }
+}

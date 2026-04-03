@@ -1,6 +1,6 @@
 # Presto 前端架构
 
-本文档面向 Presto 内部开发者，描述当前前端实现的真实结构、职责边界、运行路径和扩展原则。这里的“前端”不是仅指 React 页面，而是包括 Electron 主进程、预加载桥、Renderer 宿主层与插件页面宿主在内的完整桌面侧系统。
+本文档面向 Presto 内部开发者，描述当前前端实现的真实结构、职责边界、运行路径和扩展原则。这里的“前端”不是仅指 React 页面，而是包括 Tauri 宿主、Node sidecar、Renderer 宿主层与插件页面宿主在内的完整桌面侧系统。
 
 ## 1. 架构目标
 
@@ -17,34 +17,33 @@
 
 当前前端代码可以按四层理解：
 
-### 2.1 Electron 主进程层
+### 2.1 Tauri 宿主层
 
 核心文件：
 
-- `frontend/electron/main.mjs`
-- `frontend/electron/preload.ts`
-- `frontend/electron/runtime/registerRuntimeHandlers.mjs`
+- `src-tauri/src/main.rs`
+- `src-tauri/tauri.conf.json`
+- `frontend/tauri/runtimeBridge.ts`
 
 职责：
 
 - 应用生命周期管理
 - 主窗口创建与元数据设置
-- 后端监督器初始化
-- 插件宿主服务初始化
-- Runtime IPC handler 注册
-- 文件系统、系统 shell、移动端进度页等桌面级能力编排
+- Tauri command 调度
+- sidecar 生命周期管理
+- 文件系统、系统 shell、目录选择、窗口能力编排
 
-这一层是系统真正的“宿主根节点”。所有 Renderer 和插件最终都只能经由这里获取受控能力。
+这一层是系统真正的“桌面壳根节点”。所有 Renderer 请求最终都只能经由这里进入受控宿主能力。
 
-### 2.2 Electron Runtime 处理层
+### 2.2 Sidecar 业务宿主层
 
 核心目录：
 
-- `frontend/electron/runtime/*`
+- `frontend/sidecar/*`
+- `frontend/runtime/*`
 
 关键模块：
 
-- `runtimeBridge.ts`
 - `backendSupervisor.ts`
 - `pluginHostService.ts`
 - `mobileProgressServer.ts`
@@ -54,13 +53,13 @@
 
 职责：
 
-- 把主进程可提供的能力组织成语义明确的 runtime 面
-- 管理主进程与后端之间的连接
+- 承接业务宿主职责
+- 管理 sidecar 与后端之间的连接
 - 管理插件发现、安装、卸载、官方插件同步
 - 管理移动端导出进度页面与二维码访问入口
 - 管理自动化定义与无障碍脚本运行
 
-这一层不是 UI 层，而是“主进程业务装配层”。
+这一层不是 UI 层，而是“业务宿主装配层”。
 
 ### 2.3 Renderer 宿主层
 
@@ -100,23 +99,23 @@
 
 当前前端的真实启动链路如下：
 
-1. `electron main` 进入 `frontend/electron/main.mjs`。
-2. 主进程解析应用元数据，初始化日志存储。
-3. 主进程创建 `automationRuntime`、`macAccessibilityRuntime`、`backendSupervisor`、`pluginHostService` 等运行时依赖。
-4. 主进程通过 `registerRuntimeHandlers.mjs` 注册全部 IPC 处理器。
-5. 预加载层通过 `__PRESTO_BOOTSTRAP__` 暴露一次性 bootstrap 句柄。
-6. Renderer 侧从 bootstrap 句柄取走 client、宿主 runtime 与 plugin host bridge，并删除全局入口。
-7. 宿主 React 应用加载 `HostShellApp`，再装配内建页面与插件页面。
+1. Tauri 宿主进入 `src-tauri/src/main.rs`。
+2. Rust 宿主解析应用元数据，创建窗口并拉起 Node sidecar。
+3. Sidecar 初始化 `automationRuntime`、`macAccessibilityRuntime`、`backendSupervisor`、`pluginHostService` 等运行时依赖。
+4. Renderer 通过 `frontend/tauri/runtimeBridge.ts` 调用统一 `runtime_invoke` command。
+5. `frontend/desktop/renderHostShellApp.tsx` 装配 `PrestoClient` 与 `PrestoRuntime`。
+6. 宿主 React 应用加载 `HostShellApp`，再装配内建页面与插件页面。
 
 这一链路里最重要的边界是：
 
-- 主进程负责“提供能力”
+- Tauri 宿主负责“提供桌面壳能力”
+- sidecar 负责“提供业务宿主能力”
 - Renderer 负责“消费能力”
 - 插件只允许消费 manifest 声明过的能力
 
 ## 4. RuntimeBridge 设计
 
-`frontend/electron/runtime/runtimeBridge.ts` 的作用不是简单转发 IPC，而是把 IPC 通道提升为结构化、类型化的 Runtime 客户端。
+`frontend/desktop/runtimeBridge.ts` 的作用不是简单转发宿主调用，而是把宿主 operation 提升为结构化、类型化的 Runtime 客户端。
 
 当前桥接暴露的 runtime 领域包括：
 
@@ -130,13 +129,13 @@
 - `mobileProgress`
 - `macAccessibility`
 
-这意味着 Renderer 宿主侧不需要记住裸字符串通道名，也不应该直接拼接 IPC channel。宿主内部调用应统一通过 runtime client 完成。
+这意味着 Renderer 宿主侧不需要记住裸字符串 operation，也不应该直接拼接 invoke 参数。宿主内部调用应统一通过 runtime client 完成。
 
 这里要明确当前真实边界：
 
-- `preload.ts` 不再把长期可见的私有 host bridge 暴露到 `window`。
-- Renderer 只从 `window.__PRESTO_BOOTSTRAP__` 一次性取走 `PrestoClient`、宿主 runtime 与插件管理桥。
-- `frontend/electron/test/plugin-host-bridge-source.test.mjs` 明确约束代码中不应重新出现 `__PRESTO_PLUGIN_HOST__` 或 `__PRESTO_PLUGIN_SANDBOX__`。
+- 前端不再依赖 `preload.ts`、`contextBridge`、`window.__PRESTO_BOOTSTRAP__`。
+- Renderer 只持有 `PrestoClient` 与 `PrestoRuntime`。
+- `plugins` 已并入正式 `PrestoRuntime`。
 
 这样设计的收益：
 

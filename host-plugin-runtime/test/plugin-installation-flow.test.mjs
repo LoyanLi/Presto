@@ -59,7 +59,7 @@ async function createPluginFixture(parentDir, options = {}) {
       supportedDaws: options.supportedDaws ?? ['pro_tools'],
       uiRuntime: 'react18',
       displayName,
-      entry: 'dist/index.js',
+      entry: 'dist/index.mjs',
       workflowDefinition: extensionType === 'workflow'
         ? {
             workflowId: `${pluginId}.run`,
@@ -93,7 +93,7 @@ async function createPluginFixture(parentDir, options = {}) {
       supportedDaws: options.supportedDaws ?? ['pro_tools'],
       uiRuntime: 'react18',
       displayName,
-      entry: 'dist/index.js',
+      entry: 'dist/index.mjs',
       workflowDefinition: extensionType === 'workflow'
         ? {
             workflowId: `${pluginId}.run`,
@@ -114,7 +114,7 @@ async function createPluginFixture(parentDir, options = {}) {
     }
 
   await writeFile(path.join(pluginRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8')
-  await writeFile(path.join(distDir, 'index.js'), entryFileContent, 'utf8')
+  await writeFile(path.join(distDir, 'index.mjs'), entryFileContent, 'utf8')
   if (extensionType === 'workflow' && manifest.workflowDefinition) {
     await writeFile(
       path.join(distDir, 'workflow-definition.json'),
@@ -177,11 +177,12 @@ test('installPluginFromDirectory returns manifest category issues for invalid ma
   const { pluginRoot } = await createPluginFixture(sourceParent, {
     manifest: {
       pluginId: 'plugin.bad.manifest',
+      extensionType: 'workflow',
       version: '1.0.0',
       hostApiVersion: '1.0.0',
       supportedDaws: ['pro_tools'],
       uiRuntime: 'react18',
-      entry: 'dist/index.js',
+      entry: 'dist/index.mjs',
       pages: [],
       requiredCapabilities: ['system.health'],
     },

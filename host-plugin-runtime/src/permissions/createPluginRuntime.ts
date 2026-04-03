@@ -1,8 +1,8 @@
-import type { PrestoClient } from '../../../packages/contracts/src/capabilities/clients'
-import type { PluginContext } from '../../../packages/contracts/src/plugins/context'
-import type { PluginLogger } from '../../../packages/contracts/src/plugins/logger'
-import type { PluginStorage } from '../../../packages/contracts/src/plugins/storage'
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins/manifest'
+import type { PrestoClient } from '@presto/contracts/capabilities/clients'
+import type { PluginContext } from '@presto/contracts/plugins/context'
+import type { PluginLogger } from '@presto/contracts/plugins/logger'
+import type { PluginStorage } from '@presto/contracts/plugins/storage'
+import type { WorkflowPluginManifest } from '@presto/contracts/plugins/manifest'
 import { guardCapabilityAccess } from './guardCapabilityAccess'
 
 interface PluginRuntimeDependencies {

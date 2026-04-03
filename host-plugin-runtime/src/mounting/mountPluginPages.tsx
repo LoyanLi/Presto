@@ -1,5 +1,5 @@
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins'
-import type { PluginPageDefinition } from '../../../packages/contracts/src/plugins/page'
+import type { WorkflowPluginManifest } from '@presto/contracts/plugins'
+import type { PluginPageDefinition } from '@presto/contracts/plugins/page'
 
 export interface MountedPluginPage extends PluginPageDefinition {
   kind: 'page'

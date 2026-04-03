@@ -3,23 +3,30 @@
   "version": "0.3.0-alpha.2",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/contracts",
+    "packages/sdk-core",
+    "packages/sdk-runtime"
+  ],
   "description": "Desktop shell for Presto Pro Tools workflows",
-  "main": "frontend/electron/main.mjs",
+  "main": "build/sidecar/main.mjs",
   "author": "Luminous Layers",
   "copyright": "Copyright (c) 2026 Loyan Li",
   "scripts": {
-    "stage1:build": "node frontend/electron/build-stage1.mjs",
-    "stage1:start": "npm run stage1:build && electron frontend/electron/main.mjs",
+    "clean:local": "node scripts/clean-local-artifacts.mjs",
+    "test": "npm run test:node && npm run test:python",
+    "test:node": "node --test frontend/electron/test/*.test.mjs frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs",
+    "test:python": "cd backend && python3 -m pytest presto/tests",
+    "tauri:build:frontend": "node scripts/build-tauri-frontend.mjs",
+    "tauri:build:sidecar": "node scripts/build-tauri-sidecar.mjs",
+    "tauri:dev": "npm run tauri:build:frontend && npm run tauri:build:sidecar && tauri dev",
+    "tauri:build": "npm run tauri:build:frontend && npm run tauri:build:sidecar && tauri build",
     "sync:icon": "bash scripts/prepare_icon.sh",
-    "package:mac:prepare": "npm run sync:icon && PRESTO_STAGE1_SOURCEMAP=0 PRESTO_STAGE1_MINIFY=1 npm run stage1:build",
-    "package:mac:dmg:arm64": "electron-builder --mac dmg --arm64 -c.mac.identity=null",
-    "package:mac:dmg:x64": "electron-builder --mac dmg --x64 -c.mac.identity=null",
-    "package:mac:dmg": "npm run package:mac:prepare && npm run package:mac:dmg:arm64 && npm run package:mac:dmg:x64",
-    "developer:smoke:read": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=developer-read",
-    "developer:smoke:write": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=developer-write",
-    "developer:smoke:strip-silence": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=strip-silence",
-    "developer:smoke:core-io": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=core-io-write",
-    "stage1:smoke:track-write": "npm run stage1:build && electron frontend/electron/main.mjs --smoke-target=track-write",
+    "developer:smoke:read": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "developer:smoke:write": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "developer:smoke:strip-silence": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "developer:smoke:core-io": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "stage1:smoke:track-write": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
     "stage1:smoke:core-io": "npm run developer:smoke:core-io",
     "stage1:smoke": "npm run developer:smoke:read && npm run developer:smoke:write && npm run stage1:smoke:core-io && npm run developer:smoke:strip-silence && npm run stage1:smoke:track-write"
   },
@@ -28,54 +35,14 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
+    "@tauri-apps/api": "^2.0.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-is": "^18.3.1"
   },
-  "build": {
-    "appId": "com.loyan.presto",
-    "productName": "Presto",
-    "asar": true,
-    "compression": "maximum",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "package.json",
-      "frontend/electron/**",
-      "frontend/build/**",
-      "frontend/host/**",
-      "frontend/ui/**",
-      "backend/**",
-      "host-plugin-runtime/**",
-      "packages/**",
-      "plugins/**",
-      "assets/**",
-      "!**/test{,s}/**",
-      "!**/*.test.*",
-      "!**/__pycache__/**",
-      "!**/.pytest_cache/**",
-      "!**/*.map",
-      "!docs/**",
-      "!scripts/**",
-      "!node_modules/.cache/**"
-    ],
-    "extraResources": [
-      {
-        "from": "backend",
-        "to": "backend"
-      }
-    ],
-    "mac": {
-      "icon": "frontend/build/icon.png",
-      "category": "public.app-category.music",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
-    }
-  },
   "devDependencies": {
-    "electron": "^37.0.0",
-    "electron-builder": "^26.8.1",
+    "@tauri-apps/cli": "^2.0.0",
     "esbuild": "^0.25.0"
   }
 }

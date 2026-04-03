@@ -1,13 +1,5 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-project_root = Path(__file__).resolve().parents[2]
-project_root_str = str(project_root)
-if project_root_str not in sys.path:
-    sys.path.insert(0, project_root_str)
-
 from presto.domain.jobs import JobProgress, JobRecord
 from presto.transport.http.schemas.jobs import JobSchema
 

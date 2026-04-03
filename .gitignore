@@ -7,12 +7,17 @@
 # Node / frontend
 node_modules/
 dist/
+!plugins/official/*/dist/
+!plugins/official/*/dist/**
 build/
 release/
 coverage/
 *.tsbuildinfo
 frontend/electron/.stage1/
 frontend/electron/index.html
+
+# Rust / Tauri
+src-tauri/target/
 
 # Python / backend
 **/__pycache__/

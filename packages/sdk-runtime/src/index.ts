@@ -20,6 +20,14 @@ export type {
   MobileProgressGetViewUrlResult,
   MobileProgressRuntimeClient,
 } from './clients/mobileProgress'
+export type {
+  PluginRuntimeClient,
+  PluginRuntimeInstallResult,
+  PluginRuntimeIssue,
+  PluginRuntimeListResult,
+  PluginRuntimePluginRecord,
+  PluginRuntimeUninstallResult,
+} from './clients/plugins'
 export type { ShellRuntimeClient } from './clients/shell'
 export type { WindowRuntimeClient } from './clients/window'
 export type { PrestoRuntime } from './createPrestoRuntime'

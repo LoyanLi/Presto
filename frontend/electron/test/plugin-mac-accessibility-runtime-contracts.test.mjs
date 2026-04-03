@@ -8,21 +8,20 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
 
 test('plugin runtime contract declares mac accessibility runtime service names', async () => {
-  const source = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/runtime.ts'), 'utf8')
-
-  assert.match(source, /'macAccessibility\.preflight'/)
-  assert.match(source, /'macAccessibility\.runScript'/)
-  assert.match(source, /'macAccessibility\.runFile'/)
+  await assert.rejects(
+    readFile(path.join(repoRoot, 'packages/contracts/src/plugins/runtime.ts'), 'utf8'),
+    /ENOENT/,
+  )
 })
 
 test('plugin runtime contract exposes mac accessibility API shape', async () => {
-  const source = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/runtime.ts'), 'utf8')
+  const source = await readFile(path.join(repoRoot, 'packages/sdk-runtime/src/clients/macAccessibility.ts'), 'utf8')
 
-  assert.match(source, /macAccessibility\?:\s*\{/)
-  assert.match(source, /preflight\(\): Promise<\{ ok: boolean; trusted: boolean; error\?: string \}>/)
-  assert.match(source, /runScript\(script: string, args\?: string\[\]\): Promise<\{/)
-  assert.match(source, /runFile\(path: string, args\?: string\[\]\): Promise<\{/)
-  assert.match(source, /error\?: \{ code: string; message: string; details\?: Record<string, unknown> \}/)
+  assert.match(source, /export interface MacAccessibilityRuntimeClient \{/)
+  assert.match(source, /preflight\(\): Promise<MacAccessibilityPreflightResult>/)
+  assert.match(source, /runScript\(script: string, args\?: string\[\]\): Promise<MacAccessibilityRunResult>/)
+  assert.match(source, /runFile\(path: string, args\?: string\[\]\): Promise<MacAccessibilityRunResult>/)
+  assert.match(source, /export interface MacAccessibilityStructuredError \{/)
 })
 
 test('sdk-runtime exports and wires mac accessibility runtime client', async () => {

@@ -4,7 +4,7 @@ import type {
   PluginAdapterModuleRequirement,
   PluginCapabilityRequirement,
   WorkflowSettingsSectionDefinition,
-} from '../../packages/contracts/src'
+} from '@presto/contracts'
 
 export type HostPluginOrigin = 'official' | 'installed'
 export type HostPluginStatus = 'ready' | 'error'

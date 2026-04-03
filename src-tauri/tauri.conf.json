@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Presto",
+  "version": "0.3.0-alpha.2",
+  "identifier": "com.loyan.presto",
+  "build": {
+    "beforeBuildCommand": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "beforeDevCommand": "npm run tauri:build:frontend && npm run tauri:build:sidecar",
+    "frontendDist": "../build/tauri/renderer"
+  },
+  "app": {
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/extensions/**"]
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Presto",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "entitlements": "entitlements.mac.plist"
+    },
+    "resources": [
+      "../build/sidecar",
+      "../backend",
+      "../plugins/official",
+      "../frontend/runtime/automation",
+      "../assets/App.icon"
+    ]
+  }
+}

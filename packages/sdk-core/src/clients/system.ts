@@ -3,7 +3,7 @@ import type {
   SystemClient,
   SystemHealthRequest,
   SystemHealthResponse,
-} from '../../../contracts/src'
+} from '@presto/contracts'
 import type { PrestoClientAssemblyContext } from '../createPrestoClient'
 
 const invokeCapability = async <TRequest, TResponse>(

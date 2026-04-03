@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { access, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-import type { DawTarget, WorkflowPluginManifest, WorkflowPluginModule } from '../../../packages/contracts/src'
+import type { DawTarget, WorkflowPluginManifest, WorkflowPluginModule } from '@presto/contracts'
 import {
   discoverPlugins,
   type PluginDiscoveryIssue,
@@ -474,4 +474,3 @@ export async function installPluginFromZip(
     await rm(stagingRoot, { recursive: true, force: true })
   }
 }
-

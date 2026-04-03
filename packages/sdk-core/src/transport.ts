@@ -1,1 +1,1 @@
-export type { PrestoTransport } from '../../contracts/src'
+export type { PrestoTransport } from '@presto/contracts'

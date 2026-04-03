@@ -67,6 +67,16 @@ test('generate-contracts script no longer references runtime service manifest ar
   assert.doesNotMatch(source, /runtimeServices\.ts/)
 })
 
+test('generate-contracts writes Python capability catalog into the runtime backend package path', async () => {
+  const source = await readFile(path.join(repoRoot, 'scripts/generate-contracts.mjs'), 'utf8')
+
+  assert.match(source, /path\.join\(repoRoot,\s*'backend',\s*'presto',\s*'application',\s*'capabilities'\)/)
+  assert.doesNotMatch(
+    source,
+    /path\.join\(repoRoot,\s*'backend',\s*'import',\s*'presto',\s*'application',\s*'capabilities'\)/,
+  )
+})
+
 test('plugin runtime contract artifacts are removed', async () => {
   await assertFileMissing(path.join(repoRoot, 'packages/contracts/src/plugins/runtime.ts'))
   await assertFileMissing(path.join(repoRoot, 'packages/contracts-manifest/runtime-services.json'))

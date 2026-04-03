@@ -3,10 +3,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const repoRoot = '/Users/loyan/Documents/Mixing/工具/Presto-Rebuild'
-const entry = path.join(repoRoot, 'frontend/electron/runtime/appLogStore.mjs')
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(currentDir, '../../..')
+const entry = path.join(repoRoot, 'frontend/runtime/appLogStore.mjs')
 
 test('app log store appends entries into a stable current log file', async () => {
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-app-log-store-'))

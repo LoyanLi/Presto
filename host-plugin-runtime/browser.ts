@@ -1,0 +1,5 @@
+export { activatePlugin } from './src/lifecycle/activatePlugin'
+export { mountPluginCommands } from './src/mounting/mountPluginCommands'
+export { mountPluginNavigation } from './src/mounting/mountPluginNavigation'
+export { mountPluginPages } from './src/mounting/mountPluginPages'
+export { createPluginRuntime } from './src/permissions/createPluginRuntime'

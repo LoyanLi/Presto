@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -28,25 +29,31 @@ class MemoryStorage {
 async function loadHostModule() {
   if (!hostModulePromise) {
     hostModulePromise = (async () => {
-      const tempDir = await mkdtemp(path.join(repoRoot, '.tmp-host-mui-theme-test-'))
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'presto-host-mui-theme-test-'))
       const outfile = path.join(tempDir, 'host-index.mjs')
-      await esbuild.build({
-        entryPoints: [path.join(repoRoot, 'frontend/host/index.ts')],
-        bundle: true,
-        format: 'esm',
-        platform: 'node',
-        jsx: 'automatic',
-        target: 'node20',
-        outfile,
-        external: ['react', 'react-dom', 'react-dom/server', 'electron', '@mui/*', '@emotion/*'],
-        loader: {
-          '.ts': 'ts',
-          '.tsx': 'tsx',
-          '.css': 'text',
-        },
-      })
+      try {
+        await symlink(path.join(repoRoot, 'node_modules'), path.join(tempDir, 'node_modules'), 'dir')
+        await esbuild.build({
+          entryPoints: [path.join(repoRoot, 'frontend/host/index.ts')],
+          bundle: true,
+          format: 'esm',
+          platform: 'node',
+          jsx: 'automatic',
+          target: 'node20',
+          outfile,
+          external: ['react', 'react-dom', 'react-dom/server', 'electron', '@mui/*', '@emotion/*'],
+          loader: {
+            '.ts': 'ts',
+            '.tsx': 'tsx',
+            '.css': 'text',
+            '.png': 'dataurl',
+          },
+        })
 
-      return import(pathToFileURL(outfile).href)
+        return await import(pathToFileURL(outfile).href)
+      } finally {
+        await rm(tempDir, { recursive: true, force: true })
+      }
     })()
   }
 

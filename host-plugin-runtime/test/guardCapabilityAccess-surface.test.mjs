@@ -151,6 +151,14 @@ function createPrestoFixture(invocations) {
         return { ok: true }
       },
     },
+    workflow: {
+      run: {
+        async start(request) {
+          invocations.push({ method: 'workflow.run.start', request })
+          return { jobId: 'workflow-job-1', state: 'queued' }
+        },
+      },
+    },
     import: {
       async analyze(request) {
         invocations.push({ method: 'import.analyze', request })
@@ -269,6 +277,35 @@ test('guardCapabilityAccess exposes current clip/import/export surfaces and remo
     { method: 'export.run.start', request: { snapshotIds: ['snapshot-1'], exportSettings: { output_path: '/tmp/out' } } },
     { method: 'jobs.create', request: { capability: 'jobs.get', targetDaw: 'pro_tools' } },
     { method: 'jobs.update', request: { jobId: 'job-1', state: 'running' } },
+  ])
+})
+
+test('guardCapabilityAccess exposes workflow run surface for workflow plugins', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const invocations = []
+  const presto = createPrestoFixture(invocations)
+  const manifest = {
+    pluginId: 'plugin.guard.workflow-surface',
+    requiredCapabilities: ['workflow.run.start'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest)
+  const response = await guarded.workflow.run.start({
+    pluginId: 'plugin.guard.workflow-surface',
+    workflowId: 'official.export-workflow.run',
+    input: { snapshots: [] },
+  })
+
+  assert.deepEqual(response, { jobId: 'workflow-job-1', state: 'queued' })
+  assert.deepEqual(invocations, [
+    {
+      method: 'workflow.run.start',
+      request: {
+        pluginId: 'plugin.guard.workflow-surface',
+        workflowId: 'official.export-workflow.run',
+        input: { snapshots: [] },
+      },
+    },
   ])
 })
 

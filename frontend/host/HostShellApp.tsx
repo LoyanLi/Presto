@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 
-import type { DawTarget, PrestoClient } from '../../packages/contracts/src'
-import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
-import type { DawAdapterSnapshot } from '../../packages/sdk-runtime/src/clients/backend'
+import type { DawTarget, PrestoClient } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
+import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { getThemeMode, subscribeThemeMode } from '../ui'
 import { md3ColorSchemes, md3Shape, md3Typography } from '../ui/tokens'
 import { useDawStatusPolling } from './hooks/useDawStatusPolling'
@@ -14,12 +14,21 @@ import { getSystemLocaleCandidates, resolveHostLocale, translateHost } from './i
 import type { HostPrimarySidebarRoute } from './HostPrimarySidebar'
 import { HostSettingsSurface, type BuiltinSettingsEntry } from './HostSettingsSurface'
 import type { HostShellState, HostShellViewId } from './hostShellState'
+import {
+  buildFilteredPluginManagerModel,
+  createHostMuiTheme,
+  dawLabel,
+  defaultSettingsRoute,
+  findActiveWorkspacePage,
+  isPluginAvailableForSnapshot,
+  normalizeSettingsPageRoute,
+  sortPluginSettingsEntries,
+  type LegacySettingsRouteInput,
+} from './hostShellHelpers'
 import type {
   HostAutomationEntry,
-  HostBuiltinSettingsPageId,
   HostPluginHomeEntry,
   HostPluginManagerModel,
-  HostPluginRecord,
   HostRenderedPluginPage,
   HostSettingsPageRoute,
   HostPluginSettingsEntry,
@@ -28,20 +37,6 @@ import type {
 import { getHostShellPreferences, setHostShellPreferences, subscribeHostShellPreferences } from './shellPreferences'
 import { GeneralSettingsPage, type GeneralSettingsPageProps } from './settings/GeneralSettingsPage'
 import { ExtensionsSettingsPage } from './settings/ExtensionsSettingsPage'
-
-function dawLabel(target: DawTarget): string {
-  if (target === 'pro_tools') {
-    return 'Pro Tools'
-  }
-
-  return target
-}
-
-type LegacySettingsRouteInput = {
-  kind?: unknown
-  pageId?: unknown
-  pluginId?: unknown
-}
 
 export interface HostShellAppProps {
   state: HostShellState
@@ -62,217 +57,6 @@ export interface HostShellAppProps {
   onRefreshPlugins?(): void | Promise<void>
 }
 
-const builtinSettingsPageIds = new Set<HostBuiltinSettingsPageId>([
-  'general',
-  'workflowExtensions',
-  'automationExtensions',
-])
-const defaultSettingsRoute: HostSettingsPageRoute = { kind: 'builtin', pageId: 'general' }
-
-function px(value: string): number {
-  const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function parseVersionSegment(value: string): number | string {
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && String(parsed) === value ? parsed : value
-}
-
-function compareVersions(left: string, right: string): number {
-  const leftParts = left.split('.')
-  const rightParts = right.split('.')
-  const maxLength = Math.max(leftParts.length, rightParts.length)
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const leftPart = parseVersionSegment(leftParts[index] ?? '0')
-    const rightPart = parseVersionSegment(rightParts[index] ?? '0')
-    if (leftPart === rightPart) {
-      continue
-    }
-
-    if (typeof leftPart === 'number' && typeof rightPart === 'number') {
-      return leftPart > rightPart ? 1 : -1
-    }
-
-    return String(leftPart).localeCompare(String(rightPart))
-  }
-
-  return 0
-}
-
-function pickHighestMinVersions<T extends { minVersion: string }>(
-  entries: readonly T[],
-  keyOf: (entry: T) => string,
-): Map<string, string> {
-  const map = new Map<string, string>()
-
-  for (const entry of entries) {
-    const key = keyOf(entry)
-    const current = map.get(key)
-    if (!current || compareVersions(entry.minVersion, current) > 0) {
-      map.set(key, entry.minVersion)
-    }
-  }
-
-  return map
-}
-
-function isPluginAvailableForSnapshot(plugin: HostPluginRecord, snapshot: DawAdapterSnapshot | null): boolean {
-  if (snapshot && plugin.supportedDaws && plugin.supportedDaws.length > 0 && !plugin.supportedDaws.includes(snapshot.targetDaw as DawTarget)) {
-    return false
-  }
-
-  if (!snapshot) {
-    return true
-  }
-
-  const moduleRequirements = pickHighestMinVersions(plugin.adapterModuleRequirements ?? [], (entry) => entry.moduleId)
-  if (moduleRequirements.size > 0) {
-    const moduleVersions = new Map(snapshot.modules.map((module) => [module.moduleId, module.version]))
-    for (const [moduleId, minVersion] of moduleRequirements.entries()) {
-      const current = moduleVersions.get(moduleId)
-      if (!current || compareVersions(current, minVersion) < 0) {
-        return false
-      }
-    }
-  }
-
-  const capabilityRequirements = pickHighestMinVersions(plugin.capabilityRequirements ?? [], (entry) => entry.capabilityId)
-  if (capabilityRequirements.size > 0) {
-    const capabilityVersions = new Map(snapshot.capabilities.map((capability) => [capability.capabilityId, capability.version]))
-    for (const [capabilityId, minVersion] of capabilityRequirements.entries()) {
-      const current = capabilityVersions.get(capabilityId)
-      if (!current || compareVersions(current, minVersion) < 0) {
-        return false
-      }
-    }
-  }
-
-  return true
-}
-
-function createHostMuiTheme(mode: 'light' | 'dark') {
-  const colors = md3ColorSchemes[mode]
-
-  return createTheme({
-    palette: {
-      mode,
-      primary: {
-        main: colors.primary,
-        contrastText: colors.onPrimary,
-      },
-      secondary: {
-        main: colors.secondary,
-        contrastText: colors.onSecondary,
-      },
-      error: {
-        main: colors.error,
-        contrastText: colors.onError,
-      },
-      background: {
-        default: colors.background,
-        paper: colors.surfaceContainerLow,
-      },
-      text: {
-        primary: colors.onSurface,
-        secondary: colors.onSurfaceVariant,
-      },
-      divider: colors.outlineVariant,
-    },
-    shape: {
-      borderRadius: px(md3Shape.cornerMedium),
-    },
-    typography: {
-      fontFamily: md3Typography.plain,
-      h2: {
-        fontFamily: md3Typography.brand,
-        fontSize: md3Typography.headlineSize,
-        fontWeight: 800,
-      },
-      button: {
-        fontFamily: md3Typography.plain,
-        fontWeight: 700,
-        textTransform: 'none',
-      },
-      body1: {
-        fontFamily: md3Typography.plain,
-        fontSize: md3Typography.bodySize,
-      },
-      body2: {
-        fontFamily: md3Typography.plain,
-        fontSize: md3Typography.smallSize,
-      },
-    },
-    components: {
-      MuiCssBaseline: {
-        styleOverrides: {
-          ':root': {
-            colorScheme: mode,
-          },
-          body: {
-            backgroundColor: colors.background,
-            color: colors.onBackground,
-            fontFamily: md3Typography.plain,
-          },
-        },
-      },
-    },
-  })
-}
-
-function normalizeSettingsPageRoute(
-  route: HostSettingsPageRoute | LegacySettingsRouteInput | null | undefined,
-): HostSettingsPageRoute {
-  if (!route || typeof route !== 'object') {
-    return defaultSettingsRoute
-  }
-
-  const candidate = route as LegacySettingsRouteInput
-
-  if (
-    candidate.kind === 'builtin' &&
-    typeof candidate.pageId === 'string' &&
-    builtinSettingsPageIds.has(candidate.pageId as HostBuiltinSettingsPageId)
-  ) {
-    return {
-      kind: 'builtin',
-      pageId: candidate.pageId as HostBuiltinSettingsPageId,
-    }
-  }
-
-  if (
-    candidate.kind === 'plugin' &&
-    typeof candidate.pluginId === 'string' &&
-    typeof candidate.pageId === 'string'
-  ) {
-    return {
-      kind: 'plugin',
-      pluginId: candidate.pluginId,
-      pageId: candidate.pageId,
-    }
-  }
-
-  if (typeof candidate.pluginId === 'string' && typeof candidate.pageId === 'string') {
-    return {
-      kind: 'plugin',
-      pluginId: candidate.pluginId,
-      pageId: candidate.pageId,
-    }
-  }
-
-  if (
-    typeof candidate.pageId === 'string' &&
-    builtinSettingsPageIds.has(candidate.pageId as HostBuiltinSettingsPageId)
-  ) {
-    return {
-      kind: 'builtin',
-      pageId: candidate.pageId as HostBuiltinSettingsPageId,
-    }
-  }
-
-  return defaultSettingsRoute
-}
 
 export function HostShellApp({
   state,
@@ -293,11 +77,11 @@ export function HostShellApp({
   onRefreshPlugins,
 }: HostShellAppProps) {
   const initialPreferences = getHostShellPreferences()
-  const initialResolvedLocale = resolveHostLocale(initialPreferences.language, getSystemLocaleCandidates())
   const [surface, setSurface] = useState<HostShellViewId>(() => state.shellViewId)
   const [themeMode, setThemeModeState] = useState<'light' | 'dark'>(() => getThemeMode())
   const [preferences, setPreferencesState] = useState(() => initialPreferences)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
 
   const {
     dawStatus,
@@ -310,14 +94,13 @@ export function HostShellApp({
     developerPresto,
     developerRuntime,
     preferences,
-    resolvedLocale: initialResolvedLocale,
+    resolvedLocale,
     initialSnapshot: dawAdapterSnapshot,
   })
   const [workspacePageRoute, setWorkspacePageRoute] = useState<HostWorkspacePageRoute | null>(() => initialWorkspacePageRoute)
   const [settingsRoute, setSettingsRoute] = useState<HostSettingsPageRoute>(() =>
     normalizeSettingsPageRoute(initialSettingsPageRoute),
   )
-  const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
 
   useEffect(() => {
     setSurface(state.shellViewId)
@@ -366,10 +149,7 @@ export function HostShellApp({
   )
 
   const allPluginSettingsEntries = useMemo(
-    () =>
-      [...(pluginManagerModel?.settingsEntries ?? [])].sort(
-        (left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title),
-      ),
+    () => sortPluginSettingsEntries(pluginManagerModel?.settingsEntries ?? []),
     [pluginManagerModel?.settingsEntries],
   )
 
@@ -379,33 +159,14 @@ export function HostShellApp({
   )
 
   const filteredPluginManagerModel: HostPluginManagerModel | undefined = useMemo(() => {
-    if (!pluginManagerModel) {
-      return undefined
-    }
-
-    const surfacedPluginIds = new Set<string>()
-    for (const entry of filteredPluginHomeEntries) {
-      surfacedPluginIds.add(entry.pluginId)
-    }
-    for (const entry of filteredAutomationEntries) {
-      surfacedPluginIds.add(entry.pluginId)
-    }
-    for (const entry of filteredPluginSettingsEntries) {
-      surfacedPluginIds.add(entry.pluginId)
-    }
-    for (const page of pluginPages) {
-      surfacedPluginIds.add(page.pluginId)
-    }
-
-    const plugins = pluginManagerModel.plugins.filter(
-      (plugin) => surfacedPluginIds.has(plugin.pluginId) && isPluginAvailable(plugin.pluginId),
-    )
-    const pluginIds = new Set(plugins.map((plugin) => plugin.pluginId))
-    return {
-      ...pluginManagerModel,
-      plugins,
-      settingsEntries: filteredPluginSettingsEntries.filter((entry) => pluginIds.has(entry.pluginId)),
-    }
+    return buildFilteredPluginManagerModel({
+      pluginManagerModel,
+      filteredPluginHomeEntries,
+      filteredAutomationEntries,
+      filteredPluginSettingsEntries,
+      pluginPages,
+      isPluginAvailable,
+    })
   }, [
     filteredAutomationEntries,
     filteredPluginHomeEntries,
@@ -417,15 +178,7 @@ export function HostShellApp({
 
   const pluginSettingsEntries = filteredPluginSettingsEntries
 
-  const activeWorkspacePage =
-    workspacePageRoute === null
-      ? null
-      : pluginPages.find(
-          (page) =>
-            page.mount === 'workspace' &&
-            page.pluginId === workspacePageRoute.pluginId &&
-            page.pageId === workspacePageRoute.pageId,
-        ) ?? null
+  const activeWorkspacePage = findActiveWorkspacePage(workspacePageRoute, pluginPages)
 
   const activeSettingsEntry =
     settingsRoute.kind === 'plugin'

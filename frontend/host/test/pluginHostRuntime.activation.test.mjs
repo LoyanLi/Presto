@@ -124,3 +124,69 @@ test('loadHostPlugins keeps workflow plugins available when host only provides d
   ])
   assert.equal(result.managerModel.plugins[0]?.status, 'ready')
 })
+
+test('loadHostPlugins keeps workflow library entries visible when the workflow page module fails to load', async () => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: '/tmp/plugins',
+      plugins: [
+        {
+          pluginId: 'official.export-workflow',
+          displayName: 'Export Workflow',
+          version: '1.0.0',
+          pluginRoot: '/tmp/plugins/official.export-workflow',
+          entryPath: '/tmp/plugins/official.export-workflow/dist/missing-entry.mjs',
+          manifest: {
+            pluginId: 'official.export-workflow',
+            extensionType: 'workflow',
+            version: '1.0.0',
+            hostApiVersion: '0.1.0',
+            supportedDaws: ['pro_tools'],
+            uiRuntime: 'react18',
+            displayName: 'Export Workflow',
+            description: 'Official export workflow plugin.',
+            entry: 'dist/missing-entry.mjs',
+            pages: [
+              {
+                pageId: 'export-workflow.page.main',
+                path: '/plugins/export-workflow',
+                title: 'Export Workflow',
+                mount: 'workspace',
+                componentExport: 'ExportWorkflowPage',
+              },
+            ],
+            settingsPages: [],
+            requiredCapabilities: [],
+            adapterModuleRequirements: [],
+            capabilityRequirements: [],
+          },
+          settingsPages: [],
+          loadable: true,
+        },
+      ],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+  })
+
+  assert.deepEqual(result.homeEntries, [
+    {
+      pluginId: 'official.export-workflow',
+      pageId: 'export-workflow.page.main',
+      title: 'Export Workflow',
+      description: 'Official export workflow plugin.',
+      actionLabel: 'Open Plugin',
+    },
+  ])
+  assert.equal(result.pages[0]?.pluginId, 'official.export-workflow')
+  assert.equal(result.pages[0]?.pageId, 'export-workflow.page.main')
+  assert.equal(result.managerModel.plugins[0]?.status, 'error')
+  assert.match(result.managerModel.issues[0]?.reason ?? '', /missing-entry\.mjs|module_import_failed|Cannot find module/)
+  assert.match(result.managerModel.issues[0]?.reason ?? '', /importUrl:/)
+})

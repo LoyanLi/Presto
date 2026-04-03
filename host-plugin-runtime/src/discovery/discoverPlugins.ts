@@ -1,7 +1,7 @@
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-import { type DawTarget, type PublicCapabilityId } from '../../../packages/contracts/src'
+import { type DawTarget, type PublicCapabilityId } from '@presto/contracts'
 import { FORMAL_PUBLIC_CAPABILITY_IDS } from './runtimeServices'
 import { validateDawSupport } from '../validation/validateDawSupport'
 import { validateManifest } from '../validation/validateManifest'

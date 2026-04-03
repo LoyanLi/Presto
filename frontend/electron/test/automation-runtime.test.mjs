@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
-const runtimeModulePath = path.resolve(currentDir, '../runtime/automationRuntime.mjs')
+const runtimeModulePath = path.resolve(currentDir, '../../runtime/automationRuntime.mjs')
 const runtimeModule = await import(pathToFileURL(runtimeModulePath).href)
 const { createAutomationRuntime } = runtimeModule
 

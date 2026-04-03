@@ -1,4 +1,4 @@
-import type { DawTarget, WorkflowPluginManifest } from '../../../packages/contracts/src'
+import type { DawTarget, WorkflowPluginManifest } from '@presto/contracts'
 
 export interface DawSupportValidationIssue {
   field: string

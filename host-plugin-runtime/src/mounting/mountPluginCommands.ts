@@ -1,5 +1,5 @@
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins'
-import type { PluginCommandDefinition } from '../../../packages/contracts/src/plugins/page'
+import type { WorkflowPluginManifest } from '@presto/contracts/plugins'
+import type { PluginCommandDefinition } from '@presto/contracts/plugins/page'
 
 export interface MountedPluginCommand extends PluginCommandDefinition {
   kind: 'command'

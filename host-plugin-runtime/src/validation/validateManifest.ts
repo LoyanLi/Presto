@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import type { WorkflowDefinition, WorkflowPluginManifest } from '../../../packages/contracts/src'
+import type { WorkflowDefinition, WorkflowPluginManifest } from '@presto/contracts'
 
 export interface ManifestValidationIssue {
   field: string

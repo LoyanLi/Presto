@@ -6,7 +6,7 @@ import type {
   StripSilenceExecuteResponse,
   StripSilenceOpenRequest,
   StripSilenceOpenResponse,
-} from '../../contracts/src'
+} from '@presto/contracts'
 import { createAutomationClient } from './clients/automation'
 import { createExportClient } from './clients/export'
 import { createClipClient } from './clients/clip'
@@ -19,8 +19,8 @@ import { createSystemClient } from './clients/system'
 import { createTrackClient } from './clients/track'
 import { createTransportClient } from './clients/transport'
 import { createWorkflowClient } from './clients/workflow'
-import type { PublicCapabilityId } from '../../contracts/src'
-import type { StripSilenceClient } from '../../contracts/src'
+import type { PublicCapabilityId } from '@presto/contracts'
+import type { StripSilenceClient } from '@presto/contracts'
 
 export interface PrestoClientAssemblyContext {
   transport: PrestoTransport

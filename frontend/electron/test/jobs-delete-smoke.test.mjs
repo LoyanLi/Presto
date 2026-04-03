@@ -15,13 +15,8 @@ test('package.json does not expose a deletion smoke command for jobs', async () 
   assert.equal(packageJson.scripts['stage1:smoke'].includes(['jobs', 'delete'].join('-')), false)
 })
 
-test('electron smoke harness does not expose a dedicated deletion smoke target for jobs', async () => {
-  const source = await readFile(path.join(repoRoot, 'frontend/electron/main.mjs'), 'utf8')
+test('formal desktop runtime no longer carries an Electron smoke harness for jobs deletion', async () => {
+  const smokeHarnessPath = path.join(repoRoot, 'frontend/electron/runtime/smokeHarness.mjs')
 
-  const smokeTargetPattern = new RegExp(['jobs', 'delete'].join('-'))
-  const cancelPattern = new RegExp(String.raw`window\.__PRESTO_SMOKE__\.jobs\.cancel\(`)
-  const deletePattern = new RegExp(String.raw`window\.__PRESTO_SMOKE__\.jobs\.delete\(`)
-  assert.doesNotMatch(source, smokeTargetPattern)
-  assert.doesNotMatch(source, cancelPattern)
-  assert.doesNotMatch(source, deletePattern)
+  await assert.rejects(() => readFile(smokeHarnessPath, 'utf8'))
 })

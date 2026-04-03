@@ -5,8 +5,8 @@ import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { CapabilityRequestEnvelope, CapabilityResponseEnvelope, DawTarget } from '../../../packages/contracts/src'
-import type { BackendLogEntry, BackendStatus } from '../../../packages/sdk-runtime/src/clients/backend.ts'
+import type { CapabilityRequestEnvelope, CapabilityResponseEnvelope, DawTarget } from '@presto/contracts'
+import type { BackendLogEntry, BackendStatus } from '@presto/sdk-runtime/clients/backend'
 
 export interface BackendSupervisor {
   start(): Promise<BackendStatus>
@@ -44,22 +44,26 @@ const REQUIRED_PTSL_SYMBOLS = [
 ] as const
 
 export function resolveBackendRoot({
+  explicitBackendRoot = process.env.PRESTO_BACKEND_ROOT,
   currentDir: resolvedCurrentDir = currentDir,
   isPackaged = /(^|[\\/])app\.asar([\\/]|$)/.test(resolvedCurrentDir),
   resourcesPath = process.resourcesPath,
 }: {
+  explicitBackendRoot?: string
   currentDir?: string
   isPackaged?: boolean
   resourcesPath?: string
 } = {}): string {
+  if (explicitBackendRoot) {
+    return path.resolve(explicitBackendRoot)
+  }
+
   if (isPackaged) {
     return path.resolve(resourcesPath, 'backend/presto')
   }
 
   return path.resolve(resolvedCurrentDir, '../../../backend/presto')
 }
-
-const backendRoot = resolveBackendRoot()
 
 function pythonSupportsModernPtsl(pythonBin: string): boolean {
   const probeScript = `
@@ -206,6 +210,7 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
   const spawnImpl = options.spawnImpl ?? spawn
   const resolvePort = options.resolvePortImpl ?? resolveAvailablePort
   const resolvePythonBin = options.resolvePythonBinImpl ?? resolveBackendPythonBin
+  const resolveBackendWorkingDir = () => path.resolve(resolveBackendRoot(), '..')
   const log = (level: 'info' | 'warn' | 'error', message: string, details?: Record<string, unknown>) => {
     options.onLog?.({
       source: 'backend.supervisor',
@@ -282,8 +287,8 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
       lastError = null
       transition('starting')
       currentPort = await resolvePort(DEFAULT_PORT)
-      processHandle = spawnImpl(resolvePythonBin(), ['main_api.py', '--host', '127.0.0.1', '--port', String(currentPort)], {
-        cwd: backendRoot,
+      processHandle = spawnImpl(resolvePythonBin(), ['-m', 'presto.main_api', '--host', '127.0.0.1', '--port', String(currentPort)], {
+        cwd: resolveBackendWorkingDir(),
         env: {
           ...process.env,
           PYTHONUNBUFFERED: '1',

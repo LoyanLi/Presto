@@ -19,7 +19,7 @@ import type {
   TrackSelectResponse,
   TrackSoloSetRequest,
   TrackSoloSetResponse,
-} from '../../../contracts/src'
+} from '@presto/contracts'
 import type { PrestoClientAssemblyContext } from '../createPrestoClient'
 
 const invokeCapability = async <TRequest, TResponse>(

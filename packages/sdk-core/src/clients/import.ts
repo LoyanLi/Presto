@@ -7,7 +7,7 @@ import type {
   ImportRunStartRequest,
   ImportRunStartResponse,
   PublicCapabilityId,
-} from '../../../contracts/src'
+} from '@presto/contracts'
 import type { PrestoClientAssemblyContext } from '../createPrestoClient'
 
 const invokeCapability = async <TRequest, TResponse>(

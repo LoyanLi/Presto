@@ -93,7 +93,7 @@ export const PUBLIC_CAPABILITY_IDS = CAPABILITY_REGISTRY.filter((definition) => 
 }
 
 function generatePyCapabilityCatalog() {
-  const outDir = path.join(repoRoot, 'backend', 'import', 'presto', 'application', 'capabilities')
+  const outDir = path.join(repoRoot, 'backend', 'presto', 'application', 'capabilities')
   ensureDir(outDir)
 
   const definitions = capabilities

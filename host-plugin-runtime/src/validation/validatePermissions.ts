@@ -1,4 +1,4 @@
-import type { PublicCapabilityId, WorkflowPluginManifest } from '../../../packages/contracts/src'
+import type { PublicCapabilityId, WorkflowPluginManifest } from '@presto/contracts'
 
 export interface PermissionValidationIssue {
   field: string

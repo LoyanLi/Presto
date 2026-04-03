@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { DawTarget, PrestoClient } from '../../packages/contracts/src'
-import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
-import type { DawAdapterSnapshot } from '../../packages/sdk-runtime/src/clients/backend'
+import type { DawTarget, PrestoClient } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
+import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { translateHost } from '../i18n'
 
 type HostDawStatusState = {

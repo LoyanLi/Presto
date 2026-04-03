@@ -1,4 +1,5 @@
 import React from 'react'
+import { convertFileSrc, isTauri } from '@tauri-apps/api/core'
 
 import type {
   PluginAutomationItemDefinition,
@@ -7,14 +8,19 @@ import type {
   PluginPageProps,
   PluginStorage,
   PrestoClient,
-  WorkflowPluginManifest,
   WorkflowPluginModule,
-} from '../../packages/contracts/src'
-import { activatePlugin } from '../../host-plugin-runtime/src/lifecycle/activatePlugin'
-import { mountPluginCommands } from '../../host-plugin-runtime/src/mounting/mountPluginCommands'
-import { mountPluginNavigation } from '../../host-plugin-runtime/src/mounting/mountPluginNavigation'
-import { mountPluginPages } from '../../host-plugin-runtime/src/mounting/mountPluginPages'
-import { createPluginRuntime } from '../../host-plugin-runtime/src/permissions/createPluginRuntime'
+} from '@presto/contracts'
+import type {
+  PluginRuntimeIssue,
+  PluginRuntimeListResult,
+} from '@presto/sdk-runtime/clients/plugins'
+import {
+  activatePlugin,
+  createPluginRuntime,
+  mountPluginCommands,
+  mountPluginNavigation,
+  mountPluginPages,
+} from '../../host-plugin-runtime/browser'
 import type {
   HostAutomationEntry,
   HostPluginHomeEntry,
@@ -26,52 +32,6 @@ import type {
   HostRenderedPluginPage,
 } from './pluginHostTypes'
 
-export interface PluginHostBridgeIssue {
-  category: string
-  reason: string
-  pluginRoot?: string
-  manifestPath?: string
-}
-
-export interface PluginHostBridgePluginRecord {
-  pluginId: string
-  displayName: string
-  version: string
-  pluginRoot: string
-  entryPath: string
-  manifest: WorkflowPluginManifest
-  settingsPages?: NonNullable<WorkflowPluginManifest['settingsPages']>
-  loadable: boolean
-}
-
-export interface PluginHostBridgeListResult {
-  managedPluginsRoot: string
-  plugins: PluginHostBridgePluginRecord[]
-  issues: PluginHostBridgeIssue[]
-}
-
-export interface PluginHostBridgeInstallResult {
-  ok: boolean
-  cancelled?: boolean
-  managedPluginsRoot: string
-  plugin?: PluginHostBridgePluginRecord
-  issues: PluginHostBridgeIssue[]
-}
-
-export interface PluginHostBridgeUninstallResult {
-  ok: boolean
-  managedPluginsRoot: string
-  pluginId: string
-  issues: PluginHostBridgeIssue[]
-}
-
-export interface PluginHostBridge {
-  listPlugins(): Promise<PluginHostBridgeListResult>
-  installFromDirectory(overwrite?: boolean): Promise<PluginHostBridgeInstallResult>
-  installFromZip(overwrite?: boolean): Promise<PluginHostBridgeInstallResult>
-  uninstall(pluginId: string): Promise<PluginHostBridgeUninstallResult>
-}
-
 export interface LoadedHostPlugins {
   automationEntries: HostAutomationEntry[]
   homeEntries: HostPluginHomeEntry[]
@@ -80,7 +40,7 @@ export interface LoadedHostPlugins {
 }
 
 export interface LoadHostPluginsInput {
-  catalog: PluginHostBridgeListResult
+  catalog: PluginRuntimeListResult
   locale: PluginLocaleContext
   presto: PrestoClient
 }
@@ -94,8 +54,43 @@ type SettingsSaveFunction = (
 
 const inMemoryStorage = new Map<string, string>()
 
-function toFileUrl(pathValue: string): string {
-  return pathValue.startsWith('file://') ? pathValue : new URL(pathValue, 'file://').href
+function encodeTauriAssetPath(pathValue: string): string {
+  const normalizedPath = pathValue.replace(/\\/g, '/')
+  const hasLeadingSlash = normalizedPath.startsWith('/')
+  const segments = normalizedPath.split('/').filter(Boolean).map((segment) => encodeURIComponent(segment))
+
+  if (!hasLeadingSlash) {
+    return `/${segments.join('/')}`
+  }
+
+  const [firstSegment = '', ...remainingSegments] = segments
+  const encodedRootedFirstSegment = encodeURIComponent(`/${decodeURIComponent(firstSegment)}`)
+  return `/${[encodedRootedFirstSegment, ...remainingSegments].join('/')}`
+}
+
+function toRuntimeAssetUrl(pathValue: string): string {
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(pathValue)) {
+    return pathValue
+  }
+
+  if (isTauri()) {
+    return convertFileSrc(pathValue)
+  }
+
+  return new URL(pathValue, 'file://').href
+}
+
+export function toRuntimeModuleUrl(pathValue: string): string {
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(pathValue)) {
+    return pathValue
+  }
+
+  if (isTauri()) {
+    const runtimeAssetUrl = convertFileSrc(pathValue)
+    return new URL(encodeTauriAssetPath(pathValue), runtimeAssetUrl).href
+  }
+
+  return new URL(pathValue, 'file://').href
 }
 
 function createHostPluginStorage(): PluginStorage {
@@ -161,7 +156,64 @@ function determineOrigin(pluginId: string): HostPluginOrigin {
   return pluginId.startsWith('official.') ? 'official' : 'installed'
 }
 
-function formatPluginIssue(issue: PluginHostBridgeIssue): HostPluginIssue {
+function buildWorkflowHomeEntry(plugin: LoadHostPluginsInput['catalog']['plugins'][number], page: {
+  pluginId: string
+  pageId: string
+  title: string
+}): HostPluginHomeEntry {
+  return {
+    pluginId: page.pluginId,
+    pageId: page.pageId,
+    title: page.title,
+    description: plugin.manifest.description ?? `${plugin.displayName} plugin page.`,
+    actionLabel: 'Open Plugin',
+  }
+}
+
+function renderPluginLoadFailurePage(title: string, message: string): () => React.ReactElement {
+  return () =>
+    React.createElement(
+      'div',
+      {
+        style: {
+          display: 'grid',
+          gap: 12,
+          padding: 24,
+          borderRadius: 24,
+          border: '1px solid rgba(188, 195, 208, 0.9)',
+          background: 'rgba(244, 246, 251, 0.96)',
+        },
+      },
+      React.createElement(
+        'div',
+        { style: { display: 'grid', gap: 6 } },
+        React.createElement('h2', { style: { margin: 0, fontSize: 20, fontWeight: 600 } }, title),
+        React.createElement(
+          'p',
+          { style: { margin: 0, fontSize: 14, lineHeight: 1.5, color: 'rgba(80, 88, 102, 0.95)' } },
+          'This workflow failed to load in the renderer.',
+        ),
+      ),
+      React.createElement(
+        'pre',
+        {
+          style: {
+            margin: 0,
+            padding: 12,
+            borderRadius: 16,
+            overflowX: 'auto',
+            whiteSpace: 'pre-wrap',
+            fontSize: 12,
+            lineHeight: 1.5,
+            background: 'rgba(255, 255, 255, 0.92)',
+          },
+        },
+        message,
+      ),
+    )
+}
+
+function formatPluginIssue(issue: PluginRuntimeIssue): HostPluginIssue {
   if (issue.reason.startsWith('manifest_validation:')) {
     const [, field = 'manifest', detail = 'validation_failed'] = issue.reason.split(':')
     return {
@@ -200,13 +252,51 @@ function formatPluginIssue(issue: PluginHostBridgeIssue): HostPluginIssue {
   }
 }
 
+function extractStaticModuleImports(sourceText: string): string[] {
+  const importMatches = sourceText.matchAll(/import\s+(?:[^'"]+?\s+from\s+)?['"]([^'"]+)['"]/g)
+  return Array.from(new Set(Array.from(importMatches, (match) => match[1]).filter(Boolean)))
+}
+
+async function inspectModuleImportFailure(entryPath: string, importUrl: string, error: unknown): Promise<string> {
+  const diagnostics: string[] = []
+  const message = error instanceof Error ? error.message : 'module_import_failed'
+  diagnostics.push(message)
+  diagnostics.push(`entryPath: ${entryPath}`)
+  diagnostics.push(`importUrl: ${importUrl}`)
+
+  if (isTauri()) {
+    diagnostics.push(`assetUrl: ${convertFileSrc(entryPath)}`)
+  }
+
+  if (typeof fetch === 'function') {
+    try {
+      const response = await fetch(importUrl)
+      diagnostics.push(`fetch.ok: ${response.ok}`)
+      diagnostics.push(`fetch.status: ${response.status}`)
+      diagnostics.push(`fetch.contentType: ${response.headers.get('content-type') ?? 'unknown'}`)
+      const sourceText = await response.text()
+      diagnostics.push(`fetch.length: ${sourceText.length}`)
+      const staticImports = extractStaticModuleImports(sourceText)
+      if (staticImports.length > 0) {
+        diagnostics.push(`entryImports: ${staticImports.join(', ')}`)
+      }
+    } catch (fetchError) {
+      diagnostics.push(`fetchError: ${fetchError instanceof Error ? fetchError.message : 'unknown_fetch_error'}`)
+    }
+  }
+
+  return diagnostics.join('\n')
+}
+
 async function loadRendererPluginModule(entryPath: string): Promise<{
   ok: boolean
   module?: PluginModuleNamespace
-  issue?: PluginHostBridgeIssue
+  issue?: PluginRuntimeIssue
 }> {
+  const importUrl = toRuntimeModuleUrl(entryPath)
+
   try {
-    const moduleNamespace = (await import(/* @vite-ignore */ toFileUrl(entryPath))) as PluginModuleNamespace
+    const moduleNamespace = (await import(/* @vite-ignore */ importUrl)) as PluginModuleNamespace
     if (typeof moduleNamespace.activate !== 'function' || typeof moduleNamespace.manifest !== 'object') {
       return {
         ok: false,
@@ -226,7 +316,7 @@ async function loadRendererPluginModule(entryPath: string): Promise<{
       ok: false,
       issue: {
         category: 'entry_load',
-        reason: error instanceof Error ? error.message : 'module_import_failed',
+        reason: await inspectModuleImportFailure(entryPath, importUrl, error),
       },
     }
   }
@@ -245,7 +335,7 @@ function ensurePluginStyle(pluginId: string, styleEntryPath: string | undefined,
   const link = document.createElement('link')
   link.id = styleId
   link.rel = 'stylesheet'
-  link.href = toFileUrl(`${pluginRoot}/${styleEntryPath}`.replace(/\/+/g, '/'))
+  link.href = toRuntimeAssetUrl(`${pluginRoot}/${styleEntryPath}`.replace(/\/+/g, '/'))
   document.head.append(link)
 }
 
@@ -274,15 +364,33 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const logger = createHostPluginLogger()
 
   for (const plugin of input.catalog.plugins) {
+    const mountedPages = mountPluginPages(plugin.manifest)
     const loaded = await loadRendererPluginModule(plugin.entryPath)
     if (!loaded.ok || !loaded.module) {
+      const reason = loaded.issue?.reason ?? 'module_import_failed'
       issues.push(
         formatPluginIssue({
           category: 'entry_load',
-          reason: loaded.issue?.reason ?? 'module_import_failed',
+          reason,
           pluginRoot: plugin.pluginRoot,
         }),
       )
+      const targetRecord = pluginRecords.find((record) => record.pluginId === plugin.pluginId)
+      if (targetRecord) {
+        targetRecord.status = 'error'
+      }
+      for (const page of mountedPages) {
+        pages.push({
+          pluginId: page.pluginId,
+          pageId: page.pageId,
+          title: page.title,
+          mount: page.mount,
+          render: renderPluginLoadFailurePage(page.title, reason),
+        })
+        if (page.mount === 'workspace') {
+          homeEntries.push(buildWorkflowHomeEntry(plugin, page))
+        }
+      }
       continue
     }
 
@@ -315,7 +423,6 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     ensurePluginStyle(plugin.pluginId, plugin.manifest.styleEntry, plugin.pluginRoot)
     mountPluginNavigation(plugin.manifest)
     mountPluginCommands(plugin.manifest)
-    const mountedPages = mountPluginPages(plugin.manifest)
 
     for (const automationItem of (plugin.manifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {
       automationEntries.push({
@@ -331,13 +438,28 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     for (const page of mountedPages) {
       const pageComponent = loaded.module[page.componentExport]
       if (typeof pageComponent !== 'function') {
+        const reason = `missing_page_export:${page.componentExport}`
         issues.push(
           formatPluginIssue({
             category: 'entry_load',
-            reason: `missing_page_export:${page.componentExport}`,
+            reason,
             pluginRoot: plugin.pluginRoot,
           }),
         )
+        const targetRecord = pluginRecords.find((record) => record.pluginId === plugin.pluginId)
+        if (targetRecord) {
+          targetRecord.status = 'error'
+        }
+        pages.push({
+          pluginId: page.pluginId,
+          pageId: page.pageId,
+          title: page.title,
+          mount: page.mount,
+          render: renderPluginLoadFailurePage(page.title, reason),
+        })
+        if (page.mount === 'workspace') {
+          homeEntries.push(buildWorkflowHomeEntry(plugin, page))
+        }
         continue
       }
 
@@ -356,13 +478,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       })
 
       if (page.mount === 'workspace') {
-        homeEntries.push({
-          pluginId: page.pluginId,
-          pageId: page.pageId,
-          title: page.title,
-          description: plugin.manifest.description ?? `${plugin.displayName} plugin page.`,
-          actionLabel: 'Open Plugin',
-        })
+        homeEntries.push(buildWorkflowHomeEntry(plugin, page))
       }
     }
 

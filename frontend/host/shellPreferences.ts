@@ -1,4 +1,4 @@
-import type { DawTarget } from '../../packages/contracts/src'
+import type { DawTarget } from '@presto/contracts'
 import type { HostLanguagePreference } from './i18n'
 
 export type HostShellLanguage = HostLanguagePreference
