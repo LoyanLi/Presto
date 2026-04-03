@@ -1,0 +1,19 @@
+{
+  "name": "@presto/contracts",
+  "version": "0.3.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./capabilities": "./src/capabilities/index.ts",
+    "./capabilities/clients": "./capabilities/clients.ts",
+    "./plugins": "./plugins/index.ts",
+    "./plugins/context": "./plugins/context.ts",
+    "./plugins/logger": "./plugins/logger.ts",
+    "./plugins/manifest": "./plugins/manifest.ts",
+    "./plugins/module": "./plugins/module.ts",
+    "./plugins/page": "./plugins/page.ts",
+    "./plugins/settings": "./plugins/settings.ts",
+    "./plugins/storage": "./plugins/storage.ts"
+  }
+}

@@ -1,5 +1,5 @@
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins'
-import type { PluginNavigationItem } from '../../../packages/contracts/src/plugins/page'
+import type { WorkflowPluginManifest } from '@presto/contracts/plugins'
+import type { PluginNavigationItem } from '@presto/contracts/plugins/page'
 
 export interface MountedPluginNavigationItem extends PluginNavigationItem {
   kind: 'navigation'

@@ -1,0 +1,12 @@
+{
+  "name": "@presto/sdk-core",
+  "version": "0.3.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@presto/contracts": "file:../contracts"
+  },
+  "exports": {
+    ".": "./index.ts"
+  }
+}

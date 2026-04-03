@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -42,22 +43,27 @@ function installWindowStub() {
 async function loadPreferencesModule() {
   if (!preferencesModulePromise) {
     preferencesModulePromise = (async () => {
-      const tempDir = await mkdtemp(path.join(repoRoot, '.tmp-host-shell-preferences-test-'))
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'presto-host-shell-preferences-test-'))
       const outfile = path.join(tempDir, 'shell-preferences.mjs')
-      await esbuild.build({
-        entryPoints: [path.join(repoRoot, 'frontend/host/shellPreferences.ts')],
-        bundle: true,
-        format: 'esm',
-        platform: 'node',
-        target: 'node20',
-        outfile,
-        loader: {
-          '.ts': 'ts',
-          '.tsx': 'tsx',
-        },
-      })
+      try {
+        await symlink(path.join(repoRoot, 'node_modules'), path.join(tempDir, 'node_modules'), 'dir')
+        await esbuild.build({
+          entryPoints: [path.join(repoRoot, 'frontend/host/shellPreferences.ts')],
+          bundle: true,
+          format: 'esm',
+          platform: 'node',
+          target: 'node20',
+          outfile,
+          loader: {
+            '.ts': 'ts',
+            '.tsx': 'tsx',
+          },
+        })
 
-      return import(pathToFileURL(outfile).href)
+        return await import(pathToFileURL(outfile).href)
+      } finally {
+        await rm(tempDir, { recursive: true, force: true })
+      }
     })()
   }
 

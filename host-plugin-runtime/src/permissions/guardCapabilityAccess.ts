@@ -1,5 +1,5 @@
-import type { PrestoClient } from '../../../packages/contracts/src/capabilities/clients'
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins/manifest'
+import type { PrestoClient } from '@presto/contracts/capabilities/clients'
+import type { WorkflowPluginManifest } from '@presto/contracts/plugins/manifest'
 
 class PluginPermissionError extends Error {
   readonly code = 'PLUGIN_PERMISSION_DENIED'
@@ -64,6 +64,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
   const track = () => requireService(presto.track, pluginId, 'presto.track')
   const clip = () => requireService(presto.clip, pluginId, 'presto.clip')
   const transport = () => requireService(presto.transport, pluginId, 'presto.transport')
+  const workflow = () => requireService(presto.workflow, pluginId, 'presto.workflow')
   const importClient = () => requireService(presto.import, pluginId, 'presto.import')
   const stripSilence = () => requireService(presto.stripSilence, pluginId, 'presto.stripSilence')
   const exportClient = () => requireService(presto.export, pluginId, 'presto.export')
@@ -290,6 +291,17 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         'transport.getStatus()',
         () => transport().getStatus(),
       ),
+    },
+    workflow: {
+      run: {
+        start: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'workflow.run.start',
+          'workflow.run.start()',
+          (request) => workflow().run.start(request),
+        ),
+      },
     },
     import: {
       analyze: createCapabilityGuard(

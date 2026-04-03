@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import type { PrestoClient } from '../../../packages/contracts/src'
+import type { PrestoClient } from '@presto/contracts'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'

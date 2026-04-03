@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react'
 
-import type { PrestoClient } from '../../packages/contracts/src'
+import type { PrestoClient } from '@presto/contracts'
 import {
   Badge,
   Button,

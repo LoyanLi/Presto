@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import type { PrestoClient } from '../../../../packages/contracts/src'
+import type { PrestoClient } from '@presto/contracts'
 import { Button, Select } from '../../../ui'
 import { hostShellColors } from '../../hostShellColors'
 import type { HostLocale } from '../../i18n'

@@ -1,4 +1,4 @@
-import type { WorkflowPluginModule } from '../../../packages/contracts/src'
+import type { WorkflowPluginModule } from '@presto/contracts'
 
 export interface PluginModuleLoadIssue {
   entryPath: string

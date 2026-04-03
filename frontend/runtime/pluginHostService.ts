@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import type { DawTarget, WorkflowDefinition, WorkflowPluginManifest } from '../../../packages/contracts/src'
-import { discoverPlugins, loadPluginModule } from '../../../host-plugin-runtime/src'
+import type { DawTarget, WorkflowDefinition, WorkflowPluginManifest } from '@presto/contracts'
+import { discoverPlugins, loadPluginModule } from '../../host-plugin-runtime/index'
 
 export type PluginIssueCategory =
   | 'manifest'

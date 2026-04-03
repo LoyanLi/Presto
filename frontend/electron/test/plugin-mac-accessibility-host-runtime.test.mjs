@@ -6,7 +6,7 @@ import test from 'node:test'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
-const runtimeModulePath = path.resolve(currentDir, '../runtime/macAccessibilityRuntime.mjs')
+const runtimeModulePath = path.resolve(currentDir, '../../runtime/macAccessibilityRuntime.mjs')
 const runtimeModule = await import(pathToFileURL(runtimeModulePath).href)
 const { createMacAccessibilityRuntime } = runtimeModule
 
@@ -133,20 +133,26 @@ test('macAccessibility runtime returns unsupported on non-macOS and does not exe
   assert.equal(callCount, 0)
 })
 
-test('electron runtime bridge and main process register macAccessibility channels', async () => {
+test('shared runtime modules keep automation and macAccessibility behavior decoupled from desktop host shells', async () => {
   const runtimeBridgeSource = await readFile(path.join(repoRoot, 'frontend/electron/runtime/runtimeBridge.ts'), 'utf8')
-  const mainSource = await readFile(path.join(repoRoot, 'frontend/electron/main.mjs'), 'utf8')
-  const automationRuntimeSource = await readFile(path.join(repoRoot, 'frontend/electron/runtime/automationRuntime.mjs'), 'utf8')
+  const desktopBridgeSource = await readFile(path.join(repoRoot, 'frontend/desktop/runtimeBridge.ts'), 'utf8')
+  const tauriBridgeSource = await readFile(path.join(repoRoot, 'frontend/tauri/runtimeBridge.ts'), 'utf8')
+  const automationRuntimeSource = await readFile(path.join(repoRoot, 'frontend/runtime/automationRuntime.mjs'), 'utf8')
+  const sidecarSource = await readFile(path.join(repoRoot, 'frontend/sidecar/main.ts'), 'utf8')
 
   assert.match(runtimeBridgeSource, /macAccessibility:\s*\{/)
   assert.match(runtimeBridgeSource, /preflight:\s*'macAccessibility:preflight'/)
   assert.match(runtimeBridgeSource, /runScript:\s*'macAccessibility:run-script'/)
   assert.match(runtimeBridgeSource, /runFile:\s*'macAccessibility:run-file'/)
-  assert.match(mainSource, /createAutomationRuntime/)
-  assert.match(mainSource, /ipcMain\.handle\('automation:list-definitions'/)
-  assert.match(mainSource, /ipcMain\.handle\('automation:run-definition'/)
+  assert.match(desktopBridgeSource, /const macAccessibility: MacAccessibilityRuntimeClient = \{/)
+  assert.match(desktopBridgeSource, /macAccessibility,/)
+  assert.match(tauriBridgeSource, /mac-accessibility\.preflight/)
+  assert.match(tauriBridgeSource, /mac-accessibility\.script\.run/)
+  assert.match(tauriBridgeSource, /mac-accessibility\.file\.run/)
   assert.match(automationRuntimeSource, /runDefinition\(request = \{\}\)/)
-  assert.match(mainSource, /ipcMain\.handle\('macAccessibility:preflight'/)
-  assert.match(mainSource, /ipcMain\.handle\('macAccessibility:run-script'/)
-  assert.match(mainSource, /ipcMain\.handle\('macAccessibility:run-file'/)
+  assert.match(sidecarSource, /automation\.definition\.list/)
+  assert.match(sidecarSource, /automation\.definition\.run/)
+  assert.match(sidecarSource, /mac-accessibility\.preflight/)
+  assert.match(sidecarSource, /mac-accessibility\.script\.run/)
+  assert.match(sidecarSource, /mac-accessibility\.file\.run/)
 })

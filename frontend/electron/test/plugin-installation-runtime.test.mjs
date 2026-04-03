@@ -8,7 +8,7 @@ import esbuild from 'esbuild'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
-const serviceEntry = path.join(repoRoot, 'frontend/electron/runtime/pluginHostService.ts')
+const serviceEntry = path.join(repoRoot, 'frontend/runtime/pluginHostService.ts')
 
 let serviceModulePromise = null
 

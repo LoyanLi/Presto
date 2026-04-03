@@ -3,17 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import uvicorn
-
-project_root = Path(__file__).resolve().parents[1]
-project_root_str = str(project_root)
-if project_root_str not in sys.path:
-    sys.path.insert(0, project_root_str)
 
 from presto.application.service_container import build_service_container
 from presto.domain.errors import PrestoError

@@ -8,7 +8,7 @@ import esbuild from 'esbuild'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
-const entry = path.join(repoRoot, 'frontend/electron/runtime/backendSupervisor.ts')
+const entry = path.join(repoRoot, 'frontend/runtime/backendSupervisor.ts')
 
 let modulePromise = null
 
@@ -218,9 +218,62 @@ test('backend supervisor uses the resolved python binary when starting the backe
   assert.equal(response.success, true)
   assert.equal(spawnCalls.length, 1)
   assert.equal(spawnCalls[0]?.command, '/usr/local/bin/python3')
+  assert.deepEqual(spawnCalls[0]?.args, ['-m', 'presto.main_api', '--host', '127.0.0.1', '--port', '18500'])
+  assert.equal(path.basename(String(spawnCalls[0]?.options?.cwd ?? '')), 'backend')
+  assert.doesNotMatch(String(spawnCalls[0]?.options?.cwd ?? ''), /backend\/presto$/)
   t.after(async () => {
     await supervisor.stop()
   })
+})
+
+test('backend supervisor resolves backend root when the supervisor is created, not at module load', async (t) => {
+  const { createBackendSupervisor } = await loadSupervisorModule()
+  const previousBackendRoot = process.env.PRESTO_BACKEND_ROOT
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'presto-backend-root-'))
+  const explicitBackendRoot = path.join(tempRoot, 'backend', 'presto')
+  const expectedWorkingDir = path.join(tempRoot, 'backend')
+  const spawnCalls = []
+
+  let supervisor = null
+  try {
+    process.env.PRESTO_BACKEND_ROOT = explicitBackendRoot
+
+    supervisor = createBackendSupervisor({
+      resolvePortImpl: async () => 18500,
+      resolvePythonBinImpl: () => '/usr/local/bin/python3',
+      requestJsonImpl: async (method, _port, pathname, _body) => {
+        if (method === 'GET' && pathname === '/api/v1/health') {
+          return { ok: true }
+        }
+        if (method === 'POST' && pathname === '/api/v1/capabilities/invoke') {
+          return { success: true, capability: 'system.health', data: { ok: true } }
+        }
+        throw new Error(`unexpected_request:${method}:${pathname}`)
+      },
+      spawnImpl: (command, args, options) => {
+        spawnCalls.push({ command, args, options })
+        return createFakeProcess()
+      },
+    })
+
+    const response = await supervisor.invokeCapability({
+      requestId: 'req-dynamic-backend-root',
+      capability: 'system.health',
+      payload: {},
+    })
+
+    assert.equal(response.success, true)
+    assert.equal(spawnCalls.length, 1)
+    assert.equal(spawnCalls[0]?.options?.cwd, expectedWorkingDir)
+  } finally {
+    await supervisor?.stop()
+    if (previousBackendRoot === undefined) {
+      delete process.env.PRESTO_BACKEND_ROOT
+    } else {
+      process.env.PRESTO_BACKEND_ROOT = previousBackendRoot
+    }
+    await rm(tempRoot, { recursive: true, force: true })
+  }
 })
 
 test('resolveBackendRoot points to unpacked backend in packaged mode', async () => {
@@ -228,7 +281,7 @@ test('resolveBackendRoot points to unpacked backend in packaged mode', async () 
 
   assert.equal(
     resolveBackendRoot({
-      currentDir: '/tmp/Presto.app/Contents/Resources/app.asar/frontend/electron/.stage1',
+      currentDir: '/tmp/Presto.app/Contents/Resources/app.asar/build/stage1/electron',
       isPackaged: true,
       resourcesPath: '/tmp/Presto.app/Contents/Resources',
     }),
@@ -241,10 +294,24 @@ test('resolveBackendRoot points to repo backend in development mode', async () =
 
   assert.equal(
     resolveBackendRoot({
-      currentDir: '/worktree/frontend/electron/.stage1',
+      currentDir: '/worktree/build/stage1/electron',
       isPackaged: false,
       resourcesPath: '/ignored',
     }),
     '/worktree/backend/presto',
+  )
+})
+
+test('resolveBackendRoot prefers an explicit backend root for sidecar packaging', async () => {
+  const { resolveBackendRoot } = await loadSupervisorModule()
+
+  assert.equal(
+    resolveBackendRoot({
+      explicitBackendRoot: '/Applications/Presto.app/Contents/Resources/backend/presto',
+      currentDir: '/Applications/Presto.app/Contents/Resources/sidecar',
+      isPackaged: false,
+      resourcesPath: '/ignored',
+    }),
+    '/Applications/Presto.app/Contents/Resources/backend/presto',
   )
 })

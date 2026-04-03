@@ -1,4 +1,4 @@
-import type { PluginContext, WorkflowPluginManifest, WorkflowPluginModule } from '../../../packages/contracts/src'
+import type { PluginContext, WorkflowPluginManifest, WorkflowPluginModule } from '@presto/contracts'
 
 export interface PluginActivationIssue {
   pluginId: string

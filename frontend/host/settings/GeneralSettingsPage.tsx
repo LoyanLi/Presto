@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import type { DawTarget } from '../../../packages/contracts/src'
-import type { AppViewLogResult } from '../../../packages/sdk-runtime/src/clients/app'
+import type { DawTarget } from '@presto/contracts'
+import type { AppViewLogResult } from '@presto/sdk-runtime/clients/app'
 
 import { Switch } from '../../ui'
 import { hostShellColors } from '../hostShellColors'

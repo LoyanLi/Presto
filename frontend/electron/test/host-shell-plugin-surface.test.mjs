@@ -287,7 +287,7 @@ test('home surface renders plugin launch cards and settings surface renders plug
   assert.doesNotMatch(automationMarkup, /Single-shot automation tools live here/)
 })
 
-test('workflows and automation entries are filtered by live daw adapter snapshot while opened workspace stays mounted', async () => {
+test('workflow and automation entries stay visible even when the live daw adapter snapshot lacks required modules', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const sharedProps = {
     developerPresto: {},
@@ -313,7 +313,7 @@ test('workflows and automation entries are filtered by live daw adapter snapshot
   )
 
   assert.match(workflowsMarkup, /Import Workflow/)
-  assert.doesNotMatch(workflowsMarkup, /Export Workflow/)
+  assert.match(workflowsMarkup, /Export Workflow/)
   assert.doesNotMatch(workflowsMarkup, /Audio Cleanup/)
 
   const automationMarkup = renderToStaticMarkup(
@@ -324,6 +324,7 @@ test('workflows and automation entries are filtered by live daw adapter snapshot
   )
 
   assert.match(automationMarkup, /Split Stereo To Mono/)
+  assert.doesNotMatch(automationMarkup, /Audio Cleanup/)
 
   const workspaceMarkup = renderToStaticMarkup(
     React.createElement(HostShellApp, {

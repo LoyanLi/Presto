@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement } from 'react'
 
-import type { PrestoClient } from '../../packages/contracts/src'
-import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
+import type { PrestoClient } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
 import { Button, EmptyState, ShellSurface } from '../ui'
 import { AutomationSurface } from './automation/AutomationSurface'
 import type { HostShellViewId } from './hostShellState'

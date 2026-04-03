@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import type { PrestoClient } from '../../packages/contracts/src'
+import type { PrestoClient } from '@presto/contracts'
 import { Button, ShellSurface } from '../ui'
 import { DeveloperCapabilityConsole } from './DeveloperCapabilityConsole'
 

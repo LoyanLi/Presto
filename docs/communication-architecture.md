@@ -2,8 +2,8 @@
 
 本文档面向内部开发者，描述 Presto 当前已经实现的通信路径、协议分层、消息边界与权限控制。Presto 的通信不是单一协议，而是三段式链路：
 
-1. Renderer 与 Electron Main 的 IPC 通信
-2. Main 与 Backend 的本地 HTTP 通信
+1. Renderer 与 Tauri 宿主的 command 通信
+2. Tauri sidecar 与 Backend 的本地 HTTP 通信
 3. Plugin 与 Host 的受限能力调用与受限 Runtime 调用
 
 整个系统的关键目标不是“通信通了”，而是“跨边界调用仍然保持可验证、可裁剪、可追踪”。
@@ -15,9 +15,13 @@
 ```text
 React Host / Plugin UI
         │
-        │ Electron IPC
+        │ Tauri invoke
         ▼
-Electron Main Runtime Handlers
+Tauri Host Commands
+        │
+        │ stdio RPC
+        ▼
+Node Sidecar Runtime
         │
         ├── 本地桌面服务
         │   ├── fs
@@ -39,22 +43,23 @@ Electron Main Runtime Handlers
 
 插件不直接连后端 HTTP，也不直接连主进程私有对象。插件只通过宿主注入的受限 `PluginContext` 访问系统。
 
-当前 Renderer 侧也不是长期暴露宿主桥，而是先从 `preload.ts` 暴露的 `__PRESTO_BOOTSTRAP__` 里一次性取走 client/runtime/插件管理桥，再在宿主层继续装配。
+当前 Renderer 侧不再依赖 preload 或全局 bootstrap，而是通过 Tauri runtime bridge 直接装配 client/runtime。
 
-## 2. 第一段通信：Renderer 到 Main
+## 2. 第一段通信：Renderer 到 Tauri
 
 ### 2.1 通信形式
 
-Renderer 到 Main 当前使用 Electron IPC。
+Renderer 到宿主当前使用 Tauri invoke。
 
 关键位置：
 
-- 通道定义：`frontend/electron/runtime/runtimeBridge.ts`
-- 处理器注册：`frontend/electron/runtime/registerRuntimeHandlers.mjs`
+- operation 定义：`frontend/tauri/runtimeBridge.ts`
+- 共享 runtime 装配：`frontend/desktop/runtimeBridge.ts`
+- command 实现：`src-tauri/src/main.rs`
 
 ### 2.2 当前通道领域
 
-当前 IPC 通道按领域分组：
+当前宿主 operation 按领域分组：
 
 - `app`
 - `automation`
@@ -65,33 +70,33 @@ Renderer 到 Main 当前使用 Electron IPC。
 - `window`
 - `mobileProgress`
 - `macAccessibility`
-- `plugins`（handler 侧）
+- `plugins`
 
-这里最重要的设计点是：Renderer 并不直接使用分散的 `ipcRenderer.invoke("xxx")`，而是通过 `runtimeBridge` 获取类型化 runtime client。
+这里最重要的设计点是：Renderer 并不直接使用分散的 `invoke("xxx")`，而是通过 `runtimeBridge` 获取类型化 runtime client。
 
 ### 2.3 当前典型通道
 
 例如：
 
-- `backend:invoke-capability`
-- `backend:get-status`
-- `plugins:list`
-- `plugins:install-directory`
-- `fs:read-file`
-- `shell:open-external`
-- `window:set-always-on-top`
+- `backend.capability.invoke`
+- `backend.status.get`
+- `plugins.catalog.list`
+- `plugins.catalog.install-directory`
+- `fs.file.read`
+- `shell.external.open`
+- `window.always-on-top.set`
 
-这说明 Main 层承担了一个“系统能力代理层”的角色，而不是单纯窗口控制器。
+这说明宿主层承担了一个“系统能力代理层”的角色，而不是单纯窗口控制器。
 
-## 3. 第二段通信：Main 到 Backend
+## 3. 第二段通信：Sidecar 到 Backend
 
 ### 3.1 通信形式
 
-Main 到 Backend 当前使用本地 HTTP JSON 调用。
+Sidecar 到 Backend 当前使用本地 HTTP JSON 调用。
 
 关键位置：
 
-- `frontend/electron/runtime/backendSupervisor.ts`
+- `frontend/runtime/backendSupervisor.ts`
 - `backend/presto/main_api.py`
 
 ### 3.2 当前职责分配
@@ -178,7 +183,7 @@ Presto 跨层通信里最核心的稳定协议不是 IPC channel，也不是 HTT
 
 ## 6. 宿主 Runtime 协议
 
-除了 capability 协议之外，当前系统还存在一套宿主内部 runtime 协议，供 Electron 宿主装配与 renderer 宿主调用使用。
+除了 capability 协议之外，当前系统还存在一套宿主内部 runtime 协议，供 Tauri 宿主装配与 renderer 宿主调用使用。
 
 当前已出现的 runtime 服务包括：
 

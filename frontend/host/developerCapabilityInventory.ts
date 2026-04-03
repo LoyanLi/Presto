@@ -1,4 +1,4 @@
-import type { PublicCapabilityId } from '../../packages/contracts/src'
+import type { PublicCapabilityId } from '@presto/contracts'
 
 export type CapabilityStatus = 'live' | 'public'
 export type DeveloperCapabilityId =

@@ -1,6 +1,6 @@
 import type { CSSProperties, ChangeEvent, MutableRefObject } from 'react'
 
-import type { WorkflowSettingsFieldDefinition } from '../../../packages/contracts/src'
+import type { WorkflowSettingsFieldDefinition } from '@presto/contracts'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'

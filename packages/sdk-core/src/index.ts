@@ -26,4 +26,4 @@ export type {
   TrackClient,
   TransportClient,
   WorkflowClient,
-} from '../../contracts/src'
+} from '@presto/contracts'

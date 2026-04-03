@@ -1,14 +1,7 @@
 from __future__ import annotations
 
-import sys
 import time
-from pathlib import Path
 from types import SimpleNamespace
-
-project_root = Path(__file__).resolve().parents[2]
-project_root_str = str(project_root)
-if project_root_str not in sys.path:
-    sys.path.insert(0, project_root_str)
 
 from presto.application.capabilities.registry import build_default_capability_registry
 from presto.application.errors.normalizer import ErrorNormalizer

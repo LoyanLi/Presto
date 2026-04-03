@@ -1,4 +1,5 @@
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -47,25 +48,30 @@ export async function buildAndImportModule({
   loader = {},
   jsx = true,
 }) {
-  const tempDir = await mkdtemp(path.join(repoRoot, tempPrefix))
+  const tempDir = await mkdtemp(path.join(tmpdir(), tempPrefix))
   const outfile = path.join(tempDir, outfileName)
 
-  await esbuild.build({
-    entryPoints: [path.join(repoRoot, entryPoint)],
-    bundle: true,
-    format: 'esm',
-    platform: 'node',
-    target: 'node20',
-    outfile,
-    jsx: jsx ? 'automatic' : undefined,
-    external: [...new Set([...muiNodeExternalPackages, ...extraExternal])],
-    loader: {
-      '.png': 'dataurl',
-      '.ts': 'ts',
-      '.tsx': 'tsx',
-      ...loader,
-    },
-  })
+  try {
+    await symlink(path.join(repoRoot, 'node_modules'), path.join(tempDir, 'node_modules'), 'dir')
+    await esbuild.build({
+      entryPoints: [path.join(repoRoot, entryPoint)],
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      target: 'node20',
+      outfile,
+      jsx: jsx ? 'automatic' : undefined,
+      external: [...new Set([...muiNodeExternalPackages, ...extraExternal])],
+      loader: {
+        '.png': 'dataurl',
+        '.ts': 'ts',
+        '.tsx': 'tsx',
+        ...loader,
+      },
+    })
 
-  return import(pathToFileURL(outfile).href)
+    return await import(pathToFileURL(outfile).href)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
 }

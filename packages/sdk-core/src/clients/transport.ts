@@ -9,7 +9,7 @@ import type {
   TransportRecordResponse,
   TransportStopRequest,
   TransportStopResponse,
-} from '../../../contracts/src'
+} from '@presto/contracts'
 import type { PrestoClientAssemblyContext } from '../createPrestoClient'
 
 const invokeCapability = async <TRequest, TResponse>(
