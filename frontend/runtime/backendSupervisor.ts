@@ -65,6 +65,15 @@ export function resolveBackendRoot({
   return path.resolve(resolvedCurrentDir, '../../../backend/presto')
 }
 
+export function resolveBundledPythonBin(resourcesDir = process.env.PRESTO_RESOURCES_DIR): string | null {
+  if (!resourcesDir) {
+    return null
+  }
+
+  const bundledPython = path.resolve(resourcesDir, 'backend', 'python', 'bin', 'python3')
+  return existsSync(bundledPython) ? bundledPython : null
+}
+
 function pythonSupportsModernPtsl(pythonBin: string): boolean {
   const probeScript = `
 import sys
@@ -88,6 +97,11 @@ sys.exit(0 if all(hasattr(pb2, name) for name in required) else 1)
 }
 
 export function resolveBackendPythonBin(): string {
+  const bundledPython = resolveBundledPythonBin()
+  if (bundledPython) {
+    return bundledPython
+  }
+
   const explicitPythonBin = process.env.PRESTO_PYTHON_BIN ?? process.env.PYTHON_BIN
   if (explicitPythonBin) {
     return explicitPythonBin
@@ -209,7 +223,8 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
   const requestImpl = options.requestJsonImpl ?? requestJson
   const spawnImpl = options.spawnImpl ?? spawn
   const resolvePort = options.resolvePortImpl ?? resolveAvailablePort
-  const resolvePythonBin = options.resolvePythonBinImpl ?? resolveBackendPythonBin
+  const resolvePythonBin = () =>
+    resolveBundledPythonBin() ?? (options.resolvePythonBinImpl ? options.resolvePythonBinImpl() : resolveBackendPythonBin())
   const resolveBackendWorkingDir = () => path.resolve(resolveBackendRoot(), '..')
   const log = (level: 'info' | 'warn' | 'error', message: string, details?: Record<string, unknown>) => {
     options.onLog?.({

@@ -17,6 +17,16 @@ def test_track_color_catalog_does_not_expose_apply_via_ui() -> None:
         "ai.key.getStatus",
         "ai.key.set",
         "import.preflight",
+        "session.requireOpen",
+        "track.requireAnySelected",
+        "daw.requireMinimumVersion",
+        "trackColor.requireSupport",
+        "audio.importOne",
+        "audio.importBatch",
+        "export.cancel",
+        "export.isCancelled",
+        "mac.preflightAccessibility",
+        "track.color.applyViaUi",
     ):
         assert capability_id not in capability_ids
 
@@ -39,3 +49,11 @@ def test_capability_catalog_is_loaded_from_generated_source() -> None:
     from presto.application.capabilities import catalog_generated
 
     assert catalog_module.DEFAULT_CAPABILITY_DEFINITIONS is catalog_generated.DEFAULT_CAPABILITY_DEFINITIONS
+
+
+def test_capability_catalog_only_declares_handlers_implemented_by_backend() -> None:
+    from presto.application.handlers.invoker import _CAPABILITY_HANDLERS
+
+    declared_handlers = {definition.handler for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+
+    assert declared_handlers.issubset(set(_CAPABILITY_HANDLERS))

@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '..')
-const outputRoot = path.join(repoRoot, 'build', 'runtime-resources')
+const stagingRoot = path.join(repoRoot, 'src-tauri', 'resources')
+const outputRoot = stagingRoot
+const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resources')
 
 function isIgnoredName(name) {
   return (
@@ -39,12 +41,21 @@ async function copyFiltered(source, destination) {
 async function prepareBackendResources() {
   const backendOutput = path.join(outputRoot, 'backend')
   await mkdir(backendOutput, { recursive: true })
+  await rm(path.join(backendOutput, 'presto'), { recursive: true, force: true })
   await copyFiltered(path.join(repoRoot, 'backend', 'presto'), path.join(backendOutput, 'presto'))
+}
+
+async function prepareSidecarResources() {
+  const sidecarOutput = path.join(outputRoot, 'build')
+  await mkdir(sidecarOutput, { recursive: true })
+  await rm(path.join(sidecarOutput, 'sidecar'), { recursive: true, force: true })
+  await copyFiltered(path.join(repoRoot, 'build', 'sidecar'), path.join(sidecarOutput, 'sidecar'))
 }
 
 async function prepareOfficialPluginResources() {
   const pluginsRoot = path.join(repoRoot, 'plugins', 'official')
   const pluginsOutput = path.join(outputRoot, 'plugins', 'official')
+  await rm(path.join(outputRoot, 'plugins'), { recursive: true, force: true })
   await mkdir(pluginsOutput, { recursive: true })
   const pluginEntries = await readdir(pluginsRoot, { withFileTypes: true })
 
@@ -61,16 +72,18 @@ async function prepareOfficialPluginResources() {
 }
 
 async function prepareAutomationResources() {
+  await rm(path.join(outputRoot, 'frontend'), { recursive: true, force: true })
   await copyFiltered(
     path.join(repoRoot, 'frontend', 'runtime', 'automation'),
     path.join(outputRoot, 'frontend', 'runtime', 'automation'),
   )
 }
 
-await rm(outputRoot, { recursive: true, force: true })
 await mkdir(outputRoot, { recursive: true })
+await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
 
 await Promise.all([
+  prepareSidecarResources(),
   prepareBackendResources(),
   prepareOfficialPluginResources(),
   prepareAutomationResources(),

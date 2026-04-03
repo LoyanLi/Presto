@@ -682,6 +682,31 @@
     "handler": "transport.getStatus"
   },
   {
+    "id": "workflow.run.start",
+    "version": 1,
+    "kind": "job",
+    "domain": "workflow",
+    "visibility": "public",
+    "description": "启动声明式工作流执行",
+    "requestSchema": {
+      "name": "WorkflowRunStartRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "WorkflowRunStartResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "dependsOn": [
+      "jobs"
+    ],
+    "handler": "workflow.run.start"
+  },
+  {
     "id": "import.analyze",
     "version": 1,
     "kind": "query",
@@ -726,6 +751,29 @@
     ],
     "dependsOn": [],
     "handler": "import.cache.save"
+  },
+  {
+    "id": "import.planRunItems",
+    "version": 1,
+    "kind": "query",
+    "domain": "import",
+    "visibility": "public",
+    "description": "规划导入后的轨道后处理动作",
+    "requestSchema": {
+      "name": "ImportPlanRunItemsRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ImportPlanRunItemsResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "dependsOn": [],
+    "handler": "import.planRunItems"
   },
   {
     "id": "import.run.start",
@@ -1058,182 +1106,6 @@
     "handler": "jobs.delete"
   },
   {
-    "id": "session.requireOpen",
-    "version": 1,
-    "kind": "query",
-    "domain": "session",
-    "visibility": "internal",
-    "description": "要求当前 Session 已打开",
-    "requestSchema": {
-      "name": "SessionRequireOpenRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "SessionRequireOpenResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "session.requireOpen"
-  },
-  {
-    "id": "track.requireAnySelected",
-    "version": 1,
-    "kind": "query",
-    "domain": "track",
-    "visibility": "internal",
-    "description": "要求至少选择一个轨道",
-    "requestSchema": {
-      "name": "TrackRequireAnySelectedRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "TrackRequireAnySelectedResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "track.requireAnySelected"
-  },
-  {
-    "id": "daw.requireMinimumVersion",
-    "version": 1,
-    "kind": "query",
-    "domain": "daw",
-    "visibility": "internal",
-    "description": "要求最低 DAW 版本",
-    "requestSchema": {
-      "name": "DawRequireMinimumVersionRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "DawRequireMinimumVersionResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "daw.requireMinimumVersion"
-  },
-  {
-    "id": "trackColor.requireSupport",
-    "version": 1,
-    "kind": "query",
-    "domain": "track",
-    "visibility": "internal",
-    "description": "要求轨道颜色能力可用",
-    "requestSchema": {
-      "name": "TrackColorRequireSupportRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "TrackColorRequireSupportResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "trackColor.requireSupport"
-  },
-  {
-    "id": "audio.importOne",
-    "version": 1,
-    "kind": "command",
-    "domain": "import",
-    "visibility": "internal",
-    "description": "导入单个音频文件",
-    "requestSchema": {
-      "name": "AudioImportOneRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "AudioImportOneResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "audio.importOne"
-  },
-  {
-    "id": "audio.importBatch",
-    "version": 1,
-    "kind": "job",
-    "domain": "import",
-    "visibility": "internal",
-    "description": "批量导入音频文件",
-    "requestSchema": {
-      "name": "AudioImportBatchRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "AudioImportBatchResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw",
-      "jobs"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "audio.importBatch"
-  },
-  {
-    "id": "export.cancel",
-    "version": 1,
-    "kind": "command",
-    "domain": "export",
-    "visibility": "internal",
-    "description": "取消导出任务",
-    "requestSchema": {
-      "name": "ExportCancelRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "ExportCancelResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "jobs"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "export.cancel"
-  },
-  {
     "id": "export.mixWithSource",
     "version": 1,
     "kind": "command",
@@ -1257,81 +1129,6 @@
       "pro_tools"
     ],
     "handler": "export.mixWithSource"
-  },
-  {
-    "id": "export.isCancelled",
-    "version": 1,
-    "kind": "query",
-    "domain": "export",
-    "visibility": "internal",
-    "description": "检查导出任务是否已取消",
-    "requestSchema": {
-      "name": "ExportIsCancelledRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "ExportIsCancelledResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "jobs"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "export.isCancelled"
-  },
-  {
-    "id": "mac.preflightAccessibility",
-    "version": 1,
-    "kind": "query",
-    "domain": "system",
-    "visibility": "internal",
-    "description": "预检 mac 辅助功能权限",
-    "requestSchema": {
-      "name": "MacPreflightAccessibilityRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "MacPreflightAccessibilityResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "mac_automation"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "mac.preflightAccessibility"
-  },
-  {
-    "id": "track.color.applyViaUi",
-    "version": 1,
-    "kind": "command",
-    "domain": "track",
-    "visibility": "internal",
-    "description": "通过 UI 应用轨道颜色",
-    "requestSchema": {
-      "name": "TrackColorApplyViaUiRequest",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "responseSchema": {
-      "name": "TrackColorApplyViaUiResponse",
-      "package": "@presto/contracts",
-      "version": 1
-    },
-    "dependsOn": [
-      "daw_ui_profile"
-    ],
-    "supportedDaws": [
-      "pro_tools"
-    ],
-    "handler": "track.color.applyViaUi"
   },
   {
     "id": "stripSilence.openViaUi",

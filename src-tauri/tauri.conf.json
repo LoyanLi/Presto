@@ -4,8 +4,8 @@
   "version": "0.3.0-alpha.2",
   "identifier": "com.loyan.presto",
   "build": {
-    "beforeBuildCommand": "npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources",
-    "beforeDevCommand": "npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:resources",
+    "beforeBuildCommand": "npm run tauri:prepare:all",
+    "beforeDevCommand": "npm run tauri:prepare:all",
     "frontendDist": "../build/tauri/renderer"
   },
   "app": {
@@ -53,11 +53,11 @@
     "macOS": {
       "entitlements": "entitlements.mac.plist"
     },
-    "resources": [
-      "../build/sidecar",
-      "../build/runtime-resources/backend",
-      "../build/runtime-resources/plugins",
-      "../build/runtime-resources/frontend"
-    ]
+    "resources": {
+      "resources/build/": "build/",
+      "resources/backend/": "backend/",
+      "resources/plugins/": "plugins/",
+      "resources/frontend/": "frontend/"
+    }
   }
 }

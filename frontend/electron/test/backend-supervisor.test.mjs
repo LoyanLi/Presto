@@ -226,6 +226,58 @@ test('backend supervisor uses the resolved python binary when starting the backe
   })
 })
 
+test('backend supervisor prefers the packaged python runtime when resources are available', async (t) => {
+  const { createBackendSupervisor } = await loadSupervisorModule()
+  const previousResourcesDir = process.env.PRESTO_RESOURCES_DIR
+  const tempRoot = await mkdtemp(path.join(tmpdir(), 'presto-packaged-python-'))
+  const bundledPython = path.join(tempRoot, 'backend', 'python', 'bin', 'python3')
+  const spawnCalls = []
+
+  try {
+    process.env.PRESTO_RESOURCES_DIR = tempRoot
+
+    const supervisor = createBackendSupervisor({
+      resolvePortImpl: async () => 18500,
+      resolvePythonBinImpl: () => '/usr/local/bin/python3',
+      requestJsonImpl: async (method, _port, pathname, _body) => {
+        if (method === 'GET' && pathname === '/api/v1/health') {
+          return { ok: true }
+        }
+        if (method === 'POST' && pathname === '/api/v1/capabilities/invoke') {
+          return { success: true, capability: 'system.health', data: { ok: true } }
+        }
+        throw new Error(`unexpected_request:${method}:${pathname}`)
+      },
+      spawnImpl: (command, args, options) => {
+        spawnCalls.push({ command, args, options })
+        return createFakeProcess()
+      },
+    })
+
+    await import('node:fs/promises').then(({ mkdir, writeFile }) =>
+      mkdir(path.dirname(bundledPython), { recursive: true }).then(() => writeFile(bundledPython, '')))
+
+    const response = await supervisor.invokeCapability({
+      requestId: 'req-packaged-python-bin',
+      capability: 'system.health',
+      payload: {},
+    })
+
+    assert.equal(response.success, true)
+    assert.equal(spawnCalls.length, 1)
+    assert.equal(spawnCalls[0]?.command, bundledPython)
+
+    await supervisor.stop()
+  } finally {
+    if (previousResourcesDir === undefined) {
+      delete process.env.PRESTO_RESOURCES_DIR
+    } else {
+      process.env.PRESTO_RESOURCES_DIR = previousResourcesDir
+    }
+    await rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
 test('backend supervisor resolves backend root when the supervisor is created, not at module load', async (t) => {
   const { createBackendSupervisor } = await loadSupervisorModule()
   const previousBackendRoot = process.env.PRESTO_BACKEND_ROOT
