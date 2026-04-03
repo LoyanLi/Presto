@@ -144,6 +144,7 @@ def _await_child_job(
     parent_job_id: str,
     child_job_id: str,
     *,
+    phase: str,
     cancel_event: threading.Event,
 ) -> dict[str, Any]:
     while True:
@@ -160,7 +161,7 @@ def _await_child_job(
             parent_job.state = "running"
             parent_job.started_at = parent_job.started_at or _utc_now()
             parent_job.progress = JobProgress(
-                phase="running",
+                phase=phase,
                 current=child_job.progress.current,
                 total=child_job.progress.total,
                 percent=child_job.progress.percent,
@@ -185,6 +186,8 @@ def _execute_steps(
     context: dict[str, Any],
     invoke_capability: Callable[[str, dict[str, Any]], Any],
     cancel_event: threading.Event,
+    progress_phase: str | None = None,
+    report_step_progress: bool = True,
 ) -> dict[str, Any]:
     for step in steps:
         if cancel_event.is_set():
@@ -192,6 +195,10 @@ def _execute_steps(
 
         if not _should_run_step(step, context):
             continue
+
+        step_id = str(step.get("stepId", "")).strip() or "running"
+        effective_phase = progress_phase or step_id
+        parent_job = services.job_manager.get(parent_job_id)
 
         if isinstance(step.get("foreach"), dict):
             foreach = step["foreach"]
@@ -204,7 +211,18 @@ def _execute_steps(
             nested_steps = step.get("steps")
             if not isinstance(nested_steps, list):
                 raise _validation_error("workflow foreach requires nested steps.", field="definition")
-            for item in items:
+            total_items = max(len(items), 1)
+            parent_job.state = "running"
+            parent_job.started_at = parent_job.started_at or _utc_now()
+            parent_job.progress = JobProgress(
+                phase=effective_phase,
+                current=0,
+                total=total_items,
+                percent=0.0,
+                message=f"Workflow step {effective_phase} is running.",
+            )
+            services.job_manager.upsert(parent_job)
+            for index, item in enumerate(items, start=1):
                 context[item_name] = item
                 _execute_steps(
                     services,
@@ -213,7 +231,21 @@ def _execute_steps(
                     context=context,
                     invoke_capability=invoke_capability,
                     cancel_event=cancel_event,
+                    progress_phase=effective_phase,
+                    report_step_progress=False,
                 )
+                parent_job = services.job_manager.get(parent_job_id)
+                if parent_job.state in {"queued", "running"}:
+                    parent_job.state = "running"
+                    parent_job.started_at = parent_job.started_at or _utc_now()
+                    parent_job.progress = JobProgress(
+                        phase=effective_phase,
+                        current=index,
+                        total=total_items,
+                        percent=round((index / total_items) * 100, 1),
+                        message=f"Workflow step {effective_phase} is running.",
+                    )
+                    services.job_manager.upsert(parent_job)
             context.pop(item_name, None)
             continue
 
@@ -224,12 +256,38 @@ def _execute_steps(
         payload = _resolve_template(step.get("input", {}), context)
         if not isinstance(payload, dict):
             raise _validation_error("workflow step input must resolve to an object.", field="definition")
+
+        if report_step_progress:
+            parent_job.state = "running"
+            parent_job.started_at = parent_job.started_at or _utc_now()
+            parent_job.progress = JobProgress(
+                phase=effective_phase,
+                current=0,
+                total=1,
+                percent=0.0,
+                message=f"Workflow step {effective_phase} is running.",
+            )
+            services.job_manager.upsert(parent_job)
         result = invoke_capability(capability_id, payload)
 
         if step.get("awaitJob") is True:
             if not isinstance(result, dict) or not isinstance(result.get("jobId"), str):
                 raise _validation_error("awaitJob steps must return a jobId.", field="definition")
-            result = _await_child_job(services, parent_job_id, result["jobId"], cancel_event=cancel_event)
+            result = _await_child_job(services, parent_job_id, result["jobId"], phase=effective_phase, cancel_event=cancel_event)
+
+        if report_step_progress:
+            parent_job = services.job_manager.get(parent_job_id)
+            if parent_job.state in {"queued", "running"}:
+                parent_job.state = "running"
+                parent_job.started_at = parent_job.started_at or _utc_now()
+                parent_job.progress = JobProgress(
+                    phase=effective_phase,
+                    current=1,
+                    total=1,
+                    percent=100.0,
+                    message=f"Workflow step {effective_phase} completed.",
+                )
+                services.job_manager.upsert(parent_job)
 
         save_as = str(step.get("saveAs", "")).strip()
         if save_as:

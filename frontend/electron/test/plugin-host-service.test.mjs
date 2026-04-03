@@ -508,6 +508,164 @@ test('plugin host service refreshes seeded official extensions when package cont
   assert.match(refreshedManifest, /"import\.cache\.save"/)
 })
 
+test('plugin host service refreshes official extensions when legacy seed state stores only version strings', async (t) => {
+  const { createPluginHostService } = await loadServiceModule()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-official-legacy-seed-'))
+  const managedRoot = path.join(sandbox, 'managed')
+  const officialRoot = path.join(sandbox, 'official')
+  const pluginRoot = await createPluginFixture(officialRoot, {
+    folderName: 'official-import',
+    pluginId: 'official.import-workflow',
+    requiredCapabilities: ['import.run.start'],
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  await mkdir(path.join(managedRoot, 'official.import-workflow', 'dist'), { recursive: true })
+  await writeFile(
+    path.join(managedRoot, 'official.import-workflow', 'manifest.json'),
+    JSON.stringify(
+      {
+        pluginId: 'official.import-workflow',
+        extensionType: 'workflow',
+        version: '1.0.0',
+        hostApiVersion: '0.1.0',
+        supportedDaws: ['pro_tools'],
+        uiRuntime: 'react18',
+        displayName: 'Plugin Example',
+        entry: 'dist/index.mjs',
+        workflowDefinition: {
+          workflowId: 'official.import-workflow.run',
+          inputSchemaId: 'official.import-workflow.input.v1',
+          definitionEntry: 'dist/workflow-definition.json',
+        },
+        pages: [],
+        automationItems: [],
+        settingsPages: [],
+        navigationItems: [],
+        requiredCapabilities: ['legacy.capability'],
+        adapterModuleRequirements: [],
+        capabilityRequirements: [],
+      },
+      null,
+      2,
+    ),
+  )
+  await writeFile(path.join(managedRoot, '.presto-official-extension-seed-state.json'), JSON.stringify({
+    'official.import-workflow': '1.0.0',
+  }))
+
+  await writeFile(
+    path.join(pluginRoot, 'manifest.json'),
+    JSON.stringify(
+      {
+        pluginId: 'official.import-workflow',
+        extensionType: 'workflow',
+        version: '1.0.0',
+        hostApiVersion: '0.1.0',
+        supportedDaws: ['pro_tools'],
+        uiRuntime: 'react18',
+        displayName: 'Plugin Example',
+        entry: 'dist/index.mjs',
+        workflowDefinition: {
+          workflowId: 'official.import-workflow.run',
+          inputSchemaId: 'official.import-workflow.input.v1',
+          definitionEntry: 'dist/workflow-definition.json',
+        },
+        pages: [
+          {
+            pageId: 'page.main',
+            path: '/plugin/example',
+            title: 'Example',
+            mount: 'workspace',
+            componentExport: 'ExamplePage',
+          },
+        ],
+        automationItems: [],
+        settingsPages: [],
+        navigationItems: [],
+        requiredCapabilities: ['import.run.start', 'track.rename'],
+        adapterModuleRequirements: [],
+        capabilityRequirements: [],
+      },
+      null,
+      2,
+    ),
+  )
+  await writeFile(
+    path.join(pluginRoot, 'dist/index.mjs'),
+    `
+export const manifest = {
+  pluginId: 'official.import-workflow',
+  extensionType: 'workflow',
+  version: '1.0.0',
+  hostApiVersion: '0.1.0',
+  supportedDaws: ['pro_tools'],
+  uiRuntime: 'react18',
+  displayName: 'Plugin Example',
+  entry: 'dist/index.mjs',
+  workflowDefinition: {
+    workflowId: 'official.import-workflow.run',
+    inputSchemaId: 'official.import-workflow.input.v1',
+    definitionEntry: 'dist/workflow-definition.json',
+  },
+  pages: [
+    {
+      pageId: 'page.main',
+      path: '/plugin/example',
+      title: 'Example',
+      mount: 'workspace',
+      componentExport: 'ExamplePage',
+    },
+  ],
+  automationItems: [],
+  settingsPages: [],
+  navigationItems: [],
+  requiredCapabilities: ['import.run.start', 'track.rename'],
+  adapterModuleRequirements: [],
+  capabilityRequirements: [],
+}
+
+export async function activate() {}
+`,
+  )
+  await writeFile(
+    path.join(pluginRoot, 'dist/workflow-definition.json'),
+    JSON.stringify(
+      {
+        workflowId: 'official.import-workflow.run',
+        version: '1.0.0',
+        inputSchemaId: 'official.import-workflow.input.v1',
+        steps: [
+          {
+            stepId: 'rename',
+            usesCapability: 'track.rename',
+            input: {
+              currentName: { $ref: 'input.currentName' },
+              newName: { $ref: 'input.newName' },
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+
+  const service = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+
+  await service.syncOfficialExtensions({ officialExtensionsRoot: officialRoot })
+
+  const refreshedManifest = await readFile(path.join(managedRoot, 'official.import-workflow', 'manifest.json'), 'utf8')
+  assert.match(refreshedManifest, /"track\.rename"/)
+  assert.doesNotMatch(refreshedManifest, /"legacy\.capability"/)
+})
+
 test('plugin host service resolves trusted workflow execution payload from installed plugin metadata', async (t) => {
   const { createPluginHostService } = await loadServiceModule()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-workflow-resolution-'))

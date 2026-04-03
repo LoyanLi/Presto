@@ -258,6 +258,13 @@ function overallRunPercent({ stageKeys, stageKey, current, total, percent }) {
   return Math.max(0, Math.min(100, Math.round(((safeStageIndex + itemFraction) / stageKeys.length) * 100)))
 }
 
+function resolveRunStageKey(stageKeys, phase) {
+  if (!Array.isArray(stageKeys) || stageKeys.length === 0) {
+    return 'idle'
+  }
+  return stageKeys.includes(phase) ? phase : 'import'
+}
+
 export function ImportWorkflowPage({ context, host }) {
   const [settings, setSettings] = React.useState(() => createDefaultImportWorkflowSettings())
   const [rows, setRows] = React.useState([])
@@ -604,9 +611,10 @@ export function ImportWorkflowPage({ context, host }) {
       try {
         const job = await context.presto.jobs.get(jobId)
         const progress = job.progress || { current: 0, total: 0, percent: 0, phase: '', message: '' }
+        const stageKey = resolveRunStageKey(stageKeys, progress.phase)
         setRunState({
           phase: 'backend',
-          stageKey: 'import',
+          stageKey,
           stageKeys,
           jobId,
           current: progress.current ?? 0,

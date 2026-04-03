@@ -281,6 +281,27 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.equal(fileManifest.requiredRuntimeServices, undefined)
 })
 
+test('workflow definition batches post-import operations in the same order shown by progress stages', async () => {
+  const definition = JSON.parse(await readFile(new URL('../dist/workflow-definition.json', import.meta.url), 'utf8'))
+  const renameSteps = definition.steps[2]?.steps ?? []
+  const colorSteps = definition.steps[3]?.steps ?? []
+  const stripSteps = definition.steps[4]?.steps ?? []
+
+  assert.deepEqual(
+    definition.steps.map((step) => step.stepId),
+    ['import_files', 'plan_items', 'rename', 'color', 'strip', 'save_session'],
+  )
+  assert.equal(definition.steps[2]?.foreach?.as, 'item')
+  assert.equal(definition.steps[3]?.foreach?.as, 'item')
+  assert.equal(definition.steps[4]?.foreach?.as, 'item')
+  assert.deepEqual(renameSteps.map((step) => step.stepId), ['rename_track'])
+  assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['track.rename'])
+  assert.deepEqual(colorSteps.map((step) => step.stepId), ['apply_color'])
+  assert.deepEqual(colorSteps.map((step) => step.usesCapability), ['track.color.apply'])
+  assert.deepEqual(stripSteps.map((step) => step.stepId), ['select_track', 'select_clips', 'strip_silence'])
+  assert.deepEqual(stripSteps.map((step) => step.usesCapability), ['track.select', 'clip.selectAllOnTrack', 'stripSilence.execute'])
+})
+
 test('dist modules resolve React through a plugin-local shared helper', async () => {
   const [pageSource, entrySource, uiSource, helperSource] = await Promise.all([
     readFile(new URL('../dist/ImportWorkflowPage.mjs', import.meta.url), 'utf8'),
@@ -571,6 +592,92 @@ test('main page normalizes structured workflow start errors instead of storing o
       stateUpdates.some((update) => update.value === '[object Object]'),
       false,
       'expected no state update to store the raw object string output',
+    )
+  } finally {
+    restore()
+  }
+})
+
+test('main page maps backend workflow phase updates onto the matching progress stage', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick In',
+        finalName: 'Kick In',
+        status: 'ready',
+        errorMessage: null,
+      },
+      {
+        filePath: '/Imports/Drums/snare.wav',
+        categoryId: 'drums',
+        aiName: 'Snare Top',
+        finalName: 'Snare Top',
+        status: 'ready',
+        errorMessage: null,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    4: 3,
+    5: false,
+  })
+  const testContext = createPluginContext()
+  let pollCount = 0
+  testContext.presto.workflow.run.start = async () => ({ jobId: 'job-progress', capability: 'workflow.run.start', state: 'queued' })
+  testContext.presto.jobs.get = async () => {
+    pollCount += 1
+    if (pollCount === 1) {
+      return {
+        state: 'running',
+        progress: {
+          phase: 'rename',
+          current: 0,
+          total: 2,
+          percent: 0,
+          message: 'Renaming tracks.',
+        },
+      }
+    }
+    return {
+      state: 'succeeded',
+      progress: {
+        phase: 'succeeded',
+        current: 6,
+        total: 6,
+        percent: 100,
+        message: 'Workflow completed.',
+      },
+    }
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const runButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Run import',
+    )
+
+    assert.ok(runButton, 'expected import step 3 to render a Run import action')
+
+    runButton.props.onClick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.ok(
+      stateUpdates.some(
+        (update) =>
+          update.value &&
+          typeof update.value === 'object' &&
+          update.value.phase === 'backend' &&
+          update.value.stageKey === 'rename' &&
+          update.value.total === 2,
+      ),
+      'expected backend rename phase to map onto the rename progress stage',
     )
   } finally {
     restore()

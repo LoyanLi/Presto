@@ -139,6 +139,10 @@ fn repo_root() -> PathBuf {
 }
 
 fn resolve_runtime_resources_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        return Ok(repo_root());
+    }
+
     let bundled_resources_dir = app
         .path()
         .resource_dir()

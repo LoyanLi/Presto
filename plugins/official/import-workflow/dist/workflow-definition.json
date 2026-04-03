@@ -37,7 +37,7 @@
       "saveAs": "planned"
     },
     {
-      "stepId": "apply_items",
+      "stepId": "rename",
       "foreach": {
         "items": {
           "$ref": "planned.items"
@@ -56,7 +56,18 @@
               "$ref": "item.finalTrackName"
             }
           }
+        }
+      ]
+    },
+    {
+      "stepId": "color",
+      "foreach": {
+        "items": {
+          "$ref": "planned.items"
         },
+        "as": "item"
+      },
+      "steps": [
         {
           "stepId": "apply_color",
           "usesCapability": "track.color.apply",
@@ -72,7 +83,18 @@
               "$ref": "item.colorSlot"
             }
           }
+        }
+      ]
+    },
+    {
+      "stepId": "strip",
+      "foreach": {
+        "items": {
+          "$ref": "planned.items"
         },
+        "as": "item"
+      },
+      "steps": [
         {
           "stepId": "select_track",
           "usesCapability": "track.select",

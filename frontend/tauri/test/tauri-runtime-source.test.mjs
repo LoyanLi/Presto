@@ -46,6 +46,7 @@ test('tauri host uses invoke bridge and stdio sidecar RPC', async () => {
   assert.match(rustSource, /app\.version\.get/)
   assert.match(rustSource, /backend\.capability\.invoke/)
   assert.match(rustSource, /fn app_ready/)
+  assert.match(rustSource, /if cfg!\(debug_assertions\) \{\s*return Ok\(repo_root\(\)\);/m)
   assert.match(rustSource, /get_webview_window\("splashscreen"\)/)
   assert.match(rustSource, /close\(\)/)
   assert.match(rustSource, /get_webview_window\("main"\)/)

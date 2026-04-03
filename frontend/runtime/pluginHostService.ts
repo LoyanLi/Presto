@@ -200,6 +200,10 @@ async function computeOfficialPackageFingerprint(pluginRoot: string): Promise<st
   return hash.digest('hex')
 }
 
+function isOfficialPackageFingerprint(value: string | undefined): boolean {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
+}
+
 async function readWorkflowDefinitionJson(
   pluginRoot: string,
   manifest: WorkflowPluginManifest,
@@ -399,14 +403,15 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
         const sourceFingerprint = await computeOfficialPackageFingerprint(candidate.pluginRoot)
         const seededFingerprint = seedState[manifest.pluginId]
 
-        if (!seededFingerprint) {
-          if (!destinationExists) {
-            await cp(candidate.pluginRoot, destinationRoot, {
-              recursive: true,
-              force: false,
-              errorOnExist: true,
-            })
+        if (!isOfficialPackageFingerprint(seededFingerprint)) {
+          if (destinationExists) {
+            await rm(destinationRoot, { recursive: true, force: true })
           }
+          await cp(candidate.pluginRoot, destinationRoot, {
+            recursive: true,
+            force: false,
+            errorOnExist: true,
+          })
           seedState[manifest.pluginId] = sourceFingerprint
           continue
         }
