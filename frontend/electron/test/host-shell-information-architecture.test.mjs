@@ -35,10 +35,8 @@ class MemoryStorage {
 
 function installWindowStub() {
   const storage = new MemoryStorage()
-  globalThis.window = {
-    localStorage: storage,
-    matchMedia: () => ({ matches: false }),
-  }
+  globalThis.localStorage = storage
+  globalThis.matchMedia = () => ({ matches: false })
   return storage
 }
 
@@ -174,7 +172,9 @@ function createPluginProps() {
 }
 
 test.afterEach(() => {
-  delete globalThis.window
+  Reflect.deleteProperty(globalThis, 'window')
+  Reflect.deleteProperty(globalThis, 'localStorage')
+  Reflect.deleteProperty(globalThis, 'matchMedia')
 })
 
 test('home exposes a settings entry point but no direct developer launch action', async () => {

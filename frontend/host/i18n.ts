@@ -273,11 +273,9 @@ const hostMessages = {
 export type HostMessageKey = keyof typeof hostMessages.en
 
 export function getSystemLocaleCandidates(): string[] {
-  if (typeof window === 'undefined') {
-    return ['en']
-  }
-
-  const navigatorValue = window.navigator
+  const navigatorValue =
+    globalThis.navigator ??
+    (typeof window !== 'undefined' ? window.navigator : undefined)
   if (!navigatorValue) {
     return ['en']
   }

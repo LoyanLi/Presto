@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 from presto.application.capabilities.registry import build_default_capability_registry
@@ -15,6 +17,9 @@ class WorkflowExecutorFakeDaw:
         self.connected = True
         self.saved = 0
         self.renames: list[tuple[str, str]] = []
+        self.imported_paths: list[str] = []
+        self.import_release_event = threading.Event()
+        self.block_after_import_count: int | None = None
 
     def is_connected(self) -> bool:
         return self.connected
@@ -24,6 +29,12 @@ class WorkflowExecutorFakeDaw:
 
     def rename_track(self, current_name: str, new_name: str) -> None:
         self.renames.append((current_name, new_name))
+
+    def import_audio_file(self, path: str) -> str:
+        self.imported_paths.append(path)
+        if self.block_after_import_count is not None and len(self.imported_paths) > self.block_after_import_count:
+            self.import_release_event.wait(timeout=5)
+        return Path(path).stem
 
 
 def _services() -> ServiceContainer:
@@ -126,3 +137,72 @@ def test_workflow_run_start_rejects_steps_outside_allowed_capabilities() -> None
         assert "session.save" in str(error)
     else:
         raise AssertionError("workflow.run.start should reject undeclared workflow capabilities")
+
+
+def test_workflow_run_start_mirrors_child_job_progress_while_awaiting_import(tmp_path: Path) -> None:
+    services = _services()
+    services.daw.block_after_import_count = 1
+    first_file = tmp_path / "Kick.wav"
+    second_file = tmp_path / "Snare.wav"
+    first_file.write_bytes(b"RIFF")
+    second_file.write_bytes(b"RIFF")
+
+    payload = {
+        "pluginId": "official.import-workflow",
+        "workflowId": "test.workflow.import",
+        "definition": {
+            "workflowId": "test.workflow.import",
+            "version": "1.0.0",
+            "inputSchemaId": "test.workflow.import.v1",
+            "steps": [
+                {
+                    "stepId": "import_files",
+                    "usesCapability": "import.run.start",
+                    "awaitJob": True,
+                    "input": {
+                        "folderPaths": {
+                            "$ref": "input.folderPaths",
+                        },
+                        "orderedFilePaths": {
+                            "$ref": "input.orderedFilePaths",
+                        },
+                    },
+                    "saveAs": "importJob",
+                }
+            ],
+        },
+        "allowedCapabilities": ["import.run.start"],
+        "input": {
+            "folderPaths": [str(tmp_path)],
+            "orderedFilePaths": [str(first_file), str(second_file)],
+        },
+    }
+
+    accepted = execute_capability(services, "workflow.run.start", payload)
+    job_id = accepted["jobId"]
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        record = services.job_manager.get(job_id)
+        if record.progress.current == 1 and record.progress.total == 2:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError(f"workflow parent job did not mirror child progress: {services.job_manager.get(job_id).progress}")
+
+    services.daw.import_release_event.set()
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        record = services.job_manager.get(job_id)
+        if record.state in {"succeeded", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow job did not finish in time after releasing import")
+
+    record = services.job_manager.get(job_id)
+    assert record.state == "succeeded"
+    assert record.progress.current == 1
+    assert record.progress.total == 1
+    assert services.daw.imported_paths == [str(first_file), str(second_file)]

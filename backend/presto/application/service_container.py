@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field
 from copy import deepcopy
+import json
 import os
+from pathlib import Path
+import subprocess
 from typing import Any
 
 from ..domain.capabilities import DEFAULT_DAW_TARGET, CapabilityRegistryProtocol, DawTarget
@@ -32,7 +35,7 @@ class ServiceContainer:
     backend_ready: bool = True
 
 
-def _default_app_config() -> dict[str, Any]:
+def create_default_app_config() -> dict[str, Any]:
     return {
         "categories": [],
         "silenceProfile": {
@@ -55,12 +58,16 @@ def _default_app_config() -> dict[str, Any]:
             "followSystemTheme": True,
             "developerModeEnabled": True,
         },
+        "hostPreferences": {
+            "language": "system",
+            "dawTarget": DEFAULT_DAW_TARGET,
+        },
     }
 
 
 @dataclass
 class InMemoryConfigStore:
-    config: dict[str, Any] = field(default_factory=_default_app_config)
+    config: dict[str, Any] = field(default_factory=create_default_app_config)
 
     def load(self) -> dict[str, Any]:
         return deepcopy(self.config)
@@ -83,6 +90,74 @@ class InMemoryKeychainStore:
         self.values.pop((service, account), None)
 
 
+@dataclass
+class FileConfigStore:
+    file_path: Path
+
+    def load(self) -> dict[str, Any]:
+        if not self.file_path.exists():
+            config = create_default_app_config()
+            self.save(config)
+            return deepcopy(config)
+
+        raw = self.file_path.read_text(encoding="utf8")
+        loaded = json.loads(raw)
+        if not isinstance(loaded, dict):
+            raise ValueError("config_file_must_contain_json_object")
+        return deepcopy(loaded)
+
+    def save(self, config: Any) -> None:
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.file_path.write_text(f"{json.dumps(config, indent=2, ensure_ascii=True)}\n", encoding="utf8")
+
+
+class MacOsKeychainStore:
+    def __init__(self, *, run_security=None) -> None:
+        self._run_security = run_security or self._default_run_security
+
+    @staticmethod
+    def _default_run_security(args: list[str], input_text: str | None = None) -> str:
+        result = subprocess.run(
+            ["security", *args],
+            input=input_text,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "security_command_failed")
+        return result.stdout.strip()
+
+    def get_api_key(self, service: str, account: str) -> str | None:
+        try:
+            return self._run_security(["find-generic-password", "-w", "-s", service, "-a", account])
+        except RuntimeError:
+            return None
+
+    def set_api_key(self, service: str, account: str, api_key: str) -> None:
+        self._run_security(
+            ["add-generic-password", "-U", "-s", service, "-a", account, "-w"],
+            input_text=api_key,
+        )
+
+    def delete_api_key(self, service: str, account: str) -> None:
+        try:
+            self._run_security(["delete-generic-password", "-s", service, "-a", account])
+        except RuntimeError:
+            return
+
+
+def create_default_config_store() -> ConfigStorePort:
+    app_data_dir = os.environ.get("PRESTO_APP_DATA_DIR", "").strip()
+    if not app_data_dir:
+        return InMemoryConfigStore()
+    return FileConfigStore(Path(app_data_dir).expanduser().resolve() / "config.json")
+
+
+def create_default_keychain_store() -> KeychainStorePort:
+    return MacOsKeychainStore()
+
+
 def build_service_container(
     *,
     capability_registry: CapabilityRegistryProtocol | None = None,
@@ -99,8 +174,8 @@ def build_service_container(
     resolved_ui_profile = daw_ui_profile or ProToolsUiProfile()
     resolved_mac_automation = mac_automation or create_default_mac_automation_engine()
     resolved_daw = daw or ProToolsDawAdapter(address="127.0.0.1:31416")
-    resolved_config_store = config_store or InMemoryConfigStore()
-    resolved_keychain_store = keychain_store or InMemoryKeychainStore()
+    resolved_config_store = config_store or create_default_config_store()
+    resolved_keychain_store = keychain_store or create_default_keychain_store()
 
     return ServiceContainer(
         capability_registry=capability_registry or build_default_capability_registry(),

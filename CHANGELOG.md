@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.3.0-alpha.1] - 2026-04-03
+## [0.3.0-alpha.2] - 2026-04-03
 
 ### Added
 - workflow 插件执行边界正式收口到 `sidecar -> backend`，前端只提交声明式 workflow 输入。
@@ -26,7 +26,7 @@ All notable changes to this project are documented in this file.
 - 修复 macOS 图标打包输入，统一到新的 PNG -> icns 资源链路。
 
 ### Docs
-- 重写并同步 `README.md`、`docs/releases/v0.3.0-alpha.1-release.md` 与开发文档索引，使文档描述与当前 Tauri 主线一致。
+- 重写并同步 `README.md`、`docs/releases/v0.3.0-alpha.2-release.md` 与开发文档索引，使文档描述与当前 Tauri 主线一致。
 
 ## [0.2.2] - 2026-03-15
 

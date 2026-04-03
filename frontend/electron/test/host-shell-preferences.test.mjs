@@ -109,3 +109,29 @@ test('shell preferences persist language, developer mode, and daw target changes
     }),
   )
 })
+
+test('shell preferences read and persist through global storage shims without window', async () => {
+  const storage = new MemoryStorage()
+  globalThis.localStorage = storage
+  const { getHostShellPreferences, setHostShellPreferences } = await loadPreferencesModule()
+
+  setHostShellPreferences({
+    language: 'en',
+    developerMode: true,
+    dawTarget: 'pro_tools',
+  })
+
+  assert.deepEqual(getHostShellPreferences(), {
+    language: 'en',
+    developerMode: true,
+    dawTarget: 'pro_tools',
+  })
+  assert.equal(
+    storage.getItem('presto.host.shell.preferences'),
+    JSON.stringify({
+      language: 'en',
+      developerMode: true,
+      dawTarget: 'pro_tools',
+    }),
+  )
+})

@@ -35,6 +35,7 @@ import type {
   HostWorkspacePageRoute,
 } from './pluginHostTypes'
 import { getHostShellPreferences, setHostShellPreferences, subscribeHostShellPreferences } from './shellPreferences'
+import { applyHostShellPreferencesToConfig, getHostShellPreferencesFromConfig } from './runtimePreferences'
 import { GeneralSettingsPage, type GeneralSettingsPageProps } from './settings/GeneralSettingsPage'
 import { ExtensionsSettingsPage } from './settings/ExtensionsSettingsPage'
 
@@ -110,6 +111,25 @@ export function HostShellApp({
   useEffect(() => subscribeThemeMode((mode) => setThemeModeState(mode)), [])
   useEffect(() => subscribeThemePreference((preferenceMode) => setThemePreferenceState(preferenceMode)), [])
   useEffect(() => subscribeHostShellPreferences((nextPreferences) => setPreferencesState(nextPreferences)), [])
+  useEffect(() => {
+    if (!developerPresto?.config?.get) {
+      return
+    }
+
+    let active = true
+    void developerPresto.config.get()
+      .then((response) => {
+        if (!active || !response?.config) {
+          return
+        }
+        setHostShellPreferences(getHostShellPreferencesFromConfig(response.config))
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
+  }, [developerPresto])
 
   const muiTheme = useMemo(() => createHostMuiTheme(themeMode), [themeMode])
 
@@ -230,6 +250,24 @@ export function HostShellApp({
     setSurface('settings')
   }
 
+  const persistHostShellPreferences = async (nextPreferences: Partial<typeof preferences>): Promise<void> => {
+    if (!developerPresto?.config?.get || !developerPresto?.config?.update) {
+      setHostShellPreferences(nextPreferences)
+      return
+    }
+
+    const currentConfig = await developerPresto.config.get()
+    const resolvedPreferences = {
+      ...preferences,
+      ...nextPreferences,
+    }
+
+    await developerPresto.config.update({
+      config: applyHostShellPreferencesToConfig(currentConfig.config, resolvedPreferences),
+    })
+    setHostShellPreferences(resolvedPreferences)
+  }
+
   const openPrimarySurface = (nextSurface: HostPrimarySidebarRoute): void => {
     if (nextSurface === 'settings') {
       openSettings()
@@ -254,7 +292,7 @@ export function HostShellApp({
       checkingConnection={checkingDawConnection}
       runtime={developerRuntime as GeneralSettingsPageProps['runtime']}
       onDeveloperModeChange={(selected) => {
-        setHostShellPreferences({
+        void persistHostShellPreferences({
           developerMode: selected,
         })
       }}
@@ -262,26 +300,34 @@ export function HostShellApp({
         setThemePreference(preferenceMode)
       }}
       onLanguageChange={(language) => {
-        setHostShellPreferences({
+        void persistHostShellPreferences({
           language,
         })
         refreshDawStatus()
       }}
       onDawTargetChange={async (target) => {
-        setHostShellPreferences({
-          dawTarget: target,
-        })
-        setDawStatus((current) => ({
-          ...current,
-          targetLabel: dawLabel(target),
-        }))
         if (developerRuntime?.backend && typeof developerRuntime.backend.setDawTarget === 'function') {
           setCheckingDawConnection(true)
           try {
             await developerRuntime.backend.setDawTarget(target)
+            await persistHostShellPreferences({
+              dawTarget: target,
+            })
+            setDawStatus((current) => ({
+              ...current,
+              targetLabel: dawLabel(target),
+            }))
           } finally {
             setCheckingDawConnection(false)
           }
+        } else {
+          await persistHostShellPreferences({
+            dawTarget: target,
+          })
+          setDawStatus((current) => ({
+            ...current,
+            targetLabel: dawLabel(target),
+          }))
         }
         refreshDawStatus()
       }}
