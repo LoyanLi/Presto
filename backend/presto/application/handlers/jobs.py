@@ -4,7 +4,8 @@ from dataclasses import asdict
 from typing import Any
 
 from .common import validation_error
-from .import_workflow import cancel_job_run
+from .import_workflow import cancel_job_run as cancel_import_or_export_job_run
+from .workflow_executor import cancel_workflow_run
 from ..service_container import ServiceContainer
 from ...domain.errors import PrestoErrorPayload
 from ...domain.jobs import JobRecord, JobsCreateRequest, JobsListRequest, JobsUpdateRequest
@@ -55,7 +56,8 @@ def list_jobs_payload(services: ServiceContainer, payload: dict[str, Any]) -> di
 def cancel_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId", ""))
     result = services.job_manager.cancel(job_id)
-    cancel_job_run(services, job_id)
+    cancel_import_or_export_job_run(services, job_id)
+    cancel_workflow_run(services, job_id)
     return {"cancelled": result.cancelled, "jobId": result.job_id}
 
 

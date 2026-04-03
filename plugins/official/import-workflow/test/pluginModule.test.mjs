@@ -15,9 +15,20 @@ function createPluginContext() {
       resolved: 'en',
     },
     presto: {
-      import: {
+      workflow: {
         run: {
-          start: async () => ({ jobId: 'job-test' }),
+          start: async () => ({ jobId: 'job-test', capability: 'workflow.run.start', state: 'queued' }),
+        },
+      },
+      import: {
+        analyze: async () => ({
+          folderPaths: [],
+          orderedFilePaths: [],
+          rows: [],
+          cache: { files: 0, hits: 0 },
+        }),
+        cache: {
+          save: async () => ({ saved: true, cacheFiles: 0 }),
         },
       },
       track: {
@@ -48,18 +59,6 @@ function createPluginContext() {
           },
         }),
         cancel: async () => {},
-      },
-    },
-    runtime: {
-      dialog: {
-        openFolder: async () => ({ canceled: true, paths: [] }),
-      },
-      fs: {
-        readFile: async () => null,
-        writeFile: async () => {},
-        ensureDir: async () => {},
-        readdir: async () => [],
-        stat: async () => ({ isDirectory: false }),
       },
     },
     storage: {
@@ -102,6 +101,8 @@ test('plugin module exports workflow manifest and page export', async () => {
   assert.equal(pluginModule.manifest.entry, 'dist/entry.mjs')
   assert.equal(pluginModule.manifest.styleEntry, 'dist/import-workflow.css')
   assert.equal(pluginModule.manifest.pages[0]?.componentExport, 'ImportWorkflowPage')
+  assert.equal(pluginModule.manifest.workflowDefinition?.workflowId, 'official.import-workflow.run')
+  assert.equal(pluginModule.manifest.workflowDefinition?.definitionEntry, 'dist/workflow-definition.json')
   assert.equal(pluginModule.manifest.pages.length, 1)
   assert.equal(pluginModule.manifest.navigationItems.length, 1)
   assert.equal(pluginModule.manifest.settingsPages[0]?.pageId, 'import-workflow.page.settings')
@@ -121,6 +122,7 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.equal(fileManifest.pluginId, pluginModule.manifest.pluginId)
   assert.equal(fileManifest.entry, pluginModule.manifest.entry)
   assert.equal(fileManifest.styleEntry, pluginModule.manifest.styleEntry)
+  assert.deepEqual(fileManifest.workflowDefinition, pluginModule.manifest.workflowDefinition)
   assert.deepEqual(fileManifest.requiredCapabilities, pluginModule.manifest.requiredCapabilities)
   assert.deepEqual(fileManifest.adapterModuleRequirements, pluginModule.manifest.adapterModuleRequirements)
   assert.deepEqual(fileManifest.capabilityRequirements, pluginModule.manifest.capabilityRequirements)
@@ -136,11 +138,12 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.equal(fileManifest.capabilityRequirements.length > 0, true)
   assert.equal(
     fileManifest.capabilityRequirements.some(
-      (item) => item.capabilityId === 'import.run.start' && item.minVersion === '2025.10.0',
+      (item) => item.capabilityId === 'workflow.run.start' && item.minVersion === '2025.10.0',
     ),
     true,
   )
   assert.deepEqual(fileManifest.settingsPages, pluginModule.manifest.settingsPages)
+  assert.equal(fileManifest.requiredRuntimeServices, undefined)
 })
 
 test('dist modules resolve React through a plugin-local shared helper', async () => {
@@ -154,9 +157,16 @@ test('dist modules resolve React through a plugin-local shared helper', async ()
   assert.doesNotMatch(pageSource, /from ['"]react['"]/)
   assert.doesNotMatch(uiSource, /from ['"]react['"]/)
   assert.match(pageSource, /react-shared\.mjs/)
+  assert.doesNotMatch(pageSource, /workflow-definition\.mjs/)
   assert.doesNotMatch(entrySource, /ImportWorkflowSettingsPage/)
+  assert.doesNotMatch(entrySource, /workflow-definition\.mjs/)
   assert.match(uiSource, /react-shared\.mjs/)
   assert.match(helperSource, /__PRESTO_PLUGIN_SHARED__/)
+})
+
+test('main page does not reference plugin runtime services', async () => {
+  const pageSource = await readFile(new URL('../dist/ImportWorkflowPage.mjs', import.meta.url), 'utf8')
+  assert.doesNotMatch(pageSource, /context\.runtime/)
 })
 
 test('settings schema stays declarative and keeps the implemented import controls', async () => {
@@ -212,6 +222,28 @@ test('main page does not render a plugin logs panel', async () => {
   assert.doesNotMatch(markup, /Execution uses public capabilities only/)
   assert.ok(markup.indexOf('iw-stepper') < markup.indexOf('Prepared files'))
   assert.ok(markup.indexOf('Prepared files') < markup.indexOf('Scan folder'))
+})
+
+test('main page exposes a source folder input wired into import analyze', async () => {
+  const pluginModule = await loadPluginModule()
+  const [pageSource, markup] = await Promise.all([
+    readFile(new URL('../dist/ImportWorkflowPage.mjs', import.meta.url), 'utf8'),
+    renderToStaticMarkup(
+      React.createElement(pluginModule.ImportWorkflowPage, {
+        context: createPluginContext(),
+        params: {},
+        searchParams: new URLSearchParams(),
+      }),
+    ),
+  ])
+
+  assert.match(markup, /Source folders/)
+  assert.match(markup, /iw-source-folders/)
+  assert.match(pageSource, /import\.analyze\(\{\s*sourceFolders/)
+  assert.match(pageSource, /workflow\.run\.start\(\{/)
+  assert.match(pageSource, /pluginId:\s*context\.pluginId/)
+  assert.match(pageSource, /workflowId:\s*IMPORT_WORKFLOW_ID/)
+  assert.doesNotMatch(pageSource, /definition:\s*workflowDefinition/)
 })
 
 test('main page renders localized strings through plugin-local locale messages', async () => {
@@ -324,7 +356,10 @@ test('main page source removes the checkbox column and table configuration ui wh
   assert.doesNotMatch(pageSource, /Threshold/)
   assert.doesNotMatch(pageSource, /Add audio files/)
   assert.doesNotMatch(pageSource, /Start import/)
-  assert.match(pageSource, /folderPaths:\s*sourceFolders/)
+  assert.match(pageSource, /pluginId:\s*context\.pluginId/)
+  assert.match(pageSource, /workflowId:\s*IMPORT_WORKFLOW_ID/)
+  assert.doesNotMatch(pageSource, /definition:\s*workflowDefinition/)
+  assert.match(pageSource, /sourceFolders/)
   assert.match(pageSource, /orderedFilePaths/)
   assert.match(pageSource, /rows:\s*sortedRows/)
   assert.match(pageSource, /persistCache\(next\)/)

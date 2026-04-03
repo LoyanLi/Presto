@@ -77,7 +77,7 @@ const automationRuntime = createAutomationRuntime({
 })
 const DEFAULT_APP_METADATA = Object.freeze({
   applicationName: 'Presto',
-  version: '0.3.0-alpha.1',
+  version: '0.3.0-alpha.2',
   author: 'Luminous Layers',
   copyright: 'Copyright (c) 2026 Loyan Li',
 })

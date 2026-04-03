@@ -62,6 +62,11 @@ function createPluginContext() {
       resolved: 'en',
     },
     presto: {
+      workflow: {
+        run: {
+          start: async () => ({ jobId: 'job-1', capability: 'workflow.run.start', state: 'queued' }),
+        },
+      },
       daw: {
         connection: {
           getStatus: async () => ({ connected: false }),
@@ -95,9 +100,6 @@ function createPluginContext() {
                   ]
                 : ['Ref Print (Stereo)'],
           }),
-        },
-        run: {
-          start: async () => ({ jobId: 'job-1', capability: 'export.run.start', state: 'queued' }),
         },
       },
       jobs: {
@@ -203,6 +205,8 @@ test('plugin module exports manifest and page export', async () => {
   assert.equal(pluginModule.manifest.styleEntry, 'dist/export-workflow.css')
   assert.equal(pluginModule.manifest.pages[0]?.componentExport, 'ExportWorkflowPage')
   assert.equal(pluginModule.manifest.pages[0]?.mount, 'workspace')
+  assert.equal(pluginModule.manifest.workflowDefinition?.workflowId, 'official.export-workflow.run')
+  assert.equal(pluginModule.manifest.workflowDefinition?.definitionEntry, 'dist/workflow-definition.json')
   assert.equal(pluginModule.manifest.pages.length, 1)
   assert.equal(pluginModule.manifest.navigationItems.length, 1)
   assert.equal(pluginModule.manifest.settingsPages[0]?.pageId, 'export-workflow.page.settings')
@@ -222,6 +226,7 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.equal(fileManifest.pluginId, pluginModule.manifest.pluginId)
   assert.equal(fileManifest.entry, pluginModule.manifest.entry)
   assert.equal(fileManifest.styleEntry, pluginModule.manifest.styleEntry)
+  assert.deepEqual(fileManifest.workflowDefinition, pluginModule.manifest.workflowDefinition)
   assert.deepEqual(fileManifest.requiredCapabilities, pluginModule.manifest.requiredCapabilities)
   assert.deepEqual(fileManifest.adapterModuleRequirements, pluginModule.manifest.adapterModuleRequirements)
   assert.deepEqual(fileManifest.capabilityRequirements, pluginModule.manifest.capabilityRequirements)
@@ -237,11 +242,12 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.equal(fileManifest.capabilityRequirements.length > 0, true)
   assert.equal(
     fileManifest.capabilityRequirements.some(
-      (item) => item.capabilityId === 'export.run.start' && item.minVersion === '2025.10.0',
+      (item) => item.capabilityId === 'workflow.run.start' && item.minVersion === '2025.10.0',
     ),
     true,
   )
-  assert.deepEqual(fileManifest.requiredRuntimeServices, pluginModule.manifest.requiredRuntimeServices)
+  assert.equal(fileManifest.requiredRuntimeServices, undefined)
+  assert.equal(pluginModule.manifest.requiredRuntimeServices, undefined)
   assert.deepEqual(fileManifest.settingsPages, pluginModule.manifest.settingsPages)
 })
 
@@ -256,7 +262,9 @@ test('dist modules resolve React through a plugin-local shared helper', async ()
   assert.doesNotMatch(pageSource, /from ['"]react['"]/)
   assert.doesNotMatch(uiSource, /from ['"]react['"]/)
   assert.match(pageSource, /react-shared\.mjs/)
+  assert.doesNotMatch(pageSource, /workflow-definition\.mjs/)
   assert.doesNotMatch(entrySource, /ExportWorkflowSettingsPage/)
+  assert.doesNotMatch(entrySource, /workflow-definition\.mjs/)
   assert.match(uiSource, /react-shared\.mjs/)
   assert.match(helperSource, /__PRESTO_PLUGIN_SHARED__/)
 })
@@ -265,15 +273,12 @@ test('settings schema keeps the implemented export workflow controls', async () 
   const pluginModule = await loadPluginModule()
   const settingsPage = pluginModule.manifest.settingsPages[0]
 
-  assert.equal(settingsPage.sections.length, 2)
+  assert.equal(settingsPage.sections.length, 1)
   assert.equal(settingsPage.sections[0]?.title, 'Default snapshot selection')
   assert.equal(settingsPage.sections[0]?.fields[0]?.path, 'defaultSnapshotSelection')
   assert.equal(settingsPage.sections[0]?.fields[0]?.kind, 'toggle')
   assert.equal(settingsPage.sections[0]?.fields[0]?.checkedValue, 'all')
   assert.equal(settingsPage.sections[0]?.fields[0]?.uncheckedValue, 'none')
-  assert.equal(settingsPage.sections[1]?.title, 'Mobile progress QR')
-  assert.equal(settingsPage.sections[1]?.fields[0]?.path, 'mobileProgressEnabled')
-  assert.equal(settingsPage.sections[1]?.fields[0]?.kind, 'toggle')
 })
 
 test('main page can render Simplified Chinese through plugin-local locale messages', async () => {
@@ -523,14 +528,13 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
   assert.doesNotMatch(idleMarkup, /snapshot-1/)
 })
 
-test('step 3 renders collapsed mobile progress entry that can show qr details when enabled', async () => {
+test('step 3 progress panel stays backend-driven and omits mobile-progress runtime ui', async () => {
   const runningModule = await loadPageModuleWithStateOverrides({
     1: 3,
     4: [createSampleSnapshot()],
     5: ['snapshot-1'],
     6: {
       defaultSnapshotSelection: 'all',
-      mobileProgressEnabled: true,
     },
     10: {
       file_format: 'wav',
@@ -547,13 +551,6 @@ test('step 3 renders collapsed mobile progress entry that can show qr details wh
       output: [],
       renderer: [],
     },
-    35: {
-      loading: false,
-      sessionId: 'mob-1',
-      url: 'http://127.0.0.1:43123/mobile-progress/mob-1?token=test-token',
-      qrSvg: '<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#fff"/></svg>',
-      error: '',
-    },
   })
   const markup = renderToStaticMarkup(
     React.createElement(runningModule.ExportWorkflowPage, {
@@ -563,16 +560,8 @@ test('step 3 renders collapsed mobile progress entry that can show qr details wh
     }),
   )
 
-  assert.match(markup, /Mobile progress QR/)
-  assert.match(markup, /<details class="ew-mobile-progress-flyout">/)
-  assert.match(markup, /<summary class="ew-mobile-progress-trigger ew-icon-button-fallback"/)
-  assert.match(markup, /aria-label="Mobile progress QR"/)
-  assert.match(markup, /ew-mobile-progress-popover/)
-  assert.match(markup, /ew-mobile-progress-qr/)
-  assert.doesNotMatch(markup, /ew-mobile-progress-popover-title/)
-  assert.doesNotMatch(markup, /ew-mobile-progress-copy/)
-  assert.doesNotMatch(markup, /ew-mobile-progress-url/)
-  assert.doesNotMatch(markup, /ew-mobile-progress-live-grid/)
+  assert.doesNotMatch(markup, /Mobile progress QR/)
+  assert.doesNotMatch(markup, /ew-mobile-progress-/)
   assert.match(markup, /ew-progress-panel/)
   assert.match(markup, /ew-progress-breakdown/)
   assert.match(markup, /ew-progress-current-file/)
@@ -623,7 +612,7 @@ test('step 3 keeps export result visible after completion instead of jumping bac
   assert.match(markup, /Export complete/)
   assert.match(markup, /Export Completed!/)
   assert.match(markup, /Continue Export/)
-  assert.match(markup, /Open Folder/)
+  assert.doesNotMatch(markup, /Open Folder/)
   assert.match(markup, /ew-progress-panel/)
   assert.doesNotMatch(markup, /Select snapshots to export/)
 })
@@ -765,15 +754,13 @@ test('export page source loads plugin-local settings and applies the default sna
 
   assert.match(source, /loadExportWorkflowSettings\(context\.storage\)/)
   assert.match(source, /defaultSnapshotSelection/)
-  assert.match(source, /mobileProgressEnabled/)
-  assert.match(source, /context\.runtime\?\.mobileProgress/)
-  assert.match(source, /ew-mobile-progress-trigger/)
-  assert.match(source, /page\.mobileProgress\.title/)
-  assert.match(source, /ensureMobileProgressSession\(targetJobId\)/)
-  assert.match(source, /mobileProgressRuntime\.updateSession\(mobileProgressView\.sessionId,\s*jobView\)/)
   assert.match(source, /currentFileProgressPercent/)
   assert.match(source, /overallProgressPercent/)
   assert.match(source, /currentMixSourceName/)
+  assert.doesNotMatch(source, /context\.runtime/)
+  assert.doesNotMatch(source, /mobileProgress/)
+  assert.doesNotMatch(source, /openFolder/)
+  assert.doesNotMatch(source, /openPath/)
 })
 
 test('export page source resets active export state immediately after cancel', async () => {

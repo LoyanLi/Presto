@@ -16,7 +16,7 @@ def test_track_color_catalog_does_not_expose_apply_via_ui() -> None:
 
     assert "track.color.apply" in capability_ids
     assert "automation.splitStereoToMono.execute" in capability_ids
-    for capability_id in ("import.run.start", "export.range.set", "export.start", "export.direct.start", "export.run.start"):
+    for capability_id in ("workflow.run.start", "import.planRunItems", "import.run.start", "export.range.set", "export.start", "export.direct.start", "export.run.start"):
         assert capability_id in capability_ids
     for capability_id in ("jobs.create", "jobs.update", "jobs.get", "jobs.list", "jobs.cancel", "jobs.delete"):
         assert capability_id in capability_ids
@@ -32,6 +32,8 @@ def test_track_color_catalog_does_not_expose_apply_via_ui() -> None:
 def test_job_capability_catalog_kinds_match_public_contract() -> None:
     definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
 
+    assert definitions["workflow.run.start"].kind == "job"
+    assert definitions["import.planRunItems"].kind == "query"
     assert definitions["import.run.start"].kind == "job"
     assert definitions["export.start"].kind == "job"
     assert definitions["export.direct.start"].kind == "job"

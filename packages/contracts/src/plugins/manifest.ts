@@ -6,8 +6,8 @@ import type {
   PluginCommandDefinition,
   PluginAutomationItemDefinition,
 } from './page'
-import type { PluginRuntimeServiceName } from './runtime'
 import type { WorkflowSettingsPageDefinition } from './settings'
+import type { WorkflowDefinitionReference } from './workflow'
 
 export interface PluginAdapterModuleRequirement {
   moduleId: string
@@ -37,6 +37,6 @@ export interface WorkflowPluginManifest {
   settingsPages?: WorkflowSettingsPageDefinition[]
   navigationItems?: PluginNavigationItem[]
   commands?: PluginCommandDefinition[]
+  workflowDefinition?: WorkflowDefinitionReference
   requiredCapabilities: PublicCapabilityId[]
-  requiredRuntimeServices?: PluginRuntimeServiceName[]
 }

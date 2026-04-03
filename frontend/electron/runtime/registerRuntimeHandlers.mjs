@@ -127,7 +127,27 @@ export function registerRuntimeHandlers({
     const startedAt = Date.now()
     try {
       const supervisor = await loadBackendSupervisor()
-      const response = await supervisor.invokeCapability(request)
+      let sanitizedRequest = request
+      if (String(request?.capability ?? '') === 'workflow.run.start') {
+        const pluginId = String(request?.payload?.pluginId ?? '').trim()
+        const workflowId = String(request?.payload?.workflowId ?? '').trim()
+        const pluginHostService = await loadPluginHostService()
+        const trustedWorkflow = await pluginHostService.resolveWorkflowExecution({
+          pluginId,
+          workflowId,
+        })
+        sanitizedRequest = {
+          ...request,
+          payload: {
+            ...request.payload,
+            pluginId,
+            workflowId,
+            definition: trustedWorkflow.definition,
+            allowedCapabilities: trustedWorkflow.allowedCapabilities,
+          },
+        }
+      }
+      const response = await supervisor.invokeCapability(sanitizedRequest)
       const summary = summarizeCapabilityResult(response)
       appendAppLog(summary.success ? 'info' : 'warn', 'backend.invoke', 'backend_invoke_capability_completed', {
         requestId: String(request?.requestId ?? ''),

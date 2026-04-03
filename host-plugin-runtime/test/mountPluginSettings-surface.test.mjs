@@ -89,7 +89,6 @@ test('mountPluginPages keeps workspace pages only while settings metadata stays 
       },
     ],
     requiredCapabilities: ['system.health'],
-    requiredRuntimeServices: [],
   }
 
   const mountedPages = mountPluginPages(manifest)

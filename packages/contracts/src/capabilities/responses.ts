@@ -231,6 +231,46 @@ export interface TransportGetStatusResponse {
   transport: TransportStatus
 }
 
+export interface WorkflowRunStartResponse {
+  jobId: JobAcceptedResponse['jobId']
+  capability: 'workflow.run.start'
+  state: JobAcceptedResponse['state']
+}
+
+export interface ImportAnalyzeRow {
+  filePath: string
+  categoryId: string
+  aiName: string
+  finalName: string
+  status: string
+  errorMessage: string | null
+}
+
+export interface ImportAnalyzeResponse {
+  folderPaths: string[]
+  orderedFilePaths: string[]
+  rows: ImportAnalyzeRow[]
+  cache: {
+    files: number
+    hits: number
+  }
+}
+
+export interface ImportCacheSaveResponse {
+  saved: true
+  cacheFiles: number
+}
+
+export interface ImportPlanRunItemsResponse {
+  items: Array<{
+    currentTrackName: string
+    finalTrackName: string
+    colorSlot: number | null
+    shouldApplyColor: boolean
+    stripAfterImport: boolean
+  }>
+}
+
 export interface ImportRunStartResponse {
   jobId: JobAcceptedResponse['jobId']
   capability: 'import.run.start'
@@ -315,6 +355,10 @@ export interface CapabilityResponseMap {
   'transport.stop': TransportStopResponse
   'transport.record': TransportRecordResponse
   'transport.getStatus': TransportGetStatusResponse
+  'workflow.run.start': WorkflowRunStartResponse
+  'import.analyze': ImportAnalyzeResponse
+  'import.cache.save': ImportCacheSaveResponse
+  'import.planRunItems': ImportPlanRunItemsResponse
   'import.run.start': ImportRunStartResponse
   'stripSilence.open': StripSilenceOpenResponse
   'stripSilence.execute': StripSilenceExecuteResponse

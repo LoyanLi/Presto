@@ -8,7 +8,7 @@
 
 当前仓库中可以直接确认的版本事实如下：
 
-- 应用版本：`0.3.0-alpha.1`
+- 应用版本：`0.3.0-alpha.2`
 - 应用名：`Presto`
 - 后端应用版本字符串：`0.1.0`（FastAPI app version）
 - Contracts capability schema version：`1`
@@ -241,11 +241,11 @@
 
 - `hostApiVersion` 是否仍被当前宿主接受
 - 使用的 capability 是否仍存在且语义一致
-- `requiredRuntimeServices` 是否仍完整
+- `requiredCapabilities` 是否仍与当前插件实现一致
 - `supportedDaws` 是否匹配当前宿主运行目标
 
 ## 11. 当前结论
 
 若只用一句话总结当前版本支持状态，应表述为：
 
-当前 Presto 应用版本为 `0.3.0-alpha.1`，实际稳定目标是 `pro_tools`，插件接入以 `hostApiVersion` 白名单兼容和 capability 契约兼容为准，其他 DAW 与更广泛版本治理目前仍属于预留或后续演进空间。
+当前 Presto 应用版本为 `0.3.0-alpha.2`，实际稳定目标是 `pro_tools`，插件接入以 `hostApiVersion` 白名单兼容和 capability 契约兼容为准，其他 DAW 与更广泛版本治理目前仍属于预留或后续演进空间。

@@ -11,6 +11,14 @@ export type {
   WorkflowPluginManifest,
 } from './manifest'
 export type { WorkflowPluginModule } from './module'
+export type {
+  WorkflowConditionDefinition,
+  WorkflowDefinition,
+  WorkflowDefinitionReference,
+  WorkflowForeachDefinition,
+  WorkflowRefValue,
+  WorkflowStepDefinition,
+} from './workflow'
 export type { PluginContext } from './context'
 export type {
   WorkflowSettingsCategoryListFieldDefinition,
@@ -24,13 +32,5 @@ export type {
   WorkflowSettingsTextFieldDefinition,
   WorkflowSettingsToggleFieldDefinition,
 } from './settings'
-export type {
-  AutomationDefinition,
-  AutomationRunDefinitionRequest,
-  AutomationRunDefinitionResult,
-  AutomationRunDefinitionStepResult,
-  PluginRuntime,
-  PluginRuntimeServiceName,
-} from './runtime'
 export type { PluginStorage } from './storage'
 export type { PluginLogger } from './logger'

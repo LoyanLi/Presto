@@ -17,16 +17,16 @@ import {
   createDefaultExportWorkflowSettings,
   createSnapshotFromTracks,
   deriveExportJobView,
-  getSnapshotStorageInfo,
   loadExportWorkflowSettings,
-  loadSnapshotsFromSession,
+  loadSnapshotsFromStorage,
   normalizeSnapshot,
-  saveSnapshotsToSession,
+  saveSnapshotsToStorage,
   summarizeSnapshot,
   validateSnapshotName,
 } from './workflowCore.mjs'
 
 const h = React.createElement
+const EXPORT_WORKFLOW_ID = 'official.export-workflow.run'
 const { useCallback, useEffect, useMemo, useRef, useState } = React
 
 const FILE_FORMAT_OPTIONS = [
@@ -75,12 +75,9 @@ function getErrorMessage(error, fallbackMessage) {
   return fallbackMessage
 }
 
-const EMPTY_MOBILE_PROGRESS_VIEW = Object.freeze({
+const EMPTY_PROGRESS_PANEL_STATE = Object.freeze({
   loading: false,
-  sessionId: '',
-  url: '',
-  qrSvg: '',
-  error: '',
+  detail: '',
 })
 
 function normalizeMixSourceType(value) {
@@ -667,43 +664,6 @@ function renderSnapshotTable({
   )
 }
 
-function renderMobileProgressPanel({
-  t,
-  mobileProgressView,
-  onToggle,
-}) {
-  return h(
-    'details',
-    {
-      className: 'ew-mobile-progress-flyout',
-      onToggle: (event) => {
-        if (event.currentTarget.open && typeof onToggle === 'function') {
-          void onToggle()
-        }
-      },
-    },
-    h(
-      'summary',
-      {
-        className: 'ew-mobile-progress-trigger ew-icon-button-fallback',
-        title: t('page.mobileProgress.title'),
-        'aria-label': t('page.mobileProgress.title'),
-      },
-      h('span', { className: 'ew-mobile-progress-trigger-inner' }, renderLucideIcon(QR_CODE_ICON_NODE, { ...LUCIDE_ICON_PROPS, size: 16 })),
-    ),
-    h(
-      'div',
-      { className: 'ew-mobile-progress-popover' },
-      mobileProgressView.qrSvg
-        ? h('div', {
-            className: 'ew-mobile-progress-qr',
-            dangerouslySetInnerHTML: { __html: mobileProgressView.qrSvg },
-          })
-        : null,
-    ),
-  )
-}
-
 function cloneTrackStates(trackStates) {
   return normalizeSnapshot({ trackStates }).trackStates.map((trackState) => ({ ...trackState }))
 }
@@ -1065,7 +1025,7 @@ export function ExportWorkflowPage({ context }) {
   const [mixSourceGroups, setMixSourceGroups] = useState(() => createEmptyMixSourceGroups())
   const [mixSourceLoading, setMixSourceLoading] = useState(false)
   const [mixSourceError, setMixSourceError] = useState('')
-  const [mobileProgressView, setMobileProgressView] = useState(() => ({ ...EMPTY_MOBILE_PROGRESS_VIEW }))
+  const [_progressPanelState, _setProgressPanelState] = useState(() => ({ ...EMPTY_PROGRESS_PANEL_STATE }))
   const pollTimeoutRef = useRef(null)
   const liveTrackSyncTimeoutRef = useRef(null)
   const initializedSettingsRef = useRef(false)
@@ -1109,23 +1069,12 @@ export function ExportWorkflowPage({ context }) {
   const hasRunningJob = Boolean(jobView && !jobView.isTerminal)
   const hasExportJob = Boolean(jobView)
   const isCompletedSuccessfully = Boolean(jobView?.isTerminal && jobView.terminalStatus === 'completed')
-  const canOpenOutputFolder = Boolean(
-    context.runtime?.shell && typeof context.runtime.shell.openPath === 'function' && String(settings.output_path ?? '').trim(),
-  )
   const exportActionDisabled =
     hasRunningJob ||
     selectedSnapshots.length === 0 ||
     !String(settings.output_path ?? '').trim() ||
     selectedMixSources.length === 0 ||
     (settings.file_format === 'mp3' && selectedMixSources.length > 1)
-  const mobileProgressRuntime = context.runtime?.mobileProgress
-  const hasMobileProgressRuntime = Boolean(
-    mobileProgressRuntime &&
-    typeof mobileProgressRuntime.createSession === 'function' &&
-    typeof mobileProgressRuntime.getViewUrl === 'function' &&
-    typeof mobileProgressRuntime.closeSession === 'function' &&
-    typeof mobileProgressRuntime.updateSession === 'function',
-  )
 
   useEffect(() => {
     let cancelled = false
@@ -1221,7 +1170,7 @@ export function ExportWorkflowPage({ context }) {
           return
         }
 
-        const loadedSnapshots = await loadSnapshotsFromSession(context.runtime.fs, sessionInfo)
+        const loadedSnapshots = await loadSnapshotsFromStorage(context.storage, sessionInfo)
 
         setSessionModel({
           loading: false,
@@ -1231,11 +1180,6 @@ export function ExportWorkflowPage({ context }) {
           error: '',
         })
         setSnapshots(loadedSnapshots.map(normalizeSnapshot))
-        setStorageInfo({
-          snapshots: getSnapshotStorageInfo(sessionInfo),
-          presets: { presetPath: '', storageDir: '' },
-        })
-
         if (!initializedSettingsRef.current || refreshOnly) {
           setSettings((current) => ({
             ...createDefaultExportSettings(sessionInfo),
@@ -1268,7 +1212,7 @@ export function ExportWorkflowPage({ context }) {
         })
       }
     },
-    [context.presto.daw.connection, context.presto.session, context.presto.track, context.runtime.fs],
+    [context.presto.daw.connection, context.presto.session, context.presto.track, context.storage],
   )
 
   useEffect(() => {
@@ -1392,13 +1336,13 @@ export function ExportWorkflowPage({ context }) {
         setErrorMessage('Connect to Pro Tools before saving snapshots.')
         return false
       }
-      const saved = await saveSnapshotsToSession(context.runtime.fs, sessionModel.session, nextSnapshots)
+      const saved = await saveSnapshotsToStorage(context.storage, sessionModel.session, nextSnapshots)
       if (!saved) {
         setErrorMessage('Failed to save snapshots to the current session.')
       }
       return saved
     },
-    [context.runtime.fs, sessionModel.session],
+    [context.storage, sessionModel.session],
   )
 
   const handleCreateSnapshot = useCallback(async () => {
@@ -1478,20 +1422,6 @@ export function ExportWorkflowPage({ context }) {
     setIsEditingSnapshotTracks(false)
   }, [detailSnapshotId, detailTrackStates, handleUpdateSnapshot])
 
-  const handleBrowseFolder = useCallback(async () => {
-    if (!context.runtime.dialog || typeof context.runtime.dialog.openFolder !== 'function') {
-      setErrorMessage('Folder picker is unavailable in this runtime.')
-      return
-    }
-    const result = await context.runtime.dialog.openFolder()
-    if (!result.canceled && Array.isArray(result.paths) && result.paths[0]) {
-      setSettings((current) => ({
-        ...current,
-        output_path: result.paths[0],
-      }))
-    }
-  }, [context.runtime.dialog])
-
   const handleToggleSnapshotSelection = useCallback((snapshotId) => {
     setSelectedSnapshotIds((current) =>
       current.includes(snapshotId)
@@ -1538,97 +1468,6 @@ export function ExportWorkflowPage({ context }) {
     }))
   }, [])
 
-  const ensureMobileProgressSession = useCallback(
-    async (targetJobId) => {
-      if (!workflowSettings.mobileProgressEnabled || !hasMobileProgressRuntime || !String(targetJobId ?? '').trim()) {
-        return
-      }
-
-      setMobileProgressView((current) => ({
-        ...current,
-        loading: true,
-        error: '',
-      }))
-
-      try {
-        const result = mobileProgressView.sessionId
-          ? await mobileProgressRuntime.getViewUrl(mobileProgressView.sessionId)
-          : await mobileProgressRuntime.createSession(String(targetJobId))
-
-        if (!result?.ok || !result.url) {
-          throw new Error(result?.error || 'Failed to prepare mobile progress QR.')
-        }
-
-        setMobileProgressView({
-          loading: false,
-          sessionId: String(result.sessionId ?? mobileProgressView.sessionId ?? ''),
-          url: String(result.url),
-          qrSvg: String(result.qrSvg ?? mobileProgressView.qrSvg ?? ''),
-          error: '',
-        })
-      } catch (error) {
-        setMobileProgressView((current) => ({
-          ...current,
-          loading: false,
-          error: getErrorMessage(error, 'Failed to prepare mobile progress QR.'),
-        }))
-      }
-    },
-    [hasMobileProgressRuntime, mobileProgressRuntime, mobileProgressView.qrSvg, mobileProgressView.sessionId, workflowSettings.mobileProgressEnabled],
-  )
-
-  const handleToggleMobileProgress = useCallback(async () => {
-    const latestWorkflowSettings = await loadExportWorkflowSettings(context.storage)
-    setWorkflowSettings(latestWorkflowSettings)
-
-    if (!latestWorkflowSettings.mobileProgressEnabled || !hasMobileProgressRuntime) {
-      return
-    }
-
-    const targetJobId = String(jobId || jobView?.jobId || '').trim()
-    if (!targetJobId) {
-      return
-    }
-
-    await ensureMobileProgressSession(targetJobId)
-  }, [context.storage, ensureMobileProgressSession, hasMobileProgressRuntime, jobId, jobView?.jobId])
-
-  useEffect(() => {
-    if (!workflowSettings.mobileProgressEnabled || !hasMobileProgressRuntime || !hasRunningJob) {
-      return
-    }
-
-    const targetJobId = String(jobId || jobView?.jobId || '').trim()
-    if (!targetJobId) {
-      return
-    }
-
-    if (mobileProgressView.loading || (mobileProgressView.sessionId && mobileProgressView.url && mobileProgressView.qrSvg)) {
-      return
-    }
-
-    void ensureMobileProgressSession(targetJobId)
-  }, [
-    ensureMobileProgressSession,
-    hasMobileProgressRuntime,
-    hasRunningJob,
-    jobId,
-    jobView?.jobId,
-    mobileProgressView.loading,
-    mobileProgressView.qrSvg,
-    mobileProgressView.sessionId,
-    mobileProgressView.url,
-    workflowSettings.mobileProgressEnabled,
-  ])
-
-  useEffect(() => {
-    if (!hasMobileProgressRuntime || !mobileProgressView.sessionId || !jobView) {
-      return
-    }
-
-    void mobileProgressRuntime.updateSession(mobileProgressView.sessionId, jobView)
-  }, [hasMobileProgressRuntime, jobView, mobileProgressRuntime, mobileProgressView.sessionId])
-
   const handleStartExport = useCallback(async () => {
     if (selectedSnapshots.length === 0) {
       setErrorMessage('Select at least one snapshot before starting export.')
@@ -1649,15 +1488,16 @@ export function ExportWorkflowPage({ context }) {
 
     setErrorMessage('')
     setNoticeMessage('')
-    setMobileProgressView({ ...EMPTY_MOBILE_PROGRESS_VIEW })
 
     try {
-      const response = await context.presto.export.run.start(
-        buildExportRunPayload({
+      const response = await context.presto.workflow.run.start({
+        pluginId: context.pluginId,
+        workflowId: EXPORT_WORKFLOW_ID,
+        input: buildExportRunPayload({
           snapshots: selectedSnapshots,
           settings,
         }),
-      )
+      })
       setCurrentStep(3)
       setJobId(response.jobId)
       setJobView({
@@ -1687,7 +1527,7 @@ export function ExportWorkflowPage({ context }) {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to start export workflow.')
     }
-  }, [context.presto.export.run, pollJob, selectedMixSources.length, selectedSnapshots, settings, t])
+  }, [context.presto.workflow.run, pollJob, selectedMixSources.length, selectedSnapshots, settings, t])
 
   const resetActiveExportState = useCallback(() => {
     stopPolling()
@@ -1695,7 +1535,6 @@ export function ExportWorkflowPage({ context }) {
     setJobId('')
     setNoticeMessage('')
     setErrorMessage('')
-    setMobileProgressView({ ...EMPTY_MOBILE_PROGRESS_VIEW })
   }, [stopPolling])
 
   const handleCancelExport = useCallback(async () => {
@@ -1710,38 +1549,6 @@ export function ExportWorkflowPage({ context }) {
   const handleContinueExport = useCallback(() => {
     resetActiveExportState()
   }, [resetActiveExportState])
-
-  const handleOpenOutputFolder = useCallback(async () => {
-    if (!settings.output_path.trim()) {
-      return
-    }
-    if (!context.runtime.shell || typeof context.runtime.shell.openPath !== 'function') {
-      setErrorMessage('Open Folder is unavailable in this runtime.')
-      return
-    }
-    await context.runtime.shell.openPath(settings.output_path)
-  }, [context.runtime.shell, settings.output_path])
-
-  useEffect(() => {
-    if (!jobView?.isTerminal || !mobileProgressView.sessionId || !hasMobileProgressRuntime) {
-      return undefined
-    }
-
-    const activeSessionId = mobileProgressView.sessionId
-    void mobileProgressRuntime.closeSession(activeSessionId).finally(() => {
-      setMobileProgressView((current) =>
-        current.sessionId === activeSessionId
-          ? {
-              ...current,
-              sessionId: '',
-              loading: false,
-            }
-          : current,
-      )
-    })
-
-    return undefined
-  }, [hasMobileProgressRuntime, jobView?.isTerminal, mobileProgressRuntime, mobileProgressView.sessionId])
 
   const canAdvanceToSnapshots = sessionModel.connected
   const canAdvanceToExportSettings = snapshots.length > 0
@@ -2000,128 +1807,117 @@ export function ExportWorkflowPage({ context }) {
                                 : null,
                               jobView
                                 ? h(
-                                'div',
-                                { key: 'progress', className: 'ew-progress-panel ew-section-panel ew-progress-panel--runtime' },
-                            h(
-                              'div',
-                              { className: 'ew-progress-header' },
-                              h('span', { className: 'ew-progress-title' }, hasRunningJob ? t('page.card.exporting') : t('page.card.exportResult')),
-                              h(
-                                'div',
-                                { className: 'ew-progress-header-actions' },
-                                h('span', { className: 'ew-progress-count' }, formatExport(context, 'page.summary.exportCount', { current: jobView.currentSnapshot || 0, total: jobView.totalSnapshots || 0 })),
-                                renderMobileProgressPanel({
-                                  t,
-                                  isEnabled: workflowSettings.mobileProgressEnabled,
-                                  isRuntimeAvailable: hasMobileProgressRuntime,
-                                  hasRunningJob,
-                                  jobView,
-                                  mobileProgressView,
-                                  onToggle: () => {
-                                    void handleToggleMobileProgress()
-                                  },
-                                }),
-                              ),
-                            ),
-                            h(
-                              'div',
-                              { className: 'ew-progress-breakdown' },
-                              h(
-                                'div',
-                                { className: 'ew-progress-current-file' },
-                                h(
-                                  'div',
-                                  { className: 'ew-progress-line' },
-                                  h('span', { className: 'ew-progress-line-label' }, t('page.label.currentFile')),
-                                  h('span', { className: 'ew-progress-line-value' }, `${Math.round(normalizeProgressPercent(jobView.currentFileProgressPercent))}%`),
-                                ),
-                                h(
-                                  'div',
-                                  { className: 'ew-progress-shell ew-progress-shell--file' },
-                                  h('div', {
-                                    className: 'ew-progress-bar ew-progress-bar--file',
-                                    style: {
-                                      width: `${normalizeProgressPercent(jobView.currentFileProgressPercent)}%`,
-                                    },
-                                  }),
-                                ),
-                                jobView.currentSnapshotName
-                                  ? h('div', { className: 'ew-progress-line-sub' }, formatExport(context, 'page.summary.currentSnapshot', { name: jobView.currentSnapshotName }))
-                                  : null,
-                                formatMixSourceProgress(jobView, t)
-                                  ? h('div', { className: 'ew-progress-line-sub' }, formatMixSourceProgress(jobView, t))
-                                  : null,
-                              ),
-                              h(
-                                'div',
-                                { className: 'ew-progress-overall' },
-                                h(
-                                  'div',
-                                  { className: 'ew-progress-line' },
-                                  h('span', { className: 'ew-progress-line-label' }, t('page.label.overallProgress')),
-                                  h('span', { className: 'ew-progress-line-value' }, `${Math.round(normalizeProgressPercent(jobView.overallProgressPercent))}%`),
-                                ),
-                                h(
-                                  'div',
-                                  { className: 'ew-progress-shell ew-progress-shell--overall' },
-                                  h('div', {
-                                    className: 'ew-progress-bar ew-progress-bar--overall',
-                                    style: {
-                                      width: `${normalizeProgressPercent(jobView.overallProgressPercent)}%`,
-                                    },
-                                  }),
-                                ),
-                              ),
-                            ),
-                            h(
-                              'div',
-                              { className: 'ew-progress-meta' },
-                              h(StatItem, { label: t('page.label.status'), value: labelForState(jobView) }),
-                              h(StatItem, { label: t('page.label.eta'), value: jobView.etaSeconds == null ? t('page.value.na') : formatEta(jobView.etaSeconds) }),
-                              h(StatItem, { label: t('page.label.exported'), value: jobView.exportedCount || 0 }),
-                            ),
-                            h('div', { className: 'ew-progress-message' }, jobView.message || t('page.notice.waiting')),
-                            h(
-                              'div',
-                              { className: 'ew-kv-grid' },
-                              h('div', { className: 'ew-kv-item' }, h('label', null, t('page.label.taskId')), h('div', null, jobView.jobId || '')),
-                              h('div', { className: 'ew-kv-item' }, h('label', null, t('page.label.progress')), h('div', null, `${Math.round(normalizeProgressPercent(jobView.overallProgressPercent))}%`)),
-                            ),
-                            Array.isArray(jobView.exportedFiles) && jobView.exportedFiles.length > 0
-                              ? h(
-                                  'div',
-                                  { className: 'ew-terminal-list' },
-                                  h('h3', { className: 'ew-h3' }, t('page.summary.exportedFiles')),
-                                  h(
-                                    'ul',
-                                    null,
-                                    jobView.exportedFiles.map((filePath) => h('li', { key: filePath }, filePath)),
-                                  ),
-                                )
-                              : null,
-                            Array.isArray(jobView.failedSnapshots) && jobView.failedSnapshots.length > 0
-                              ? h(
-                                  'div',
-                                  { className: 'ew-terminal-list is-danger' },
-                                  h('h3', { className: 'ew-h3' }, t('page.summary.failedSnapshots')),
-                                  h(
-                                    'ul',
-                                    null,
-                                    (Array.isArray(jobView.failedSnapshotDetails) && jobView.failedSnapshotDetails.length > 0
-                                      ? jobView.failedSnapshotDetails
-                                      : jobView.failedSnapshots.map((snapshotName) => ({ snapshotName, error: '' })))
-                                      .map((item) =>
+                                    'div',
+                                    { key: 'progress', className: 'ew-progress-panel ew-section-panel ew-progress-panel--runtime' },
+                                    h(
+                                      'div',
+                                      { className: 'ew-progress-header' },
+                                      h('span', { className: 'ew-progress-title' }, hasRunningJob ? t('page.card.exporting') : t('page.card.exportResult')),
+                                      h(
+                                        'div',
+                                        { className: 'ew-progress-header-actions' },
+                                        h('span', { className: 'ew-progress-count' }, formatExport(context, 'page.summary.exportCount', { current: jobView.currentSnapshot || 0, total: jobView.totalSnapshots || 0 })),
+                                      ),
+                                    ),
+                                    h(
+                                      'div',
+                                      { className: 'ew-progress-breakdown' },
+                                      h(
+                                        'div',
+                                        { className: 'ew-progress-current-file' },
                                         h(
-                                          'li',
-                                          { key: `${item.snapshotName}:${item.error}` },
-                                          item.error ? `${item.snapshotName}: ${item.error}` : item.snapshotName,
+                                          'div',
+                                          { className: 'ew-progress-line' },
+                                          h('span', { className: 'ew-progress-line-label' }, t('page.label.currentFile')),
+                                          h('span', { className: 'ew-progress-line-value' }, `${Math.round(normalizeProgressPercent(jobView.currentFileProgressPercent))}%`),
+                                        ),
+                                        h(
+                                          'div',
+                                          { className: 'ew-progress-shell ew-progress-shell--file' },
+                                          h('div', {
+                                            className: 'ew-progress-bar ew-progress-bar--file',
+                                            style: {
+                                              width: `${normalizeProgressPercent(jobView.currentFileProgressPercent)}%`,
+                                            },
+                                          }),
+                                        ),
+                                        jobView.currentSnapshotName
+                                          ? h('div', { className: 'ew-progress-line-sub' }, formatExport(context, 'page.summary.currentSnapshot', { name: jobView.currentSnapshotName }))
+                                          : null,
+                                        formatMixSourceProgress(jobView, t)
+                                          ? h('div', { className: 'ew-progress-line-sub' }, formatMixSourceProgress(jobView, t))
+                                          : null,
+                                      ),
+                                      h(
+                                        'div',
+                                        { className: 'ew-progress-overall' },
+                                        h(
+                                          'div',
+                                          { className: 'ew-progress-line' },
+                                          h('span', { className: 'ew-progress-line-label' }, t('page.label.overallProgress')),
+                                          h('span', { className: 'ew-progress-line-value' }, `${Math.round(normalizeProgressPercent(jobView.overallProgressPercent))}%`),
+                                        ),
+                                        h(
+                                          'div',
+                                          { className: 'ew-progress-shell ew-progress-shell--overall' },
+                                          h('div', {
+                                            className: 'ew-progress-bar ew-progress-bar--overall',
+                                            style: {
+                                              width: `${normalizeProgressPercent(jobView.overallProgressPercent)}%`,
+                                            },
+                                          }),
                                         ),
                                       ),
-                                  ),
-                                )
-                              : null,
-                                )
-                              : null,
+                                    ),
+                                    h(
+                                      'div',
+                                      { className: 'ew-progress-meta' },
+                                      h(StatItem, { label: t('page.label.status'), value: labelForState(jobView) }),
+                                      h(StatItem, { label: t('page.label.eta'), value: jobView.etaSeconds == null ? t('page.value.na') : formatEta(jobView.etaSeconds) }),
+                                      h(StatItem, { label: t('page.label.exported'), value: jobView.exportedCount || 0 }),
+                                    ),
+                                    h('div', { className: 'ew-progress-message' }, jobView.message || t('page.notice.waiting')),
+                                    h(
+                                      'div',
+                                      { className: 'ew-kv-grid' },
+                                      h('div', { className: 'ew-kv-item' }, h('label', null, t('page.label.taskId')), h('div', null, jobView.jobId || '')),
+                                      h('div', { className: 'ew-kv-item' }, h('label', null, t('page.label.progress')), h('div', null, `${Math.round(normalizeProgressPercent(jobView.overallProgressPercent))}%`)),
+                                    ),
+                                    Array.isArray(jobView.exportedFiles) && jobView.exportedFiles.length > 0
+                                      ? h(
+                                          'div',
+                                          { className: 'ew-terminal-list' },
+                                          h('h3', { className: 'ew-h3' }, t('page.summary.exportedFiles')),
+                                          h(
+                                            'ul',
+                                            null,
+                                            jobView.exportedFiles.map((filePath) => h('li', { key: filePath }, filePath)),
+                                          ),
+                                        )
+                                      : null,
+                                    Array.isArray(jobView.failedSnapshots) && jobView.failedSnapshots.length > 0
+                                      ? h(
+                                          'div',
+                                          { className: 'ew-terminal-list is-danger' },
+                                          h('h3', { className: 'ew-h3' }, t('page.summary.failedSnapshots')),
+                                          h(
+                                            'ul',
+                                            null,
+                                            (Array.isArray(jobView.failedSnapshotDetails) && jobView.failedSnapshotDetails.length > 0
+                                              ? jobView.failedSnapshotDetails
+                                              : jobView.failedSnapshots.map((snapshotName) => ({ snapshotName, error: '' })))
+                                              .map((item) =>
+                                                h(
+                                                  'li',
+                                                  { key: `${item.snapshotName}:${item.error}` },
+                                                  item.error ? `${item.snapshotName}: ${item.error}` : item.snapshotName,
+                                                ),
+                                              ),
+                                          ),
+                                        )
+                                      : null,
+                                  )
+                                : null,
                               isCompletedSuccessfully
                                 ? h(
                                     'div',
@@ -2135,17 +1931,6 @@ export function ExportWorkflowPage({ context }) {
                                     h(
                                       'div',
                                       { className: 'ew-row-actions' },
-                                      h(
-                                        WorkflowButton,
-                                        {
-                                          variant: 'primary',
-                                          disabled: !canOpenOutputFolder,
-                                          onClick: () => {
-                                            void handleOpenOutputFolder()
-                                          },
-                                        },
-                                        t('page.button.openFolder'),
-                                      ),
                                       h(
                                         WorkflowButton,
                                         {
@@ -2333,16 +2118,6 @@ export function ExportWorkflowPage({ context }) {
                                             placeholder: t('page.placeholder.selectExportFolder'),
                                             onChange: (event) => setSettings((current) => ({ ...current, output_path: event.target.value })),
                                           }),
-                                          h(
-                                            WorkflowButton,
-                                            {
-                                              small: true,
-                                              onClick: () => {
-                                                void handleBrowseFolder()
-                                              },
-                                            },
-                                            t('page.button.browse'),
-                                          ),
                                         ),
                                       ),
                                     ),

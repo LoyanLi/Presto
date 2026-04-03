@@ -18,6 +18,7 @@ import { createSessionClient } from './clients/session'
 import { createSystemClient } from './clients/system'
 import { createTrackClient } from './clients/track'
 import { createTransportClient } from './clients/transport'
+import { createWorkflowClient } from './clients/workflow'
 import type { PublicCapabilityId } from '../../contracts/src'
 import type { StripSilenceClient } from '../../contracts/src'
 
@@ -84,6 +85,7 @@ export const createPrestoClient = (options: PrestoClientOptions): PrestoClient =
     track: createTrackClient(context),
     clip: createClipClient(context),
     transport: createTransportClient(context),
+    workflow: createWorkflowClient(context),
     import: createImportClient(context),
     export: createExportClient(context),
     stripSilence: createStripSilenceClient(context),

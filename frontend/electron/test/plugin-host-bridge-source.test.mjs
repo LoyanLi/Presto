@@ -24,6 +24,8 @@ test('electron host wires plugin host build through one-shot bootstrap and keeps
   assert.match(runtimeHandlerSource, /plugins:install-directory/)
   assert.match(runtimeHandlerSource, /plugins:install-zip/)
   assert.match(runtimeHandlerSource, /plugins:uninstall/)
+  assert.match(runtimeHandlerSource, /resolveWorkflowExecution/)
+  assert.match(runtimeHandlerSource, /allowedCapabilities:\s*trustedWorkflow\.allowedCapabilities/)
   assert.match(mainSource, /syncOfficialExtensions/)
   assert.match(preloadSource, /takePluginHostBridge/)
   assert.match(preloadSource, /takeRuntime/)

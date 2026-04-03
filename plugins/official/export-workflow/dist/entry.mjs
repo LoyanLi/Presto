@@ -16,6 +16,11 @@ export const manifest = {
   description: 'Capture track snapshots, manage export presets, and run the official batch export workflow.',
   entry: 'dist/entry.mjs',
   styleEntry: 'dist/export-workflow.css',
+  workflowDefinition: {
+    workflowId: 'official.export-workflow.run',
+    inputSchemaId: 'official.export-workflow.run.v1',
+    definitionEntry: 'dist/workflow-definition.json',
+  },
   pages: [
     {
       pageId: 'export-workflow.page.main',
@@ -49,20 +54,6 @@ export const manifest = {
             },
           ],
         },
-        {
-          sectionId: 'mobileProgressQr',
-          title: 'Mobile progress QR',
-          fields: [
-            {
-              fieldId: 'mobile-progress-enabled',
-              kind: 'toggle',
-              label: 'Enable mobile progress QR',
-              path: 'mobileProgressEnabled',
-              description:
-                'Allows the Export step to generate a QR code so your phone can follow the current export progress.',
-            },
-          ],
-        },
       ],
     },
   ],
@@ -83,6 +74,7 @@ export const manifest = {
     },
   ],
   requiredCapabilities: [
+    'workflow.run.start',
     'daw.connection.getStatus',
     'session.getInfo',
     'track.list',
@@ -99,6 +91,7 @@ export const manifest = {
     { moduleId: 'jobs', minVersion: '2025.10.0' },
   ],
   capabilityRequirements: [
+    { capabilityId: 'workflow.run.start', minVersion: '2025.10.0' },
     { capabilityId: 'daw.connection.getStatus', minVersion: '2025.10.0' },
     { capabilityId: 'session.getInfo', minVersion: '2025.10.0' },
     { capabilityId: 'track.list', minVersion: '2025.10.0' },
@@ -106,18 +99,6 @@ export const manifest = {
     { capabilityId: 'export.run.start', minVersion: '2025.10.0' },
     { capabilityId: 'jobs.get', minVersion: '2025.10.0' },
     { capabilityId: 'jobs.cancel', minVersion: '2025.10.0' },
-  ],
-  requiredRuntimeServices: [
-    'dialog.openFolder',
-    'shell.openPath',
-    'mobileProgress.createSession',
-    'mobileProgress.closeSession',
-    'mobileProgress.getViewUrl',
-    'mobileProgress.updateSession',
-    'fs.readFile',
-    'fs.writeFile',
-    'fs.ensureDir',
-    'fs.getHomePath',
   ],
 }
 

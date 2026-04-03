@@ -22,7 +22,7 @@ Presto
 ├── host-plugin-runtime/     # 插件发现、校验、加载、挂载、权限守卫
 ├── packages/
 │   ├── contracts/           # 类型契约、能力协议、插件协议、事件与错误模型
-│   ├── contracts-manifest/  # capability / runtime service / permission 白名单事实源
+│   ├── contracts-manifest/  # capability 清单与相关生成产物事实源
 │   ├── sdk-core/            # 能力调用 SDK
 │   └── sdk-runtime/         # Electron Runtime SDK
 ├── plugins/official/        # 官方插件包
@@ -63,10 +63,10 @@ Electron Main IPC Handlers
 
 以下内容是当前代码已经明确成立的事实：
 
-- 当前宿主应用名为 `Presto`，版本基线为 `0.3.0-alpha.1`。
+- 当前宿主应用名为 `Presto`，版本基线为 `0.3.0-alpha.2`。
 - 当前能力注册与官方插件的实际目标 DAW 都是 `pro_tools`。
-- 插件系统不是“任意脚本直通宿主”，而是 manifest 驱动、白名单能力驱动、运行时服务白名单驱动。
-- 类型接口定义集中在 `packages/contracts`，但 capability/runtime service/插件权限白名单的运行时事实源是 `packages/contracts-manifest`，并通过生成产物供 TypeScript、Python 和插件运行时共用。
+- 插件系统不是“任意脚本直通宿主”，而是 manifest 驱动、白名单 capability 驱动，插件只负责定义，执行由后端能力层与宿主正式能力承接。
+- 类型接口定义集中在 `packages/contracts`。当前 capability 清单与相关生成产物由 `packages/contracts-manifest` 派生，供 TypeScript、Python 和插件运行时共用。
 - `packages/sdk-core` 面向能力调用，`packages/sdk-runtime` 面向宿主运行时服务，两者职责不同，不能混用。
 - Renderer 侧不是长期持有私有宿主桥，而是从 `__PRESTO_BOOTSTRAP__` 一次性取走 client/runtime/plugin host bridge，再组装宿主应用。
 
@@ -87,7 +87,7 @@ Electron Main IPC Handlers
 ### 面向外部接入者
 
 - [SDK 开发](docs/sdk-development.md)
-- [第三方插件编写](docs/third-party-plugin-development.md)
+- [插件开发规范与流程](docs/third-party-plugin-development.md)
 
 ## 建议阅读顺序
 

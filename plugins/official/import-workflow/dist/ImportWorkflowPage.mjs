@@ -1,22 +1,15 @@
 import React from './react-shared.mjs'
 
 import {
-  ANALYZE_CACHE_FILENAME,
   applyPatchToSelectedRows,
-  analyzeFilePaths,
   basenameOf,
-  buildAnalyzeCachePayload,
   buildRunValidation,
-  collectAudioFilePathsFromFolders,
   createCategoryColorSlotMap,
   createDefaultImportWorkflowSettings,
   finalizeRowsForImport,
-  isPathInsideFolder,
   isTerminalJobState,
   loadImportWorkflowSettings,
   normalizeTrackName,
-  normalizePath,
-  planPostImportActions,
   runAiAnalyzeInPlugin,
   saveImportWorkflowSettings,
   stemOf,
@@ -33,6 +26,7 @@ import {
 import { formatImport, tImport } from './i18n.mjs'
 
 const h = React.createElement
+const IMPORT_WORKFLOW_ID = 'official.import-workflow.run'
 const WORKFLOW_STEP_KEYS = ['page.step.analyze', 'page.step.strip', 'page.step.run']
 const PREPARED_FILE_COLUMNS = [
   { id: 'file', labelKey: 'page.column.file', defaultWidth: 300 },
@@ -57,11 +51,11 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function joinPath(directoryPath, entry) {
-  if (!directoryPath) {
-    return entry
-  }
-  return directoryPath.endsWith('/') ? `${directoryPath}${entry}` : `${directoryPath}/${entry}`
+function parseSourceFolderInput(value) {
+  return String(value ?? '')
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
 }
 
 function shouldIgnoreRowSelection(target) {
@@ -153,107 +147,6 @@ function sortRowsForDisplay(rows, categories) {
     }
     return basenameOf(left.filePath).localeCompare(basenameOf(right.filePath), undefined, { sensitivity: 'base' })
   })
-}
-
-function deserializeCachedRow(rawRow, resolvedPath, fallbackCategoryId) {
-  const aiName = String(rawRow?.ai_name ?? '').trim() || toDisplayName(stemOf(resolvedPath))
-  const finalName = String(rawRow?.final_name ?? '').trim() || aiName
-  const status = rawRow?.status === 'ready' || rawRow?.status === 'failed' || rawRow?.status === 'skipped'
-    ? rawRow.status
-    : 'ready'
-  return {
-    filePath: resolvedPath,
-    categoryId: String(rawRow?.category_id ?? '').trim() || fallbackCategoryId,
-    aiName,
-    finalName,
-    status,
-    errorMessage: typeof rawRow?.error_message === 'string' ? rawRow.error_message : null,
-  }
-}
-
-async function loadAnalyzeCacheForFolders({ folders, filePaths, runtimeFs, fallbackCategoryId }) {
-  if (!runtimeFs || typeof runtimeFs.readFile !== 'function' || folders.length === 0 || filePaths.length === 0) {
-    return {
-      rows: [],
-      cacheHits: 0,
-      cacheFiles: 0,
-    }
-  }
-
-  const resolvedRows = new Map()
-  const filePathMap = new Map(filePaths.map((filePath) => [normalizePath(filePath), filePath]))
-  let cacheFiles = 0
-  let cacheHits = 0
-
-  for (const folder of folders) {
-    const cachePath = joinPath(folder, ANALYZE_CACHE_FILENAME)
-    let raw = null
-    try {
-      raw = await runtimeFs.readFile(cachePath)
-    } catch {
-      raw = null
-    }
-    if (!raw) {
-      continue
-    }
-    cacheFiles += 1
-
-    let payload
-    try {
-      payload = JSON.parse(raw)
-    } catch {
-      continue
-    }
-
-    const proposals = Array.isArray(payload?.proposals) ? payload.proposals : []
-    for (const proposal of proposals) {
-      const absolutePath = typeof proposal?.file_path === 'string' ? normalizePath(proposal.file_path) : ''
-      const relativePath = typeof proposal?.relative_path === 'string'
-        ? normalizePath(joinPath(folder, proposal.relative_path))
-        : ''
-      const resolvedPath = filePathMap.get(absolutePath) || filePathMap.get(relativePath)
-      if (!resolvedPath) {
-        continue
-      }
-      resolvedRows.set(
-        resolvedPath,
-        deserializeCachedRow(proposal, resolvedPath, fallbackCategoryId),
-      )
-      cacheHits += 1
-    }
-  }
-
-  return {
-    rows: Array.from(resolvedRows.values()),
-    cacheHits,
-    cacheFiles,
-  }
-}
-
-async function persistAnalyzeCache({ folders, rows, runtimeFs }) {
-  if (
-    !runtimeFs ||
-    typeof runtimeFs.writeFile !== 'function' ||
-    folders.length === 0 ||
-    rows.length === 0
-  ) {
-    return
-  }
-
-  for (const folder of folders) {
-    const payload = buildAnalyzeCachePayload({ folder, rows })
-    if (payload.total <= 0) {
-      continue
-    }
-    if (typeof runtimeFs.ensureDir === 'function') {
-      try {
-        await runtimeFs.ensureDir(folder)
-      } catch {
-        // Ignore ensure-dir failures; folder may already exist or be read-only.
-      }
-    }
-    await runtimeFs.writeFile(joinPath(folder, ANALYZE_CACHE_FILENAME), JSON.stringify(payload, null, 2))
-  }
 }
 
 function mergeRows(previousRows, nextRows, cachedRows, categories) {
@@ -365,6 +258,7 @@ export function ImportWorkflowPage({ context }) {
   const [settings, setSettings] = React.useState(() => createDefaultImportWorkflowSettings())
   const [rows, setRows] = React.useState([])
   const [sourceFolders, setSourceFolders] = React.useState([])
+  const [sourceFolderInput, setSourceFolderInput] = React.useState('')
   const [step, setStep] = React.useState(1)
   const [busy, setBusy] = React.useState(true)
   const [, setBanner] = React.useState('')
@@ -421,15 +315,14 @@ export function ImportWorkflowPage({ context }) {
       if (!settings.ui.analyzeCacheEnabled || sourceFolders.length === 0) {
         return
       }
-      void persistAnalyzeCache({
-        folders: sourceFolders,
-        rows: nextRows.filter((row) => sourceFolders.some((folder) => isPathInsideFolder(row.filePath, folder))),
-        runtimeFs: context.runtime.fs,
+      void context.presto.import.cache.save({
+        sourceFolders,
+        rows: nextRows,
       }).catch((error) => {
         appendLog(`Analyze cache write failed: ${error instanceof Error ? error.message : String(error)}`, 'warn')
       })
     },
-    [appendLog, context.runtime.fs, settings.ui.analyzeCacheEnabled, sourceFolders],
+    [appendLog, context.presto.import.cache, settings.ui.analyzeCacheEnabled, sourceFolders],
   )
 
   React.useEffect(() => {
@@ -494,28 +387,32 @@ export function ImportWorkflowPage({ context }) {
     [persistCache],
   )
 
-  const addRowsFromPaths = React.useCallback(
-    async (filePaths, folders = []) => {
-      const uniquePaths = Array.from(new Set(filePaths.map((value) => String(value ?? '').trim()).filter(Boolean)))
-      if (uniquePaths.length === 0) {
-      setBanner(tImport(context, 'page.banner.noFilesSelected'))
-        return
-      }
+  const onSourceFolderChange = React.useCallback((event) => {
+    const value = String(event?.target?.value ?? '')
+    setSourceFolderInput(value)
+    setSourceFolders(parseSourceFolderInput(value))
+  }, [])
 
-      const scannedRows = analyzeFilePaths(uniquePaths, settings.categories, folders)
-      const fallbackCategoryId = settings.categories[0]?.id || 'other'
-      const cacheResult = await loadAnalyzeCacheForFolders({
-        folders,
-        filePaths: scannedRows.map((row) => row.filePath),
-        runtimeFs: context.runtime.fs,
-        fallbackCategoryId,
+  const onPickFolders = React.useCallback(async () => {
+    if (sourceFolders.length === 0) {
+      setErrorMessage(tImport(context, 'page.error.import.noSource'))
+      return
+    }
+    setBusy(true)
+    setErrorMessage('')
+    try {
+      const response = await context.presto.import.analyze({
+        sourceFolders,
+        categories: settings.categories.map((category) => ({ id: category.id, name: category.name })),
+        analyzeCacheEnabled: settings.ui.analyzeCacheEnabled,
       })
-
-      replaceRows(
-        (previous) => mergeRows(previous, scannedRows, cacheResult.rows, settings.categories),
-        false,
-      )
-      setSourceFolders((previous) => Array.from(new Set([...previous, ...folders])))
+      const analyzedFolders = Array.isArray(response?.folderPaths) ? response.folderPaths : []
+      const orderedFilePaths = Array.isArray(response?.orderedFilePaths) ? response.orderedFilePaths : []
+      const analyzedRows = Array.isArray(response?.rows) ? response.rows : []
+      const cacheStats = response?.cache ?? { files: 0, hits: 0 }
+      replaceRows((previous) => mergeRows(previous, analyzedRows, [], settings.categories), false)
+      setSourceFolders(analyzedFolders)
+      setSourceFolderInput(analyzedFolders.join('\n'))
       setStep(1)
       setStripOpened(false)
       setStripReady(false)
@@ -529,46 +426,27 @@ export function ImportWorkflowPage({ context }) {
       })
 
       const cacheSuffix =
-        cacheResult.cacheHits > 0
-          ? formatImport(context, 'page.banner.cache.hits', { count: cacheResult.cacheHits })
-          : cacheResult.cacheFiles > 0
+        cacheStats.hits > 0
+          ? formatImport(context, 'page.banner.cache.hits', { count: cacheStats.hits })
+          : cacheStats.files > 0
             ? tImport(context, 'page.banner.cache.foundNone')
             : ''
-      const preparedMessage = formatImport(context, 'page.banner.prepared', { count: uniquePaths.length })
+      const preparedMessage = formatImport(context, 'page.banner.prepared', { count: orderedFilePaths.length })
       setBanner(`${preparedMessage}${cacheSuffix}`)
-      appendLog(`Prepared ${uniquePaths.length} row(s).`)
-    },
-    [appendLog, context.runtime.fs, replaceRows, settings.categories],
-  )
-
-  const onPickFolders = React.useCallback(async () => {
-    setBusy(true)
-    setErrorMessage('')
-    try {
-      if (!context.runtime.dialog || typeof context.runtime.dialog.openFolder !== 'function') {
-        throw new Error('Folder picker runtime service is unavailable.')
-      }
-      const result = await context.runtime.dialog.openFolder()
-      if (result.canceled || result.paths.length === 0) {
-        setBanner(tImport(context, 'page.banner.folderCancelled'))
-        return
-      }
-      const folders = result.paths
-      const discovered = await collectAudioFilePathsFromFolders(folders, context.runtime.fs)
-      await addRowsFromPaths(discovered, folders)
+      appendLog(`Prepared ${orderedFilePaths.length} row(s).`)
       setBanner(
         formatImport(context, 'page.banner.scanned', {
-          folders: folders.length,
-          files: discovered.length,
+          folders: analyzedFolders.length,
+          files: orderedFilePaths.length,
         }),
       )
-      appendLog(`Scanned folder: ${folders.join(', ')}`)
+      appendLog(`Scanned folder: ${analyzedFolders.join(', ')}`)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
-  }, [addRowsFromPaths, appendLog, context.runtime.dialog, context.runtime.fs])
+  }, [appendLog, context.presto.import, replaceRows, settings.categories, settings.ui.analyzeCacheEnabled, sourceFolders])
 
   const onAnalyze = React.useCallback(async () => {
     if (rows.length === 0) {
@@ -616,6 +494,7 @@ export function ImportWorkflowPage({ context }) {
   const clearWorkflow = React.useCallback(() => {
     setRows([])
     setSourceFolders([])
+    setSourceFolderInput('')
     setSelectedPaths(new Set())
     setSelectionAnchor(null)
     setStep(1)
@@ -697,85 +576,6 @@ export function ImportWorkflowPage({ context }) {
     }
   }, [appendLog, context.presto.stripSilence])
 
-  const runPostImportActions = React.useCallback(
-    async (record, executionRows, stageKeys) => {
-      const importedTrackNames = Array.isArray(record?.result?.importedTrackNames) ? record.result.importedTrackNames : []
-      const plan = planPostImportActions({
-        proposals: executionRows,
-        importedTrackNames,
-        categoryColorSlotById,
-        stripAfterImport: settings.ui.stripAfterImport,
-      })
-
-      const setPhase = (phase, current, total, message, percent = progressPercent(current, total)) => {
-        setRunState({
-          phase,
-          stageKey: phase,
-          stageKeys,
-          jobId: record.jobId,
-          current,
-          total,
-          percent,
-          message,
-        })
-      }
-
-      let processed = 0
-      for (const action of plan.renameActions) {
-        processed += 1
-        setPhase('rename', processed, Math.max(plan.renameActions.length, 1), `Renaming ${action.currentName}`)
-        await context.presto.track.rename({
-          currentName: action.currentName,
-          newName: action.newName,
-        })
-      }
-
-      processed = 0
-      for (const action of plan.colorActions) {
-        processed += 1
-        setPhase('color', processed, Math.max(plan.colorActions.length, 1), `Applying color to ${action.trackName}`)
-        await context.presto.track.color.apply({
-          trackName: action.trackName,
-          colorSlot: action.colorSlot,
-        })
-      }
-
-      if (settings.ui.stripAfterImport) {
-        processed = 0
-        for (const action of plan.stripActions) {
-          processed += 1
-          setPhase('strip', processed, Math.max(plan.stripActions.length, 1), `Strip Silence on ${action.trackName}`)
-          await context.presto.track.select({ trackName: action.trackName })
-          await context.presto.clip.selectAllOnTrack({ trackName: action.trackName })
-          await context.presto.stripSilence.execute({
-            trackName: action.trackName,
-            profile: settings.silenceProfile,
-          })
-        }
-      }
-
-      if (settings.ui.autoSaveSession) {
-        setPhase('save', 1, 1, 'Saving session')
-        await context.presto.session.save()
-      }
-
-      const completedMessage = tImport(context, 'page.state.importCompleted')
-      setRunState({
-        phase: 'completed',
-        stageKey: 'completed',
-        stageKeys,
-        jobId: record.jobId,
-        current: stageKeys.length,
-        total: stageKeys.length,
-        percent: 100,
-        message: completedMessage,
-      })
-      setBanner(tImport(context, 'page.banner.importCompleted'))
-      appendLog('Import workflow completed.')
-    },
-    [appendLog, categoryColorSlotById, context.presto.clip, context.presto.session, context.presto.stripSilence, context.presto.track, settings.silenceProfile, settings.ui.autoSaveSession, settings.ui.stripAfterImport],
-  )
-
   const pollJob = React.useCallback(
     async (jobId, executionRows, stageKeys) => {
       try {
@@ -800,7 +600,19 @@ export function ImportWorkflowPage({ context }) {
         }
 
         if (job.state === 'succeeded') {
-          await runPostImportActions(job, executionRows, stageKeys)
+          const completedMessage = tImport(context, 'page.state.importCompleted')
+          setRunState({
+            phase: 'completed',
+            stageKey: 'completed',
+            stageKeys,
+            jobId,
+            current: stageKeys.length,
+            total: stageKeys.length,
+            percent: 100,
+            message: completedMessage,
+          })
+          setBanner(tImport(context, 'page.banner.importCompleted'))
+          appendLog('Import workflow completed.')
           return
         }
 
@@ -830,7 +642,7 @@ export function ImportWorkflowPage({ context }) {
         setErrorMessage(message)
       }
     },
-    [context.presto.jobs, runPostImportActions],
+    [appendLog, context, context.presto.jobs],
   )
 
   const startImportRun = React.useCallback(async () => {
@@ -868,9 +680,17 @@ export function ImportWorkflowPage({ context }) {
         stripAfterImport: settings.ui.stripAfterImport,
         autoSaveSession: settings.ui.autoSaveSession,
       })
-      const response = await context.presto.import.run.start({
-        folderPaths: sourceFolders,
-        orderedFilePaths,
+      const response = await context.presto.workflow.run.start({
+        pluginId: context.pluginId,
+        workflowId: IMPORT_WORKFLOW_ID,
+        input: {
+          sourceFolders,
+          orderedFilePaths,
+          rows: finalized.executionRows,
+          categories: settings.categories,
+          silenceProfile: settings.silenceProfile,
+          ui: settings.ui,
+        },
       })
       const queuedMessage = tImport(context, 'page.state.importQueued')
       setRunState({
@@ -907,7 +727,7 @@ export function ImportWorkflowPage({ context }) {
     } finally {
       setBusy(false)
     }
-  }, [appendLog, categoryColorSlotById, context.presto.import.run, context.presto.track, pollJob, readyRows.length, replaceRows, settings.categories, settings.ui.autoSaveSession, settings.ui.stripAfterImport, sortedRows, sourceFolders, validationIssues])
+  }, [appendLog, categoryColorSlotById, context.presto.track, context.presto.workflow.run, pollJob, readyRows.length, replaceRows, settings.categories, settings.silenceProfile, settings.ui, sortedRows, sourceFolders, validationIssues])
 
   const cancelRun = React.useCallback(async () => {
     if (!runState.jobId || runState.phase !== 'backend') {
@@ -1019,6 +839,15 @@ export function ImportWorkflowPage({ context }) {
   const preparedFilesActions = h(
     'div',
     { className: 'iw-table-actions' },
+    h('label', { className: 'iw-source-label', htmlFor: 'iw-source-folders' }, 'Source folders'),
+    h('textarea', {
+      id: 'iw-source-folders',
+      className: 'iw-source-folders',
+      value: sourceFolderInput,
+      rows: 2,
+      placeholder: 'Paste one folder path per line',
+      onChange: onSourceFolderChange,
+    }),
     h(
       WorkflowButton,
       {

@@ -21,4 +21,3 @@ export {
 
 export { createPluginRuntime } from './permissions/createPluginRuntime'
 export { guardCapabilityAccess } from './permissions/guardCapabilityAccess'
-export { guardRuntimeAccess } from './permissions/guardRuntimeAccess'

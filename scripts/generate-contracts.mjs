@@ -8,8 +8,6 @@ const repoRoot = path.resolve(__dirname, '..')
 
 const manifestDir = path.join(repoRoot, 'packages', 'contracts-manifest')
 const capabilityManifestPath = path.join(manifestDir, 'capabilities.json')
-const runtimeServicesPath = path.join(manifestDir, 'runtime-services.json')
-const pluginPermissionsPath = path.join(manifestDir, 'plugin-permissions.json')
 const schemasPath = path.join(manifestDir, 'schemas.json')
 
 const readJson = (targetPath) => JSON.parse(readFileSync(targetPath, 'utf8'))
@@ -25,24 +23,10 @@ const toPyTuple = (values) => {
 }
 
 const capabilities = readJson(capabilityManifestPath)
-const runtimeServices = readJson(runtimeServicesPath)
-const pluginPermissions = readJson(pluginPermissionsPath)
 const schemas = readJson(schemasPath)
 
 if (!Array.isArray(capabilities)) {
   throw new Error('contracts-manifest/capabilities.json must be an array')
-}
-if (!Array.isArray(runtimeServices)) {
-  throw new Error('contracts-manifest/runtime-services.json must be an array')
-}
-if (!pluginPermissions || typeof pluginPermissions !== 'object') {
-  throw new Error('contracts-manifest/plugin-permissions.json must be an object')
-}
-if (!Array.isArray(pluginPermissions.allowedRuntimeServices)) {
-  throw new Error('plugin-permissions.allowedRuntimeServices must be an array')
-}
-if (JSON.stringify(pluginPermissions.allowedRuntimeServices) !== JSON.stringify(runtimeServices)) {
-  throw new Error('runtime-services.json must match plugin-permissions.allowedRuntimeServices exactly')
 }
 if (!schemas || typeof schemas !== 'object') {
   throw new Error('contracts-manifest/schemas.json must be an object')
@@ -108,22 +92,6 @@ export const PUBLIC_CAPABILITY_IDS = CAPABILITY_REGISTRY.filter((definition) => 
   writeFileSync(path.join(outDir, 'capabilityRegistry.ts'), content, 'utf8')
 }
 
-function generateTsRuntimeServices() {
-  const outDir = path.join(repoRoot, 'host-plugin-runtime', 'src', 'discovery', 'generated')
-  ensureDir(outDir)
-
-  const content = `/* Auto-generated from contracts-manifest; do not edit by hand. */
-export const FORMAL_RUNTIME_SERVICE_NAMES = ${JSON.stringify(runtimeServices, null, 2)} as const
-export const FORMAL_PUBLIC_CAPABILITY_IDS = ${JSON.stringify(
-    capabilities.filter((capability) => capability.visibility === 'public').map((capability) => capability.id),
-    null,
-    2,
-  )} as const
-`
-
-  writeFileSync(path.join(outDir, 'runtimeServices.ts'), content, 'utf8')
-}
-
 function generatePyCapabilityCatalog() {
   const outDir = path.join(repoRoot, 'backend', 'import', 'presto', 'application', 'capabilities')
   ensureDir(outDir)
@@ -166,10 +134,8 @@ ${definitions}
 }
 
 generateTsCapabilityRegistry()
-generateTsRuntimeServices()
 generatePyCapabilityCatalog()
 
 console.log('Generated contracts artifacts from manifest:')
 console.log(' - packages/contracts/src/generated/capabilityRegistry.ts')
-console.log(' - host-plugin-runtime/src/discovery/generated/runtimeServices.ts')
 console.log(' - backend/presto/application/capabilities/catalog_generated.py')

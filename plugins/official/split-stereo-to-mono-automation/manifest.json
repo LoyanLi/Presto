@@ -26,6 +26,5 @@
   ],
   "capabilityRequirements": [
     { "capabilityId": "automation.splitStereoToMono.execute", "minVersion": "2025.10.0" }
-  ],
-  "requiredRuntimeServices": []
+  ]
 }

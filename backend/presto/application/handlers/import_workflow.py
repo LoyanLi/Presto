@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import json
 import shutil
 import threading
 import time
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 
 SUPPORTED_AUDIO_SUFFIXES = {".wav", ".aif", ".aiff", ".mp3", ".m4a", ".flac", ".ogg"}
+ANALYZE_CACHE_FILENAME = ".presto_ai_analyze.json"
 
 
 class ImportAnalysisCache:
@@ -214,13 +216,17 @@ def _humanize_stem(stem: str) -> str:
     return " ".join(token[:1].upper() + token[1:] for token in tokens)
 
 
-def _proposal_for_file(file_path: Path, source_folder: Path) -> dict[str, Any]:
+def _proposal_for_file(
+    file_path: Path,
+    source_folder: Path,
+    *,
+    categories: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     original_stem = file_path.stem
     ai_name = _humanize_stem(original_stem)
     return {
-        "filePath": str(file_path),
-        "categoryId": source_folder.name,
-        "originalStem": original_stem,
+        "filePath": str(file_path.resolve()),
+        "categoryId": _infer_category_id(file_path, source_folder, categories=categories),
         "aiName": ai_name,
         "finalName": ai_name,
         "status": "ready",
@@ -228,19 +234,196 @@ def _proposal_for_file(file_path: Path, source_folder: Path) -> dict[str, Any]:
     }
 
 
+def _json_dumps(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, indent=2, ensure_ascii=True)
+
+
+def _normalize_category_token(value: str) -> str:
+    return value.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+def _infer_category_id(
+    file_path: Path,
+    source_folder: Path,
+    *,
+    categories: list[dict[str, Any]] | None = None,
+) -> str:
+    if categories:
+        normalized_categories: list[tuple[str, set[str]]] = []
+        for category in categories:
+            if not isinstance(category, dict):
+                continue
+            category_id = str(category.get("id", "")).strip()
+            category_name = str(category.get("name", "")).strip()
+            if not category_id and not category_name:
+                continue
+            tokens = {
+                token
+                for token in (
+                    _normalize_category_token(category_id),
+                    _normalize_category_token(category_name),
+                )
+                if token
+            }
+            if tokens:
+                normalized_categories.append((category_id or category_name, tokens))
+
+        segments = [segment for segment in file_path.resolve().parts[-4:-1] if segment]
+        for segment in segments:
+            token = _normalize_category_token(segment)
+            if not token:
+                continue
+            for category_id, tokens in normalized_categories:
+                if token in tokens:
+                    return category_id
+
+        source_token = _normalize_category_token(source_folder.name)
+        if source_token:
+            for category_id, tokens in normalized_categories:
+                if source_token in tokens:
+                    return category_id
+
+        if normalized_categories:
+            return normalized_categories[0][0]
+
+    return "drums"
+
+
+def _build_cache_rows(folder: Path, rows_payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_rows = []
+    for row in rows_payload:
+        if not isinstance(row, dict):
+            continue
+        file_path = str(row.get("filePath", "")).strip()
+        if not file_path:
+            continue
+        resolved_path = Path(file_path).expanduser().resolve()
+        if resolved_path.suffix.lower() not in SUPPORTED_AUDIO_SUFFIXES:
+            continue
+        try:
+            relative_path = resolved_path.relative_to(folder.resolve())
+        except ValueError:
+            continue
+        normalized_rows.append(
+            {
+                "file_path": str(resolved_path),
+                "category_id": str(row.get("categoryId", "")).strip() or folder.name,
+                "ai_name": row.get("aiName"),
+                "final_name": row.get("finalName"),
+                "status": row.get("status", "ready"),
+                "error_message": row.get("errorMessage"),
+                "relative_path": relative_path.as_posix(),
+            }
+        )
+    return normalized_rows
+
+
+def _deserialize_cached_row(raw_row: dict[str, Any], resolved_path: Path, fallback_category_id: str) -> dict[str, Any]:
+    ai_name = str(raw_row.get("ai_name", "")).strip() or _humanize_stem(resolved_path.stem)
+    final_name = str(raw_row.get("final_name", "")).strip() or ai_name
+    status = raw_row.get("status", "ready")
+    if status not in {"ready", "failed", "skipped"}:
+        status = "ready"
+    return {
+        "filePath": str(resolved_path),
+        "categoryId": str(raw_row.get("category_id", "")).strip() or fallback_category_id,
+        "aiName": ai_name,
+        "finalName": final_name,
+        "status": status,
+        "errorMessage": raw_row.get("error_message"),
+    }
+
+
+def _load_analyze_cache(source_folders: list[Path]) -> tuple[dict[str, dict[str, Any]], int, int]:
+    resolved_rows: dict[str, dict[str, Any]] = {}
+    cache_files = 0
+    cache_hits = 0
+    for folder in source_folders:
+        cache_path = folder / ANALYZE_CACHE_FILENAME
+        if not cache_path.exists():
+            continue
+        try:
+            payload = json.loads(cache_path.read_text())
+        except Exception:
+            continue
+        proposals = payload.get("proposals")
+        if not isinstance(proposals, list):
+            continue
+        cache_files += 1
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            absolute_path = str(proposal.get("file_path", "")).strip()
+            relative_path = str(proposal.get("relative_path", "")).strip()
+            resolved_path = None
+            if absolute_path:
+                resolved_path = Path(absolute_path).expanduser().resolve()
+            elif relative_path:
+                resolved_path = (folder / relative_path).resolve()
+            if resolved_path is None:
+                continue
+            fallback_category_id = folder.name
+            row = _deserialize_cached_row(proposal, resolved_path, fallback_category_id)
+            resolved_rows[str(resolved_path)] = row
+            cache_hits += 1
+    return resolved_rows, cache_files, cache_hits
+
+
 def analyze_import(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
     source_folders = _resolve_source_folders(payload)
-    cache = _analysis_cache(services)
+    categories = payload.get("categories")
+    analyze_cache_enabled = payload.get("analyzeCacheEnabled", True)
+
+    cached_rows: dict[str, dict[str, Any]] = {}
+    cache_files = 0
+    cache_hits = 0
+    if analyze_cache_enabled:
+        cached_rows, cache_files, cache_hits = _load_analyze_cache(source_folders)
+
     audio_files = _iter_audio_files(source_folders)
-
-    proposals = []
+    ordered_file_paths = [str(path) for path in audio_files]
+    rows = []
     for file_path in audio_files:
-        source_folder = _find_matching_root(file_path, source_folders)
-        cache_key = f"{file_path.resolve()}::{file_path.stat().st_size}::{file_path.stat().st_mtime_ns}"
-        proposal = cache.get_or_set(cache_key, lambda file_path=file_path, source_folder=source_folder: _proposal_for_file(file_path, source_folder))
-        proposals.append(proposal)
+        normalized_key = str(file_path.resolve())
+        cached = cached_rows.get(normalized_key)
+        if cached is None:
+            source_folder = _find_matching_root(file_path, source_folders)
+            cached = _proposal_for_file(file_path, source_folder, categories=categories)
+        rows.append(cached)
 
-    return {"proposals": proposals}
+    return {
+        "folderPaths": [str(folder.resolve()) for folder in source_folders],
+        "orderedFilePaths": ordered_file_paths,
+        "rows": rows,
+        "cache": {"files": cache_files, "hits": cache_hits},
+    }
+
+
+def persist_import_analysis_cache(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
+    del services
+    source_folders = _resolve_source_folders(payload)
+    rows_payload = payload.get("rows")
+    if not isinstance(rows_payload, list):
+        raise _validation_error("rows is required.", field="rows")
+
+    saved = 0
+    for folder in source_folders:
+        folder_rows = _build_cache_rows(folder, rows_payload)
+        if not folder_rows:
+            continue
+        cache_path = folder / ANALYZE_CACHE_FILENAME
+        payload_data = {
+            "version": 1,
+            "generated_at": _utc_now(),
+            "folder": str(folder),
+            "total": len(folder_rows),
+            "proposals": folder_rows,
+        }
+        folder.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(_json_dumps(payload_data))
+        saved += 1
+
+    return {"saved": True, "cacheFiles": saved}
 
 
 def finalize_import(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
@@ -281,6 +464,54 @@ def finalize_import(services: "ServiceContainer", payload: dict[str, Any]) -> di
         )
 
     return {"proposals": proposals, "resolvedItems": resolved_items}
+
+
+def plan_import_run_items(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
+    del services
+    rows_payload = payload.get("rows")
+    if not isinstance(rows_payload, list):
+        raise _validation_error("rows is required.", field="rows")
+
+    imported_track_names = payload.get("importedTrackNames")
+    if not isinstance(imported_track_names, list):
+        raise _validation_error("importedTrackNames is required.", field="importedTrackNames")
+
+    categories_payload = payload.get("categories")
+    categories = categories_payload if isinstance(categories_payload, list) else []
+    color_slot_by_category_id: dict[str, int | None] = {}
+    for category in categories:
+        if not isinstance(category, dict):
+            continue
+        category_id = str(category.get("id", "")).strip()
+        if not category_id:
+            continue
+        color_slot = category.get("colorSlot")
+        color_slot_by_category_id[category_id] = int(color_slot) if isinstance(color_slot, int) else None
+
+    strip_after_import = bool(payload.get("stripAfterImport", False))
+    items: list[dict[str, Any]] = []
+    for index, row in enumerate(rows_payload):
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("status", "ready")) != "ready":
+            continue
+        current_track_name = str(imported_track_names[index] if index < len(imported_track_names) else "").strip()
+        final_track_name = str(row.get("finalName", "") or current_track_name).strip()
+        if not current_track_name or not final_track_name:
+            continue
+        category_id = str(row.get("categoryId", "")).strip()
+        color_slot = color_slot_by_category_id.get(category_id)
+        items.append(
+            {
+                "currentTrackName": current_track_name,
+                "finalTrackName": final_track_name,
+                "colorSlot": color_slot,
+                "shouldApplyColor": color_slot is not None,
+                "stripAfterImport": strip_after_import,
+            }
+        )
+
+    return {"items": items}
 
 
 def _normalize_run_error(services: "ServiceContainer", error: Exception, *, capability_id: str) -> PrestoErrorPayload:

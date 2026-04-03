@@ -45,6 +45,11 @@ async function writePluginFixture(pluginRoot, pluginId = 'plugin.zip.import') {
         uiRuntime: 'react18',
         displayName: 'Zip Plugin',
         entry: 'dist/index.mjs',
+        workflowDefinition: {
+          workflowId: `${pluginId}.run`,
+          inputSchemaId: `${pluginId}.input.v1`,
+          definitionEntry: 'dist/workflow-definition.json',
+        },
         pages: [
           {
             pageId: 'page.main',
@@ -66,6 +71,26 @@ async function writePluginFixture(pluginRoot, pluginId = 'plugin.zip.import') {
 export const manifest = { pluginId: ${JSON.stringify(pluginId)} }
 export async function activate() {}
 `,
+  )
+  await writeFile(
+    path.join(pluginRoot, 'dist/workflow-definition.json'),
+    JSON.stringify(
+      {
+        workflowId: `${pluginId}.run`,
+        version: '1.0.0',
+        inputSchemaId: `${pluginId}.input.v1`,
+        steps: [
+          {
+            stepId: 'health',
+            usesCapability: 'system.health',
+            input: {},
+            saveAs: 'health',
+          },
+        ],
+      },
+      null,
+      2,
+    ),
   )
 }
 

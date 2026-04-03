@@ -682,6 +682,52 @@
     "handler": "transport.getStatus"
   },
   {
+    "id": "import.analyze",
+    "version": 1,
+    "kind": "query",
+    "domain": "import",
+    "visibility": "public",
+    "description": "扫描文件夹并返回待导入行",
+    "requestSchema": {
+      "name": "ImportAnalyzeRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ImportAnalyzeResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "dependsOn": [],
+    "handler": "import.analyze"
+  },
+  {
+    "id": "import.cache.save",
+    "version": 1,
+    "kind": "command",
+    "domain": "import",
+    "visibility": "public",
+    "description": "写入导入分析缓存",
+    "requestSchema": {
+      "name": "ImportCacheSaveRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "ImportCacheSaveResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "dependsOn": [],
+    "handler": "import.cache.save"
+  },
+  {
     "id": "import.run.start",
     "version": 1,
     "kind": "job",

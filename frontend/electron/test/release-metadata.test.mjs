@@ -7,11 +7,11 @@ import { readFile } from 'node:fs/promises'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
 
-test('package.json exposes Presto 0.3.0-alpha.1 release metadata', async () => {
+test('package.json exposes Presto 0.3.0-alpha.2 release metadata', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const buildStage1Source = await readFile(path.join(repoRoot, 'frontend/electron/build-stage1.mjs'), 'utf8')
 
-  assert.equal(packageJson.version, '0.3.0-alpha.1')
+  assert.equal(packageJson.version, '0.3.0-alpha.2')
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.build?.productName, 'Presto')
   assert.equal(packageJson.build?.appId, 'com.loyan.presto')

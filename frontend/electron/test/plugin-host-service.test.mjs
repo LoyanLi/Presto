@@ -69,14 +69,44 @@ export async function activate() {}
     automationItems: options.automationItems ?? [],
     settingsPages: options.settingsPages ?? [],
     navigationItems,
+    workflowDefinition:
+      options.extensionType === 'automation'
+        ? undefined
+        : (options.workflowDefinition ?? {
+            workflowId: `${pluginId}.run`,
+            inputSchemaId: `${pluginId}.input.v1`,
+            definitionEntry: 'dist/workflow-definition.json',
+          }),
     requiredCapabilities,
     adapterModuleRequirements: options.adapterModuleRequirements ?? [],
     capabilityRequirements: options.capabilityRequirements ?? [],
-    requiredRuntimeServices: [],
   }
 
   await writeFile(path.join(pluginRoot, 'manifest.json'), JSON.stringify(manifest, null, 2))
   await writeFile(path.join(pluginRoot, 'dist/index.mjs'), entrySource)
+  if (manifest.extensionType === 'workflow') {
+    await writeFile(
+      path.join(pluginRoot, 'dist/workflow-definition.json'),
+      options.workflowDefinitionSource ??
+        JSON.stringify(
+          {
+            workflowId: manifest.workflowDefinition.workflowId,
+            version: '1.0.0',
+            inputSchemaId: manifest.workflowDefinition.inputSchemaId,
+            steps: [
+              {
+                stepId: 'health',
+                usesCapability: 'system.health',
+                input: {},
+                saveAs: 'health',
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+    )
+  }
   return pluginRoot
 }
 
@@ -91,7 +121,7 @@ test('plugin host service lists plugins and exposes structured issues', async (t
   await createPluginFixture(extrasRoot, {
     folderName: 'perm-plugin',
     pluginId: 'plugin.perm',
-    requiredCapabilities: ['__unsupported.capability__'],
+    requiredCapabilities: ['system.health', '__unsupported.capability__'],
   })
   await createPluginFixture(extrasRoot, {
     folderName: 'daw-plugin',
@@ -409,4 +439,130 @@ test('plugin host service seeds official extensions into the managed root only o
     .then(() => false)
     .catch(() => true)
   assert.equal(missingAfterSecondSeed, true)
+})
+
+test('plugin host service refreshes seeded official extensions when package contents change without a version bump', async (t) => {
+  const { createPluginHostService } = await loadServiceModule()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-official-refresh-'))
+  const managedRoot = path.join(sandbox, 'managed')
+  const officialRoot = path.join(sandbox, 'official')
+  const pluginRoot = await createPluginFixture(officialRoot, {
+    folderName: 'official-import',
+    pluginId: 'official.import-workflow',
+    requiredCapabilities: ['import.run.start'],
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const service = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+
+  await service.syncOfficialExtensions({ officialExtensionsRoot: officialRoot })
+
+  await writeFile(
+    path.join(pluginRoot, 'manifest.json'),
+    JSON.stringify(
+      {
+        pluginId: 'official.import-workflow',
+        extensionType: 'workflow',
+        version: '1.0.0',
+        hostApiVersion: '0.1.0',
+        supportedDaws: ['pro_tools'],
+        uiRuntime: 'react18',
+        displayName: 'Plugin Example',
+        entry: 'dist/index.mjs',
+        workflowDefinition: {
+          workflowId: 'official.import-workflow.run',
+          inputSchemaId: 'official.import-workflow.input.v1',
+          definitionEntry: 'dist/workflow-definition.json',
+        },
+        pages: [
+          {
+            pageId: 'page.main',
+            path: '/plugin/example',
+            title: 'Example',
+            mount: 'workspace',
+            componentExport: 'ExamplePage',
+          },
+        ],
+        automationItems: [],
+        settingsPages: [],
+        navigationItems: [],
+        requiredCapabilities: ['system.health', 'import.analyze', 'import.cache.save', 'import.run.start'],
+        adapterModuleRequirements: [],
+        capabilityRequirements: [],
+      },
+      null,
+      2,
+    ),
+  )
+
+  await service.syncOfficialExtensions({ officialExtensionsRoot: officialRoot })
+
+  const refreshedManifest = await readFile(path.join(managedRoot, 'official.import-workflow', 'manifest.json'), 'utf8')
+  assert.match(refreshedManifest, /"import\.analyze"/)
+  assert.match(refreshedManifest, /"import\.cache\.save"/)
+})
+
+test('plugin host service resolves trusted workflow execution payload from installed plugin metadata', async (t) => {
+  const { createPluginHostService } = await loadServiceModule()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-workflow-resolution-'))
+  const managedRoot = path.join(sandbox, 'managed')
+  const sourceRoot = path.join(sandbox, 'source')
+  await mkdir(sourceRoot, { recursive: true })
+  const sourcePluginRoot = await createPluginFixture(sourceRoot, {
+    folderName: 'import-plugin',
+    pluginId: 'official.import-workflow',
+    requiredCapabilities: ['workflow.run.start', 'track.rename', 'session.save'],
+    workflowDefinitionSource: JSON.stringify(
+      {
+        workflowId: 'official.import-workflow.run',
+        version: '1.0.0',
+        inputSchemaId: 'official.import-workflow.input.v1',
+        steps: [
+          {
+            stepId: 'rename',
+            usesCapability: 'track.rename',
+            input: {
+              currentName: { $ref: 'input.currentName' },
+              newName: { $ref: 'input.newName' },
+            },
+          },
+          {
+            stepId: 'save',
+            usesCapability: 'session.save',
+            input: {},
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const service = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+
+  const installed = await service.installFromDirectory({ selectedPath: sourcePluginRoot })
+  assert.equal(installed.ok, true)
+
+  const resolved = await service.resolveWorkflowExecution({
+    pluginId: 'official.import-workflow',
+    workflowId: 'official.import-workflow.run',
+  })
+
+  assert.deepEqual(resolved.allowedCapabilities, ['workflow.run.start', 'track.rename', 'session.save'])
+  assert.equal(resolved.definition.workflowId, 'official.import-workflow.run')
+  assert.equal(resolved.definition.steps[0]?.usesCapability, 'track.rename')
+  assert.equal(resolved.definition.steps[1]?.usesCapability, 'session.save')
 })

@@ -1,5 +1,9 @@
 import type {
   ImportClient,
+  ImportAnalyzeRequest,
+  ImportAnalyzeResponse,
+  ImportCacheSaveRequest,
+  ImportCacheSaveResponse,
   ImportRunStartRequest,
   ImportRunStartResponse,
   PublicCapabilityId,
@@ -29,6 +33,20 @@ const invokeCapability = async <TRequest, TResponse>(
 }
 
 export const createImportClient = (context: PrestoClientAssemblyContext): ImportClient => ({
+  analyze: (request: ImportAnalyzeRequest) =>
+    invokeCapability<ImportAnalyzeRequest, ImportAnalyzeResponse>(
+      context,
+      'import.analyze',
+      request,
+    ),
+  cache: {
+    save: (request: ImportCacheSaveRequest) =>
+      invokeCapability<ImportCacheSaveRequest, ImportCacheSaveResponse>(
+        context,
+        'import.cache.save',
+        request,
+      ),
+  },
   run: {
     start: (request: ImportRunStartRequest) =>
       invokeCapability<ImportRunStartRequest, ImportRunStartResponse>(

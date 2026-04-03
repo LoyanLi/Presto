@@ -1,6 +1,5 @@
 const AUDIO_EXT_REGEX = /\.(wav|aif|aiff|flac|mp3|m4a|ogg)$/i
 const IMPORT_WORKFLOW_SETTINGS_KEY = 'settings.v1'
-export const ANALYZE_CACHE_FILENAME = '.presto_ai_analyze.json'
 export const AI_SYSTEM_PROMPT =
   'You normalize audio track names. Return strict JSON only. You must choose one best category_id from the provided categories for each item. Classify from filename semantics only; do not blindly keep defaults. Do not invent instrument meaning. Always output normalized_name in English; translate non-English words to concise natural English while preserving meaning. Use underscore style like Word_Word_Word. Remove noisy serial fragments. Use Title Case for each English token.'
 
@@ -185,23 +184,8 @@ export function stemOf(filePath) {
   return basenameOf(filePath).replace(AUDIO_EXT_REGEX, '')
 }
 
-export function normalizePath(value) {
+function normalizePath(value) {
   return String(value ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-export function isPathInsideFolder(filePath, folderPath) {
-  const normalizedFile = normalizePath(filePath)
-  const normalizedFolder = normalizePath(folderPath)
-  return normalizedFile === normalizedFolder || normalizedFile.startsWith(`${normalizedFolder}/`)
-}
-
-export function relativePathFromFolder(filePath, folderPath) {
-  const normalizedFile = normalizePath(filePath)
-  const normalizedFolder = normalizePath(folderPath)
-  if (normalizedFolder && normalizedFile.startsWith(`${normalizedFolder}/`)) {
-    return normalizedFile.slice(normalizedFolder.length + 1)
-  }
-  return basenameOf(filePath)
 }
 
 export function isAudioFile(filePath) {
@@ -416,57 +400,6 @@ export function planPostImportActions({
   }
 }
 
-function joinPath(directoryPath, entry) {
-  if (!directoryPath) {
-    return entry
-  }
-  return directoryPath.endsWith('/') ? `${directoryPath}${entry}` : `${directoryPath}/${entry}`
-}
-
-export async function collectAudioFilePathsFromFolders(folderPaths, runtimeFs) {
-  const readdir = runtimeFs && typeof runtimeFs.readdir === 'function' ? runtimeFs.readdir.bind(runtimeFs) : null
-  const stat = runtimeFs && typeof runtimeFs.stat === 'function' ? runtimeFs.stat.bind(runtimeFs) : null
-  if (!readdir || !stat) {
-    throw new Error('runtime_fs_directory_access_not_available')
-  }
-
-  const queue = dedupePaths(folderPaths)
-  const visited = new Set()
-  const discovered = []
-
-  while (queue.length > 0) {
-    const currentFolder = queue.shift()
-    if (!currentFolder || visited.has(currentFolder)) {
-      continue
-    }
-    visited.add(currentFolder)
-
-    let entries = []
-    try {
-      entries = await readdir(currentFolder)
-    } catch {
-      continue
-    }
-
-    entries.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
-
-    for (const entry of entries) {
-      const fullPath = joinPath(currentFolder, entry)
-      const info = await stat(fullPath)
-      if (!info) {
-        continue
-      }
-      if (info.isDirectory) {
-        queue.push(fullPath)
-      } else if (info.isFile && isAudioFile(fullPath)) {
-        discovered.push(fullPath)
-      }
-    }
-  }
-
-  return dedupePaths(discovered)
-}
-
 function applyFinalNamePatch(row, patch) {
   const mode = String(patch?.finalNameMode ?? '').trim()
   const value = String(patch?.finalNameValue ?? '')
@@ -504,28 +437,6 @@ export function applyPatchToSelectedRows({ rows, selectedPaths, patch }) {
     }
     return next
   })
-}
-
-export function buildAnalyzeCachePayload({ folder, rows }) {
-  const folderRows = ensureArray(rows)
-    .filter((row) => row && isPathInsideFolder(row.filePath, folder))
-    .map((row) => ({
-      file_path: row.filePath,
-      category_id: row.categoryId,
-      ai_name: row.aiName,
-      final_name: row.finalName,
-      status: row.status,
-      error_message: row.errorMessage,
-      relative_path: relativePathFromFolder(row.filePath, folder),
-    }))
-
-  return {
-    version: 1,
-    generated_at: new Date().toISOString(),
-    folder,
-    total: folderRows.length,
-    proposals: folderRows,
-  }
 }
 
 export function categoryEditorReducer(rows, action) {

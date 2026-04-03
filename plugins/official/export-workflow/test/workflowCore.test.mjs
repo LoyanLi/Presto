@@ -1,13 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import * as workflowCore from '../dist/workflowCore.mjs'
 import {
   buildExportRunPayload,
   createDefaultExportSettings,
   createDefaultExportWorkflowSettings,
   createSnapshotFromTracks,
   deriveExportJobView,
-  getSnapshotStorageInfo,
+  getSnapshotStorageKey,
   loadExportWorkflowSettings,
   saveExportWorkflowSettings,
   mergeExportWorkflowSettings,
@@ -126,14 +127,13 @@ test('deriveExportJobView maps backend job metadata and completed_with_errors re
   assert.equal(view.isTerminal, true)
 })
 
-test('path helpers and name validators keep session/preset persistence deterministic', () => {
-  const snapshotPath = getSnapshotStorageInfo({
+test('storage helpers and name validators keep snapshot persistence deterministic', () => {
+  const snapshotStorageKey = getSnapshotStorageKey({
     sessionPath: '/Users/test/Documents/Album/Album.ptx',
   })
   const preset = normalizePreset({ name: 'TV Mix', file_format: 'wav', mix_source_name: 'Out 1-2' })
 
-  assert.equal(snapshotPath.storageDir, '/Users/test/Documents/Album/snapshots')
-  assert.equal(snapshotPath.snapshotPath, '/Users/test/Documents/Album/snapshots/snapshots.json')
+  assert.equal(snapshotStorageKey, 'sessionSnapshots:/Users/test/Documents/Album/Album.ptx')
   assert.equal(validateSnapshotName('Verse', [{ id: 'a', name: 'Verse', trackStates: [] }]), 'Snapshot name "Verse" already exists.')
   assert.equal(validatePresetName('TV Mix', [preset]), 'Preset name "TV Mix" already exists.')
 })
@@ -143,11 +143,9 @@ test('export workflow plugin settings default to selecting all snapshots in step
 
   assert.deepEqual(settings, {
     defaultSnapshotSelection: 'all',
-    mobileProgressEnabled: false,
   })
   assert.equal(mergeExportWorkflowSettings({ defaultSnapshotSelection: 'none' }).defaultSnapshotSelection, 'none')
   assert.equal(mergeExportWorkflowSettings({ defaultSnapshotSelection: 'invalid' }).defaultSnapshotSelection, 'all')
-  assert.equal(mergeExportWorkflowSettings({ mobileProgressEnabled: true }).mobileProgressEnabled, true)
 })
 
 test('export workflow plugin settings load and save through plugin-local storage', async () => {
@@ -169,6 +167,15 @@ test('export workflow plugin settings load and save through plugin-local storage
   assert.equal(saved.defaultSnapshotSelection, 'none')
   assert.deepEqual(calls, [
     ['get', 'settings.v1'],
-    ['set', 'settings.v1', { defaultSnapshotSelection: 'none', mobileProgressEnabled: false }],
+    ['set', 'settings.v1', { defaultSnapshotSelection: 'none' }],
   ])
+})
+
+test('workflow core does not expose runtime-fs persistence helpers', () => {
+  assert.equal('loadSnapshotsFromSession' in workflowCore, false)
+  assert.equal('saveSnapshotsToSession' in workflowCore, false)
+  assert.equal('getSnapshotStorageInfo' in workflowCore, false)
+  assert.equal('loadPresets' in workflowCore, false)
+  assert.equal('savePresets' in workflowCore, false)
+  assert.equal('getPresetStorageInfo' in workflowCore, false)
 })

@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+import * as workflowCore from '../dist/workflowCore.mjs'
 import {
   applyPatchToSelectedRows,
   analyzeFilePaths,
-  buildAnalyzeCachePayload,
   buildRunValidation,
   categoryEditorReducer,
   finalizeRowsForImport,
@@ -168,32 +168,12 @@ test('applyPatchToSelectedRows supports batch category and name edits', () => {
   assert.equal(next[1]?.finalName, 'A_Snare')
 })
 
-test('buildAnalyzeCachePayload stores relative path per folder row', () => {
-  const payload = buildAnalyzeCachePayload({
-    folder: '/library/Drums',
-    rows: [
-      {
-        filePath: '/library/Drums/Kick.wav',
-        categoryId: 'drums',
-        aiName: 'Kick',
-        finalName: 'Kick',
-        status: 'ready',
-        errorMessage: null,
-      },
-      {
-        filePath: '/library/Bass/Bass.wav',
-        categoryId: 'bass',
-        aiName: 'Bass',
-        finalName: 'Bass',
-        status: 'ready',
-        errorMessage: null,
-      },
-    ],
-  })
-
-  assert.equal(payload.folder, '/library/Drums')
-  assert.equal(payload.total, 1)
-  assert.equal(payload.proposals[0]?.relative_path, 'Kick.wav')
+test('workflow core does not expose runtime-side folder scanning or cache payload helpers', () => {
+  assert.equal('ANALYZE_CACHE_FILENAME' in workflowCore, false)
+  assert.equal('buildAnalyzeCachePayload' in workflowCore, false)
+  assert.equal('collectAudioFilePathsFromFolders' in workflowCore, false)
+  assert.equal('isPathInsideFolder' in workflowCore, false)
+  assert.equal('relativePathFromFolder' in workflowCore, false)
 })
 
 test('categoryEditorReducer supports add/update/remove/move actions', () => {

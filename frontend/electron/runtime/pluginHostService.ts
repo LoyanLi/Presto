@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process'
-import { access, cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access, cp, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import type { DawTarget, WorkflowPluginManifest } from '../../../packages/contracts/src'
+import type { DawTarget, WorkflowDefinition, WorkflowPluginManifest } from '../../../packages/contracts/src'
 import { discoverPlugins, loadPluginModule } from '../../../host-plugin-runtime/src'
 
 export type PluginIssueCategory =
@@ -68,6 +69,13 @@ export interface PluginHostService {
   installFromZip(input: { zipPath: string; overwrite?: boolean }): Promise<PluginInstallResult>
   syncOfficialExtensions(input: { officialExtensionsRoot: string }): Promise<{ ok: true; managedPluginsRoot: string }>
   uninstall(pluginId: string): Promise<PluginUninstallResult>
+  resolveWorkflowExecution(input: {
+    pluginId: string
+    workflowId: string
+  }): Promise<{
+    definition: WorkflowDefinition
+    allowedCapabilities: string[]
+  }>
 }
 
 const unzipExec = promisify(execFile)
@@ -151,6 +159,62 @@ async function writeOfficialSeedState(managedPluginsRoot: string, state: Record<
     2,
   )
   await writeFile(filePath, `${payload}\n`, 'utf8')
+}
+
+async function collectOfficialPackageFiles(root: string, current = root): Promise<string[]> {
+  const entries = await readdir(current, { withFileTypes: true })
+  const files: string[] = []
+
+  for (const entry of entries) {
+    if (entry.name === 'test' || entry.name === 'tests' || entry.name === '__tests__' || entry.name === '.DS_Store') {
+      continue
+    }
+
+    const absolutePath = path.join(current, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await collectOfficialPackageFiles(root, absolutePath)))
+      continue
+    }
+
+    if (entry.isFile()) {
+      files.push(path.relative(root, absolutePath))
+    }
+  }
+
+  return files.sort((left, right) => left.localeCompare(right))
+}
+
+async function computeOfficialPackageFingerprint(pluginRoot: string): Promise<string> {
+  const hash = createHash('sha256')
+  const files = await collectOfficialPackageFiles(pluginRoot)
+
+  for (const relativePath of files) {
+    const absolutePath = path.join(pluginRoot, relativePath)
+    const content = await readFile(absolutePath)
+    hash.update(relativePath)
+    hash.update('\n')
+    hash.update(content)
+    hash.update('\n')
+  }
+
+  return hash.digest('hex')
+}
+
+async function readWorkflowDefinitionJson(
+  pluginRoot: string,
+  manifest: WorkflowPluginManifest,
+): Promise<WorkflowDefinition> {
+  if (!manifest.workflowDefinition) {
+    throw new Error('workflow_definition_not_declared')
+  }
+
+  const definitionPath = path.join(pluginRoot, manifest.workflowDefinition.definitionEntry)
+  const raw = await readFile(definitionPath, 'utf8')
+  const parsed = JSON.parse(raw) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('workflow_definition_must_be_object')
+  }
+  return parsed as WorkflowDefinition
 }
 
 export function createPluginHostService(options: CreatePluginHostServiceOptions): PluginHostService {
@@ -332,9 +396,10 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
         const destinationRoot = path.join(managedPluginsRoot, sanitizePluginFolderName(manifest.pluginId))
         const destinationManifestPath = path.join(destinationRoot, 'manifest.json')
         const destinationExists = await exists(destinationManifestPath)
-        const seededVersion = seedState[manifest.pluginId]
+        const sourceFingerprint = await computeOfficialPackageFingerprint(candidate.pluginRoot)
+        const seededFingerprint = seedState[manifest.pluginId]
 
-        if (!seededVersion) {
+        if (!seededFingerprint) {
           if (!destinationExists) {
             await cp(candidate.pluginRoot, destinationRoot, {
               recursive: true,
@@ -342,19 +407,20 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
               errorOnExist: true,
             })
           }
-          seedState[manifest.pluginId] = manifest.version
+          seedState[manifest.pluginId] = sourceFingerprint
           continue
         }
 
-        if (destinationExists && seededVersion !== manifest.version) {
+        if (destinationExists && seededFingerprint !== sourceFingerprint) {
           await rm(destinationRoot, { recursive: true, force: true })
           await cp(candidate.pluginRoot, destinationRoot, {
             recursive: true,
             force: false,
             errorOnExist: true,
           })
-          seedState[manifest.pluginId] = manifest.version
         }
+
+        seedState[manifest.pluginId] = sourceFingerprint
       }
 
       await writeOfficialSeedState(managedPluginsRoot, seedState)
@@ -388,6 +454,49 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
         managedPluginsRoot,
         pluginId: normalizedPluginId,
         issues: [],
+      }
+    },
+
+    async resolveWorkflowExecution(input: {
+      pluginId: string
+      workflowId: string
+    }): Promise<{
+      definition: WorkflowDefinition
+      allowedCapabilities: string[]
+    }> {
+      const pluginId = String(input.pluginId ?? '').trim()
+      const workflowId = String(input.workflowId ?? '').trim()
+      if (!pluginId) {
+        throw new Error('plugin_id_required')
+      }
+      if (!workflowId) {
+        throw new Error('workflow_id_required')
+      }
+
+      const discovered = await runDiscovery([managedPluginsRoot])
+      const candidate = discovered.plugins.find(
+        (item) => (item.manifest as WorkflowPluginManifest).pluginId === pluginId,
+      )
+      if (!candidate) {
+        throw new Error(`plugin_not_installed:${pluginId}`)
+      }
+
+      const manifest = candidate.manifest as WorkflowPluginManifest
+      if (!manifest.workflowDefinition) {
+        throw new Error(`workflow_definition_not_declared:${pluginId}`)
+      }
+      if (manifest.workflowDefinition.workflowId !== workflowId) {
+        throw new Error(`workflow_id_mismatch:${pluginId}:${workflowId}`)
+      }
+
+      const definition = await readWorkflowDefinitionJson(candidate.pluginRoot, manifest)
+      if (definition.workflowId !== workflowId) {
+        throw new Error(`workflow_definition_mismatch:${pluginId}:${workflowId}`)
+      }
+
+      return {
+        definition,
+        allowedCapabilities: [...manifest.requiredCapabilities],
       }
     },
   }

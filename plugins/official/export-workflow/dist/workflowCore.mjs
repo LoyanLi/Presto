@@ -1,7 +1,3 @@
-const SNAPSHOT_FILE_NAME = 'snapshots.json'
-const SNAPSHOT_FOLDER_NAME = 'snapshots'
-const PRESET_FILE_NAME = 'presets.json'
-const PRESET_FOLDER_NAME = 'Tracktodo'
 const EXPORT_WORKFLOW_SETTINGS_KEY = 'settings.v1'
 
 function normalizePath(value) {
@@ -53,7 +49,6 @@ export function createDefaultExportSettings(sessionInfo) {
 export function createDefaultExportWorkflowSettings() {
   return {
     defaultSnapshotSelection: 'all',
-    mobileProgressEnabled: false,
   }
 }
 
@@ -66,7 +61,6 @@ export function mergeExportWorkflowSettings(raw) {
 
   return {
     defaultSnapshotSelection,
-    mobileProgressEnabled: Boolean(raw?.mobileProgressEnabled),
   }
 }
 
@@ -151,71 +145,44 @@ export function validateSnapshotName(name, snapshots, excludeId = '') {
   return hasDuplicate ? `Snapshot name "${normalized}" already exists.` : ''
 }
 
-export function getSnapshotStorageInfo(sessionInfo) {
+export function getSnapshotStorageKey(sessionInfo) {
   const sessionPath = normalizePath(sessionInfo?.sessionPath ?? sessionInfo?.session_path ?? '')
-  const projectPath = dirnameOf(sessionPath)
-  const storageDir = projectPath ? joinPath(projectPath, SNAPSHOT_FOLDER_NAME) : ''
-  return {
-    sessionPath,
-    projectPath,
-    storageDir,
-    snapshotPath: storageDir ? joinPath(storageDir, SNAPSHOT_FILE_NAME) : '',
+  if (!sessionPath) {
+    return ''
   }
+  return `sessionSnapshots:${sessionPath}`
 }
 
-export async function loadSnapshotsFromSession(fsRuntime, sessionInfo) {
-  if (!fsRuntime || typeof fsRuntime.readFile !== 'function') {
+export async function loadSnapshotsFromStorage(storage, sessionInfo) {
+  if (!storage || typeof storage.get !== 'function') {
     return []
   }
-  const storageInfo = getSnapshotStorageInfo(sessionInfo)
-  if (!storageInfo.snapshotPath) {
+  const storageKey = getSnapshotStorageKey(sessionInfo)
+  if (!storageKey) {
     return []
   }
-  const content = await fsRuntime.readFile(storageInfo.snapshotPath)
+  const content = await storage.get(storageKey)
   if (!content) {
     return []
   }
   try {
-    const parsed = JSON.parse(content)
+    const parsed = Array.isArray(content) ? content : JSON.parse(content)
     return Array.isArray(parsed) ? parsed.map(normalizeSnapshot) : []
   } catch {
     return []
   }
 }
 
-export async function saveSnapshotsToSession(fsRuntime, sessionInfo, snapshots) {
-  if (
-    !fsRuntime ||
-    typeof fsRuntime.ensureDir !== 'function' ||
-    typeof fsRuntime.writeFile !== 'function'
-  ) {
+export async function saveSnapshotsToStorage(storage, sessionInfo, snapshots) {
+  if (!storage || typeof storage.set !== 'function') {
     return false
   }
-  const storageInfo = getSnapshotStorageInfo(sessionInfo)
-  if (!storageInfo.storageDir || !storageInfo.snapshotPath) {
+  const storageKey = getSnapshotStorageKey(sessionInfo)
+  if (!storageKey) {
     return false
   }
-  await fsRuntime.ensureDir(storageInfo.storageDir)
-  await fsRuntime.writeFile(
-    storageInfo.snapshotPath,
-    JSON.stringify((Array.isArray(snapshots) ? snapshots : []).map(normalizeSnapshot), null, 2),
-  )
+  await storage.set(storageKey, (Array.isArray(snapshots) ? snapshots : []).map(normalizeSnapshot))
   return true
-}
-
-export async function getPresetStorageInfo(fsRuntime) {
-  if (!fsRuntime || typeof fsRuntime.getHomePath !== 'function') {
-    return {
-      storageDir: '',
-      presetPath: '',
-    }
-  }
-  const homePath = normalizePath(await fsRuntime.getHomePath())
-  const storageDir = homePath ? joinPath(homePath, 'Documents', PRESET_FOLDER_NAME) : ''
-  return {
-    storageDir,
-    presetPath: storageDir ? joinPath(storageDir, PRESET_FILE_NAME) : '',
-  }
 }
 
 export function normalizePreset(rawPreset) {
@@ -228,46 +195,6 @@ export function normalizePreset(rawPreset) {
     createdAt: String(rawPreset?.createdAt ?? new Date().toISOString()),
     updatedAt: rawPreset?.updatedAt ? String(rawPreset.updatedAt) : undefined,
   }
-}
-
-export async function loadPresets(fsRuntime) {
-  if (!fsRuntime || typeof fsRuntime.readFile !== 'function') {
-    return []
-  }
-  const storageInfo = await getPresetStorageInfo(fsRuntime)
-  if (!storageInfo.presetPath) {
-    return []
-  }
-  const content = await fsRuntime.readFile(storageInfo.presetPath)
-  if (!content) {
-    return []
-  }
-  try {
-    const parsed = JSON.parse(content)
-    return Array.isArray(parsed) ? parsed.map(normalizePreset) : []
-  } catch {
-    return []
-  }
-}
-
-export async function savePresets(fsRuntime, presets) {
-  if (
-    !fsRuntime ||
-    typeof fsRuntime.ensureDir !== 'function' ||
-    typeof fsRuntime.writeFile !== 'function'
-  ) {
-    return false
-  }
-  const storageInfo = await getPresetStorageInfo(fsRuntime)
-  if (!storageInfo.storageDir || !storageInfo.presetPath) {
-    return false
-  }
-  await fsRuntime.ensureDir(storageInfo.storageDir)
-  await fsRuntime.writeFile(
-    storageInfo.presetPath,
-    JSON.stringify((Array.isArray(presets) ? presets : []).map(normalizePreset), null, 2),
-  )
-  return true
 }
 
 export function validatePresetName(name, presets, excludeId = '') {

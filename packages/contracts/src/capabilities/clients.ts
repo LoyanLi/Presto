@@ -12,6 +12,8 @@ import type {
   DawConnectionConnectResponse,
   DawConnectionDisconnectResponse,
   DawConnectionGetStatusResponse,
+  ImportAnalyzeResponse,
+  ImportCacheSaveResponse,
   ImportRunStartResponse,
   SessionApplySnapshotResponse,
   SessionGetInfoResponse,
@@ -34,6 +36,7 @@ import type {
   TransportPlayResponse,
   TransportRecordResponse,
   TransportStopResponse,
+  WorkflowRunStartResponse,
 } from './responses'
 import type {
   AutomationSplitStereoToMonoExecuteRequest,
@@ -46,6 +49,8 @@ import type {
   ConfigUpdateRequest,
   DawAdapterGetSnapshotRequest,
   DawConnectionConnectRequest,
+  ImportAnalyzeRequest,
+  ImportCacheSaveRequest,
   ImportRunStartRequest,
   SessionApplySnapshotRequest,
   SessionGetSnapshotInfoRequest,
@@ -56,6 +61,7 @@ import type {
   TrackRenameRequest,
   TrackSelectRequest,
   TrackSoloSetRequest,
+  WorkflowRunStartRequest,
 } from './requests'
 import type { JobsClient } from '../jobs/job'
 import type { DawTarget } from '../daw/targets'
@@ -143,7 +149,17 @@ export interface TransportClient {
   getStatus(): Promise<TransportGetStatusResponse>
 }
 
+export interface WorkflowClient {
+  run: {
+    start(request: WorkflowRunStartRequest): Promise<WorkflowRunStartResponse>
+  }
+}
+
 export interface ImportClient {
+  analyze(request: ImportAnalyzeRequest): Promise<ImportAnalyzeResponse>
+  cache: {
+    save(request: ImportCacheSaveRequest): Promise<ImportCacheSaveResponse>
+  }
   run: {
     start(request: ImportRunStartRequest): Promise<ImportRunStartResponse>
   }
@@ -179,6 +195,7 @@ export interface PrestoClient {
   track: TrackClient
   clip: ClipClient
   transport: TransportClient
+  workflow: WorkflowClient
   import: ImportClient
   export: ExportClient
   stripSilence: StripSilenceClient

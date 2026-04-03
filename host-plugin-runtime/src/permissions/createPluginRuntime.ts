@@ -1,16 +1,13 @@
 import type { PrestoClient } from '../../../packages/contracts/src/capabilities/clients'
 import type { PluginContext } from '../../../packages/contracts/src/plugins/context'
 import type { PluginLogger } from '../../../packages/contracts/src/plugins/logger'
-import type { PluginRuntime } from '../../../packages/contracts/src/plugins/runtime'
 import type { PluginStorage } from '../../../packages/contracts/src/plugins/storage'
 import type { WorkflowPluginManifest } from '../../../packages/contracts/src/plugins/manifest'
 import { guardCapabilityAccess } from './guardCapabilityAccess'
-import { guardRuntimeAccess } from './guardRuntimeAccess'
 
 interface PluginRuntimeDependencies {
   locale: PluginContext['locale']
   presto: PrestoClient
-  runtime: PluginRuntime
   storage: PluginStorage
   logger: PluginLogger
 }
@@ -67,7 +64,6 @@ export function createPluginRuntime(
   dependencies: PluginRuntimeDependencies,
 ): PluginContext {
   const presto = guardCapabilityAccess(dependencies.presto, manifest)
-  const runtime = guardRuntimeAccess(dependencies.runtime, manifest)
   const storage = createNamespacedStorage(dependencies.storage, manifest.pluginId)
   const logger = createPrefixedLogger(dependencies.logger, manifest.pluginId)
 
@@ -75,7 +71,6 @@ export function createPluginRuntime(
     pluginId: manifest.pluginId,
     locale: dependencies.locale,
     presto,
-    runtime,
     storage,
     logger,
   }
