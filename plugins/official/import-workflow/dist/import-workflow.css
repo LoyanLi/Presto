@@ -557,6 +557,47 @@
   justify-content: flex-end;
 }
 
+.iw-source-summary {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.iw-source-label {
+  color: var(--iw-color-on-surface-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.iw-source-folder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.iw-source-folder-pill {
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--iw-color-outline) 10%, transparent);
+  color: var(--iw-color-on-surface-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.iw-source-empty {
+  margin: 0;
+  color: var(--iw-color-on-surface-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
 .iw-table-static {
   user-select: none;
   -webkit-user-select: none;

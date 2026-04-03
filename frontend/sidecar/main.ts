@@ -6,6 +6,7 @@ import { createMacAccessibilityRuntime } from '../runtime/macAccessibilityRuntim
 import { createMobileProgressRuntimeController } from '../runtime/mobileProgressRuntimeController.mjs'
 import { createBackendSupervisor, type BackendSupervisor } from '../runtime/backendSupervisor'
 import { createPluginHostService } from '../runtime/pluginHostService'
+import { enrichCapabilityRequestForBackend } from './capabilityRouting'
 import {
   resolveAutomationDefinitionsDir,
   resolveAutomationScriptsDir,
@@ -79,7 +80,11 @@ async function ensureBackendSupervisor(): Promise<BackendSupervisor> {
 
 async function invokeCapability(request: unknown) {
   const supervisor = await ensureBackendSupervisor()
-  return supervisor.invokeCapability(request as never)
+  const enrichedRequest = await enrichCapabilityRequestForBackend(
+    request as Parameters<BackendSupervisor['invokeCapability']>[0],
+    pluginHostService,
+  )
+  return supervisor.invokeCapability(enrichedRequest as never)
 }
 
 async function loadJobForMobileProgress(taskId: string) {

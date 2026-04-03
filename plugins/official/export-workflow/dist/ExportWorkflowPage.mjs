@@ -123,10 +123,11 @@ function buildMixSourceGroupedOptions({ t, groups, loading, currentType, current
   const groupsList = MIX_SOURCE_GROUP_ORDER
     .map((group) => {
       const items = Array.isArray(fallbackInjectedGroups[group]) ? fallbackInjectedGroups[group].filter((item) => String(item ?? '').trim()) : []
+      const groupLabel = t(`page.option.mixSourceGroup.${group}`)
       return {
         group,
-        label: t(`page.option.mixSourceGroup.${group}`),
-        options: buildIndentedMixSourceOptions(group, items),
+        label: groupLabel,
+        options: buildIndentedMixSourceOptions(group, groupLabel, items),
       }
     })
     .filter((entry) => entry.options.length > 0)
@@ -162,12 +163,13 @@ function parseMixSourceLabel(rawLabel) {
   }
 }
 
-function buildIndentedMixSourceOptions(group, items) {
+function buildIndentedMixSourceOptions(group, groupLabel, items) {
   return items.map((item) => {
     const parsed = parseMixSourceLabel(item)
     return {
       value: `${group}::${parsed.raw}`,
       label: parsed.raw,
+      group: groupLabel,
       displayLabel: parsed.name,
       mode: parsed.mode,
       isChild: false,
@@ -227,39 +229,27 @@ function renderGroupedMixSourceSelect({
     currentValue: value,
   })
   const selectedValue = value ? `${normalizeMixSourceType(currentType)}::${value}` : ''
+  const selectedOption = groupedOptions
+    .flatMap((groupEntry) => groupEntry.options)
+    .find((option) => option.value === selectedValue)
+  const selectedLabel = selectedOption?.label ?? value ?? ''
+  const selectOptions = groupedOptions.flatMap((groupEntry) => groupEntry.options)
 
   return h(
-    'label',
-    { className: ['ew-field ew-mix-source-field', showLabel ? 'ew-field-span-2' : null].filter(Boolean).join(' ') },
-    showLabel ? h('span', { className: 'ew-mix-source-label' }, t('page.label.mixSource')) : null,
-    h(
-      'select',
-      {
-        className: 'ew-select ew-mix-source-select',
-        'aria-label': t('page.label.mixSource'),
-        value: selectedValue,
-        disabled: loading && !value,
-        onChange,
+    WorkflowSelect,
+    {
+      className: ['ew-mix-source-field', 'ew-mix-source-select', showLabel ? 'ew-field-span-2' : null].filter(Boolean).join(' '),
+      label: showLabel ? h('span', { className: 'ew-mix-source-label' }, t('page.label.mixSource')) : undefined,
+      'aria-label': t('page.label.mixSource'),
+      value: selectedValue,
+      options: selectOptions,
+      selectProps: {
+        renderValue: () => selectedLabel,
       },
-      groupedOptions.flatMap((groupEntry) =>
-        groupEntry.label
-          ? h(
-              'optgroup',
-              { key: groupEntry.group, label: groupEntry.label },
-              groupEntry.options.map((option) =>
-                h(
-                  'option',
-                  { key: option.value, value: option.value },
-                  option.mode ? `${option.label.replace(/\s+\((Stereo|Mono)\)$/, '')} (${option.mode})` : option.label,
-                ),
-              ),
-            )
-          : groupEntry.options.map((option) =>
-              h('option', { key: option.value, value: option.value }, option.label),
-            ),
-      ),
-    ),
-    error ? h('div', { className: 'ew-field-error' }, error) : null,
+      disabled: loading && !value,
+      error,
+      onChange,
+    },
   )
 }
 
@@ -977,7 +967,7 @@ function SnapshotDetailModal({
   )
 }
 
-export function ExportWorkflowPage({ context }) {
+export function ExportWorkflowPage({ context, host }) {
   const t = useCallback((key) => tExport(context, key), [context])
   const trackListColumns = useMemo(() => buildTrackListColumns(t), [t])
   const snapshotManageColumns = useMemo(() => buildSnapshotManageColumns(t), [t])
@@ -1029,6 +1019,27 @@ export function ExportWorkflowPage({ context }) {
   const pollTimeoutRef = useRef(null)
   const liveTrackSyncTimeoutRef = useRef(null)
   const initializedSettingsRef = useRef(false)
+
+  const browseForOutputPath = useCallback(async () => {
+    if (!host || typeof host.pickFolder !== 'function') {
+      return
+    }
+
+    const selection = await host.pickFolder()
+    if (selection?.canceled) {
+      return
+    }
+
+    const [nextOutputPath = ''] = Array.isArray(selection?.paths) ? selection.paths : []
+    if (!nextOutputPath) {
+      return
+    }
+
+    setSettings((current) => ({
+      ...current,
+      output_path: nextOutputPath,
+    }))
+  }, [host])
 
   const stopPolling = useCallback(() => {
     if (pollTimeoutRef.current) {
@@ -2060,31 +2071,22 @@ export function ExportWorkflowPage({ context }) {
                                         ),
                                         mixSourceError ? h('div', { className: 'ew-field-error' }, mixSourceError) : null,
                                       ),
-                                      h(
-                                        'label',
-                                        { className: 'ew-field ew-source-format-field' },
-                                        h('span', null, t('page.label.fileFormat')),
-                                        h(
-                                          'select',
-                                          {
-                                            className: 'ew-select',
-                                            value: settings.file_format,
-                                            onChange: (event) =>
-                                              setSettings((current) => {
-                                                const nextFormat = event.target.value
-                                                const currentMixSources = Array.isArray(current.mix_sources) ? current.mix_sources : []
-                                                return {
-                                                  ...current,
-                                                  file_format: nextFormat,
-                                                  mix_sources: nextFormat === 'mp3' ? currentMixSources.slice(0, 1) : currentMixSources,
-                                                }
-                                              }),
-                                          },
-                                          FILE_FORMAT_OPTIONS.map((option) =>
-                                            h('option', { key: option.value, value: option.value }, option.label),
-                                          ),
-                                        ),
-                                      ),
+                                      h(WorkflowSelect, {
+                                        className: 'ew-source-format-field',
+                                        label: t('page.label.fileFormat'),
+                                        value: settings.file_format,
+                                        options: FILE_FORMAT_OPTIONS,
+                                        onChange: (event) =>
+                                          setSettings((current) => {
+                                            const nextFormat = event.target.value
+                                            const currentMixSources = Array.isArray(current.mix_sources) ? current.mix_sources : []
+                                            return {
+                                              ...current,
+                                              file_format: nextFormat,
+                                              mix_sources: nextFormat === 'mp3' ? currentMixSources.slice(0, 1) : currentMixSources,
+                                            }
+                                          }),
+                                      }),
                                       h(
                                         'label',
                                         { className: 'ew-field ew-field-span-2 ew-source-prefix-field' },
@@ -2118,6 +2120,17 @@ export function ExportWorkflowPage({ context }) {
                                             placeholder: t('page.placeholder.selectExportFolder'),
                                             onChange: (event) => setSettings((current) => ({ ...current, output_path: event.target.value })),
                                           }),
+                                          h(
+                                            WorkflowButton,
+                                            {
+                                              type: 'button',
+                                              variant: 'secondary',
+                                              onClick: () => {
+                                                void browseForOutputPath()
+                                              },
+                                            },
+                                            t('page.button.browse'),
+                                          ),
                                         ),
                                       ),
                                     ),

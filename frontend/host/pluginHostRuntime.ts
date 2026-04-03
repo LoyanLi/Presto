@@ -5,11 +5,13 @@ import type {
   PluginAutomationItemDefinition,
   PluginLocaleContext,
   PluginLogger,
+  PluginPageHost,
   PluginPageProps,
   PluginStorage,
   PrestoClient,
   WorkflowPluginModule,
 } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type {
   PluginRuntimeIssue,
   PluginRuntimeListResult,
@@ -43,6 +45,7 @@ export interface LoadHostPluginsInput {
   catalog: PluginRuntimeListResult
   locale: PluginLocaleContext
   presto: PrestoClient
+  runtime: Pick<PrestoRuntime, 'dialog'>
 }
 
 type PluginModuleNamespace = WorkflowPluginModule & Record<string, unknown>
@@ -362,6 +365,11 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
 
   const storage = createHostPluginStorage()
   const logger = createHostPluginLogger()
+  const host: PluginPageHost = {
+    async pickFolder() {
+      return input.runtime.dialog.openFolder()
+    },
+  }
 
   for (const plugin of input.catalog.plugins) {
     const mountedPages = mountPluginPages(plugin.manifest)
@@ -472,6 +480,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         render: () =>
           React.createElement(RenderPage, {
             context,
+            host,
             params: {},
             searchParams: new URLSearchParams(),
           }),

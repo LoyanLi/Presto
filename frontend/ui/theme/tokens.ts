@@ -76,9 +76,47 @@ const haloLightColorScheme: Md3ColorScheme = {
   surfaceContainerHighest: '#e2e5f0',
 }
 
+const haloDarkColorScheme: Md3ColorScheme = {
+  primary: '#c9c2ff',
+  onPrimary: '#302672',
+  primaryContainer: '#4338a0',
+  onPrimaryContainer: '#e7e4ff',
+  secondary: '#c3c9dd',
+  onSecondary: '#2d3448',
+  secondaryContainer: '#444c61',
+  onSecondaryContainer: '#e7ebf5',
+  tertiary: '#d6c0ff',
+  onTertiary: '#402e74',
+  tertiaryContainer: '#5a4691',
+  onTertiaryContainer: '#ede5ff',
+  error: '#ffb4ab',
+  onError: '#690005',
+  errorContainer: '#93000a',
+  onErrorContainer: '#ffdad6',
+  background: '#0c0e17',
+  onBackground: '#e2e6f3',
+  surface: '#0c0e17',
+  onSurface: '#e2e6f3',
+  surfaceVariant: '#454b5f',
+  onSurfaceVariant: '#c2c7d9',
+  outline: '#8c92a6',
+  outlineVariant: '#454b5f',
+  inverseSurface: '#e2e6f3',
+  inverseOnSurface: '#2a2f3d',
+  inversePrimary: '#5b4ed6',
+  shadow: '#000000',
+  scrim: '#000000',
+  surfaceTint: '#c9c2ff',
+  surfaceContainerLowest: '#080a13',
+  surfaceContainerLow: '#141825',
+  surfaceContainer: '#1b1f2d',
+  surfaceContainerHigh: '#252a38',
+  surfaceContainerHighest: '#303543',
+}
+
 export const md3ColorSchemes: Record<PrestoThemeMode, Md3ColorScheme> = {
   light: haloLightColorScheme,
-  dark: { ...haloLightColorScheme },
+  dark: haloDarkColorScheme,
 }
 
 export const md3Shape = {

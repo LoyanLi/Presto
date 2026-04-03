@@ -1,10 +1,14 @@
 export { prestoBorderRoles, prestoColorRoles, prestoDesignTokens, prestoRadiusScale, prestoSpacingScale, prestoStatusRoles, prestoSurfaceRoles, prestoTypographyRoles } from './tokens'
 export {
+  getThemePreference,
   getThemeMode,
   initThemeMode,
+  setThemePreference,
   setThemeMode,
+  subscribeThemePreference,
   subscribeThemeMode,
 } from './theme/mode'
+export type { PrestoThemePreference } from './theme/mode'
 export { ensureMaterialWebRegistered } from './material/register'
 export { createPluginSharedUiApi } from './pluginShared'
 export type { PrestoPluginSharedUiApi } from './pluginShared'

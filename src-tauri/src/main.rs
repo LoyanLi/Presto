@@ -194,6 +194,20 @@ fn json_bool(value: bool) -> Value {
 }
 
 #[tauri::command]
+fn app_ready(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("splashscreen") {
+        let _ = window.close();
+    }
+
+    let main = app
+        .get_webview_window("main")
+        .ok_or_else(|| "missing_main_window".to_string())?;
+    main.show().map_err(|error| error.to_string())?;
+    main.set_focus().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn runtime_invoke(
     app: AppHandle,
     state: State<'_, Arc<SidecarState>>,
@@ -373,7 +387,7 @@ fn main() {
             }));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![runtime_invoke])
+        .invoke_handler(tauri::generate_handler![app_ready, runtime_invoke])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

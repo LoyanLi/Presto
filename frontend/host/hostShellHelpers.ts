@@ -164,7 +164,7 @@ export function createHostMuiTheme(mode: 'light' | 'dark') {
           },
           body: {
             backgroundColor: colors.background,
-            color: colors.onBackground,
+            color: colors.onSurface,
             fontFamily: md3Typography.plain,
           },
         },

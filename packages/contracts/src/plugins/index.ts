@@ -3,6 +3,7 @@ export type {
   PluginCommandDefinition,
   PluginNavigationItem,
   PluginPageDefinition,
+  PluginPageHost,
   PluginPageProps,
 } from './page'
 export type {

@@ -7,6 +7,26 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 let pluginModulePromise = null
 
+function createSharedUiMock() {
+  return {
+    Select({ label, options = [], className, children, ...props }) {
+      return React.createElement(
+        'label',
+        { className: ['ui-select', className].filter(Boolean).join(' ') },
+        label ? React.createElement('span', null, label) : null,
+        React.createElement(
+          'select',
+          props,
+          children ??
+            options.map((option) =>
+              React.createElement('option', { key: option.value, value: option.value }, option.label),
+            ),
+        ),
+      )
+    },
+  }
+}
+
 function createPluginContext() {
   return {
     pluginId: 'official.import-workflow',
@@ -72,12 +92,127 @@ function createPluginContext() {
   }
 }
 
+async function loadPageModuleWithHookHarness(overrides = {}) {
+  const previousWindow = globalThis.window
+  const originals = {
+    useState: React.useState,
+    useRef: React.useRef,
+    useMemo: React.useMemo,
+    useCallback: React.useCallback,
+    useEffect: React.useEffect,
+  }
+  let stateCallIndex = 0
+  const stateUpdates = []
+
+  React.useState = (initialValue) => {
+    stateCallIndex += 1
+    const currentIndex = stateCallIndex
+    const resolvedInitialValue = typeof initialValue === 'function' ? initialValue() : initialValue
+    const resolvedValue = Object.prototype.hasOwnProperty.call(overrides, currentIndex)
+      ? overrides[currentIndex]
+      : resolvedInitialValue
+    const setter = (nextValue) => {
+      stateUpdates.push({
+        index: currentIndex,
+        value: nextValue,
+      })
+    }
+    return [resolvedValue, setter]
+  }
+  React.useRef = (initialValue) => ({ current: initialValue })
+  React.useMemo = (factory) => factory()
+  React.useCallback = (callback) => callback
+  React.useEffect = () => {}
+
+  globalThis.window = {
+    __PRESTO_PLUGIN_SHARED__: {
+      React,
+      ui: createSharedUiMock(),
+    },
+  }
+
+  const restore = () => {
+    React.useState = originals.useState
+    React.useRef = originals.useRef
+    React.useMemo = originals.useMemo
+    React.useCallback = originals.useCallback
+    React.useEffect = originals.useEffect
+    if (previousWindow === undefined) {
+      delete globalThis.window
+    } else {
+      globalThis.window = previousWindow
+    }
+  }
+
+  try {
+    const pageUrl = new URL('../dist/ImportWorkflowPage.mjs', import.meta.url)
+    pageUrl.searchParams.set('test', String(Date.now()))
+    pageUrl.searchParams.set('scenario', Math.random().toString(36).slice(2))
+    const pageModule = await import(pageUrl.href)
+    return { pageModule, stateUpdates, restore }
+  } catch (error) {
+    restore()
+    throw error
+  }
+}
+
+function getElementText(node) {
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return ''
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+  if (Array.isArray(node)) {
+    return node.map((child) => getElementText(child)).join('')
+  }
+  return getElementText(node?.props?.children)
+}
+
+function findElement(node, predicate) {
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElement(child, predicate)
+      if (match) {
+        return match
+      }
+    }
+    return null
+  }
+  if (typeof node !== 'object') {
+    return null
+  }
+  if (predicate(node)) {
+    return node
+  }
+  for (const value of Object.values(node?.props ?? {})) {
+    const match = findElement(value, predicate)
+    if (match) {
+      return match
+    }
+  }
+  return null
+}
+
+function hasFolderSelectionUpdate(stateUpdates, expectedFolders) {
+  return stateUpdates.some(
+    (update) =>
+      Array.isArray(update?.value) &&
+      update.value.length === expectedFolders.length &&
+      update.value.every((value, index) => value === expectedFolders[index]),
+  )
+}
+
 async function loadPluginModule() {
   if (!pluginModulePromise) {
     const previousWindow = globalThis.window
     globalThis.window = {
       __PRESTO_PLUGIN_SHARED__: {
         React,
+        ui: createSharedUiMock(),
       },
     }
 
@@ -208,7 +343,8 @@ test('main page does not render a plugin logs panel', async () => {
   assert.match(markup, /Skipped/)
   assert.match(markup, /Prepared files/)
   assert.doesNotMatch(markup, /Batch edit/)
-  assert.match(markup, /Scan folder/)
+  assert.match(markup, /Browse/)
+  assert.doesNotMatch(markup, /Scan folder/)
   assert.match(markup, /Run AI analyze/)
   assert.match(markup, /Clear/)
   assert.match(markup, />Previous</)
@@ -221,29 +357,224 @@ test('main page does not render a plugin logs panel', async () => {
   assert.doesNotMatch(markup, /Open Strip Silence/)
   assert.doesNotMatch(markup, /Execution uses public capabilities only/)
   assert.ok(markup.indexOf('iw-stepper') < markup.indexOf('Prepared files'))
-  assert.ok(markup.indexOf('Prepared files') < markup.indexOf('Scan folder'))
+  assert.ok(markup.indexOf('Prepared files') < markup.indexOf('Browse'))
 })
 
-test('main page exposes a source folder input wired into import analyze', async () => {
+test('main page step 1 removes source-folder textarea and keeps browse-only folder picking contract', async () => {
   const pluginModule = await loadPluginModule()
-  const [pageSource, markup] = await Promise.all([
-    readFile(new URL('../dist/ImportWorkflowPage.mjs', import.meta.url), 'utf8'),
-    renderToStaticMarkup(
-      React.createElement(pluginModule.ImportWorkflowPage, {
-        context: createPluginContext(),
-        params: {},
-        searchParams: new URLSearchParams(),
-      }),
-    ),
-  ])
+  const markup = renderToStaticMarkup(
+    React.createElement(pluginModule.ImportWorkflowPage, {
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    }),
+  )
 
   assert.match(markup, /Source folders/)
-  assert.match(markup, /iw-source-folders/)
-  assert.match(pageSource, /import\.analyze\(\{\s*sourceFolders/)
-  assert.match(pageSource, /workflow\.run\.start\(\{/)
-  assert.match(pageSource, /pluginId:\s*context\.pluginId/)
-  assert.match(pageSource, /workflowId:\s*IMPORT_WORKFLOW_ID/)
-  assert.doesNotMatch(pageSource, /definition:\s*workflowDefinition/)
+  assert.doesNotMatch(markup, /iw-source-folders/)
+  assert.match(markup, /Browse/)
+  assert.doesNotMatch(markup, /Scan folder/)
+})
+
+test('main page uses browse to pick folders and auto-runs import analyze with selected folders', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness()
+  const pickFolderCalls = []
+  const analyzeCalls = []
+  const selectedFolders = ['/Imports/A', '/Imports/B']
+  const testContext = createPluginContext()
+  testContext.presto.import.analyze = async (payload) => {
+    analyzeCalls.push(payload)
+    return {
+      folderPaths: payload.sourceFolders,
+      orderedFilePaths: [],
+      rows: [],
+      cache: { files: 0, hits: 0 },
+    }
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      host: {
+        pickFolder: async () => {
+          pickFolderCalls.push('called')
+          return {
+            canceled: false,
+            paths: selectedFolders,
+          }
+        },
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const browseButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Browse',
+    )
+
+    assert.ok(browseButton, 'expected import step 1 to render a Browse action')
+
+    await browseButton.props.onClick()
+    assert.equal(pickFolderCalls.length, 1)
+    assert.equal(analyzeCalls.length, 1)
+    assert.deepEqual(analyzeCalls[0]?.sourceFolders, selectedFolders)
+  } finally {
+    restore()
+  }
+})
+
+test('main page browse cancel does not analyze or mutate selected source folders', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness()
+  const pickFolderCalls = []
+  const analyzeCalls = []
+  const canceledSelection = ['/Canceled/Selection']
+  const testContext = createPluginContext()
+  testContext.presto.import.analyze = async (payload) => {
+    analyzeCalls.push(payload)
+    return {
+      folderPaths: payload.sourceFolders,
+      orderedFilePaths: [],
+      rows: [],
+      cache: { files: 0, hits: 0 },
+    }
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      host: {
+        pickFolder: async () => {
+          pickFolderCalls.push('called')
+          return {
+            canceled: true,
+            paths: canceledSelection,
+          }
+        },
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const browseButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Browse',
+    )
+
+    assert.ok(browseButton, 'expected import step 1 to render a Browse action')
+
+    await browseButton.props.onClick()
+    assert.equal(pickFolderCalls.length, 1)
+    assert.equal(analyzeCalls.length, 0)
+    assert.equal(hasFolderSelectionUpdate(stateUpdates, canceledSelection), false)
+  } finally {
+    restore()
+  }
+})
+
+test('main page browse analyze failure does not replace the current source-folder selection', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness()
+  const selectedFolders = ['/Imports/Failed']
+  const analyzeCalls = []
+  const testContext = createPluginContext()
+  testContext.presto.import.analyze = async (payload) => {
+    analyzeCalls.push(payload)
+    throw new Error('analyze failed')
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      host: {
+        pickFolder: async () => ({
+          canceled: false,
+          paths: selectedFolders,
+        }),
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const browseButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Browse',
+    )
+
+    assert.ok(browseButton, 'expected import step 1 to render a Browse action')
+
+    await browseButton.props.onClick()
+    assert.equal(analyzeCalls.length, 1)
+    assert.equal(hasFolderSelectionUpdate(stateUpdates, selectedFolders), false)
+  } finally {
+    restore()
+  }
+})
+
+test('main page normalizes structured workflow start errors instead of storing object string output', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick',
+        finalName: 'Kick',
+        status: 'ready',
+        errorMessage: null,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    4: 3,
+    5: false,
+  })
+  const structuredError = {
+    message: 'workflow start failed',
+    code: 'workflow_start_failed',
+  }
+  const testContext = createPluginContext()
+  testContext.presto.workflow.run.start = async () => {
+    throw structuredError
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const runButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Run import',
+    )
+
+    assert.ok(runButton, 'expected import step 3 to render a Run import action')
+
+    runButton.props.onClick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.ok(
+      stateUpdates.some((update) => update.index === 7 && update.value === 'workflow start failed'),
+      'expected structured errors to write a readable inline error message',
+    )
+    assert.ok(
+      stateUpdates.some(
+        (update) =>
+          update.index === 12 &&
+          update.value &&
+          typeof update.value === 'object' &&
+          update.value.phase === 'failed' &&
+          update.value.message === 'workflow start failed',
+      ),
+      'expected structured errors to write a readable run-state message',
+    )
+    assert.equal(
+      stateUpdates.some((update) => update.value === '[object Object]'),
+      false,
+      'expected no state update to store the raw object string output',
+    )
+  } finally {
+    restore()
+  }
 })
 
 test('main page renders localized strings through plugin-local locale messages', async () => {
@@ -293,7 +624,8 @@ test('main page can render Simplified Chinese through plugin-local locale messag
   assert.match(markup, /分析与编辑/)
   assert.match(markup, /草稿概览/)
   assert.match(markup, /待导入文件/)
-  assert.match(markup, /扫描文件夹/)
+  assert.match(markup, /浏览/)
+  assert.match(markup, /浏览文件夹后开始扫描/)
   assert.match(markup, /下一步：Strip 设置/)
 })
 
@@ -356,6 +688,8 @@ test('main page source removes the checkbox column and table configuration ui wh
   assert.doesNotMatch(pageSource, /Threshold/)
   assert.doesNotMatch(pageSource, /Add audio files/)
   assert.doesNotMatch(pageSource, /Start import/)
+  assert.match(pageSource, /host\.pickFolder\(\)/)
+  assert.match(pageSource, /page\.button\.browse/)
   assert.match(pageSource, /pluginId:\s*context\.pluginId/)
   assert.match(pageSource, /workflowId:\s*IMPORT_WORKFLOW_ID/)
   assert.doesNotMatch(pageSource, /definition:\s*workflowDefinition/)
@@ -389,4 +723,38 @@ test('main page source removes the checkbox column and table configuration ui wh
   assert.match(cssSource, /\.iw-action-bar--workflow[\s\S]*padding-top:\s*14px/)
   assert.match(cssSource, /\.iw-stepper-row[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/)
   assert.match(cssSource, /\.iw-file-path[\s\S]*text-overflow:\s*ellipsis/)
+  assert.match(pageSource, /WorkflowSelect/)
+  assert.doesNotMatch(pageSource, /h\(\s*'select'/)
+})
+
+test('prepared rows category column reuses shared select styling instead of native import select markup', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness({
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick',
+        finalName: 'Kick',
+        status: 'ready',
+        errorMessage: null,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    5: false,
+  })
+
+  try {
+    const markup = renderToStaticMarkup(
+      React.createElement(pageModule.ImportWorkflowPage, {
+        context: createPluginContext(),
+        params: {},
+        searchParams: new URLSearchParams(),
+      }),
+    )
+
+    assert.match(markup, /ui-select/)
+    assert.doesNotMatch(markup, /<select class="iw-select"/)
+  } finally {
+    restore()
+  }
 })

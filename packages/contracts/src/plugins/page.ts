@@ -30,8 +30,16 @@ export interface PluginAutomationItemDefinition {
   order?: number
 }
 
+export interface PluginPageHost {
+  pickFolder(): Promise<{
+    canceled: boolean
+    paths: string[]
+  }>
+}
+
 export interface PluginPageProps {
   context: PluginContext
+  host: PluginPageHost
   params: Record<string, string>
   searchParams: URLSearchParams
 }

@@ -219,6 +219,7 @@ test('primary sidebar source uses the custom P logo and keeps the original small
 
   assert.match(source, /import prestoLogoPng from '\.\.\/\.\.\/assets\/PrestoLogoPng\.png'/)
   assert.match(source, /<img src=\{prestoLogoPng\}/)
+  assert.match(source, /filter:\s*'var\(--presto-logo-filter,\s*none\)'/)
   assert.match(source, /const logoRowStyle =[\s\S]*gap:\s*12/)
   assert.match(source, /fontSize:\s*14/)
   assert.doesNotMatch(source, /function PrestoHostMark/)
@@ -337,7 +338,7 @@ test('settings defaults to General and keeps Developer hidden until developer mo
   assert.doesNotMatch(markup, />Reset</)
   assert.doesNotMatch(markup, /Restore Defaults/)
   assert.doesNotMatch(markup, />Save Changes</)
-  assert.doesNotMatch(markup, /Theme/)
+  assert.match(markup, /Theme/)
   assert.doesNotMatch(markup, /<md-[^>]+><span>Developer<\/span><\/md-[^>]+>/)
 })
 

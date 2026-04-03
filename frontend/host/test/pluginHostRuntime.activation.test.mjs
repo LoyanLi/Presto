@@ -110,6 +110,11 @@ test('loadHostPlugins keeps workflow plugins available when host only provides d
         },
       },
     },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/Exports'] }),
+      },
+    },
   })
 
   assert.deepEqual(result.managerModel.issues, [])
@@ -123,6 +128,42 @@ test('loadHostPlugins keeps workflow plugins available when host only provides d
     },
   ])
   assert.equal(result.managerModel.plugins[0]?.status, 'ready')
+})
+
+test('loadHostPlugins injects page-scoped host folder picking into workflow pages', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createWorkflowPluginFixture(sandbox)
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/Workflow/Exports'] }),
+      },
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+  assert.equal(typeof renderedPage?.props?.host?.pickFolder, 'function')
+  await assert.doesNotReject(() => renderedPage.props.host.pickFolder())
+  await assert.deepEqual(await renderedPage.props.host.pickFolder(), {
+    canceled: false,
+    paths: ['/Workflow/Exports'],
+  })
 })
 
 test('loadHostPlugins keeps workflow library entries visible when the workflow page module fails to load', async () => {
@@ -173,6 +214,11 @@ test('loadHostPlugins keeps workflow library entries visible when the workflow p
       messages: {},
     },
     presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: true, paths: [] }),
+      },
+    },
   })
 
   assert.deepEqual(result.homeEntries, [

@@ -211,6 +211,11 @@ test('loadHostPlugins resolves workflow pages in tauri from asset-backed module 
       messages: {},
     },
     presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: true, paths: [] }),
+      },
+    },
   })
 
   assert.deepEqual(result.managerModel.issues, [])

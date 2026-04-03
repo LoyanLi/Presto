@@ -44,7 +44,7 @@ test('createSnapshotFromTracks stores the old snapshot track-state semantics', (
   })
 })
 
-test('buildExportRunPayload preserves old export_settings and snake_case track flags', () => {
+test('buildExportRunPayload emits exportSettings with snake_case track flags preserved', () => {
   const payload = buildExportRunPayload({
     snapshots: [
       {
@@ -73,10 +73,13 @@ test('buildExportRunPayload preserves old export_settings and snake_case track f
     },
   })
 
-  assert.equal(payload.export_settings.file_format, 'wav')
-  assert.equal(payload.export_settings.mix_source_type, 'PhysicalOut')
+  assert.equal(payload.exportSettings.file_format, 'wav')
+  assert.equal(payload.exportSettings.mix_source_type, 'PhysicalOut')
+  assert.equal(payload.startTime, null)
+  assert.equal(payload.endTime, null)
   assert.equal(payload.snapshots[0]?.trackStates[0]?.is_muted, true)
   assert.equal(payload.snapshots[0]?.trackStates[0]?.is_soloed, false)
+  assert.equal('export_settings' in payload, false)
 })
 
 test('deriveExportJobView maps backend job metadata and completed_with_errors result', () => {
