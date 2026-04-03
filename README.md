@@ -1,125 +1,120 @@
 # Presto
 
-Presto 是一个面向音频工作流的桌面应用，当前以 `Electron + React + Python FastAPI` 为主干，核心目标是在桌面宿主、后端能力层与插件扩展层之间建立一套稳定、可验证、可受控的工作流平台。当前代码实现实际聚焦 `Pro Tools`，并围绕导入、导出、自动化任务与扩展插件提供能力。
+Presto 是一个面向音频工作流的桌面应用。当前代码主干已经是 `Tauri + Node sidecar + React + Python FastAPI`，目标是在桌面宿主、后端能力层和插件扩展层之间建立稳定、可验证、可裁剪的工作流平台。当前实际落地的目标 DAW 是 `Pro Tools`。
 
-本文档是项目入口文档，只回答三类问题：
+这个入口文档只回答三件事：
 
-1. 这个项目现在是什么。
+1. 项目当前是什么。
 2. 代码结构应该从哪里读起。
-3. 哪些详细主题文档分别面向内部开发者与外部接入者。
+3. 文档已经按哪两块组织。
 
 ## 当前系统概览
 
-当前已实现的运行结构如下：
-
 ```text
 Presto
+├── src-tauri/               # Tauri Rust 宿主入口与 runtime_invoke command
 ├── frontend/
-│   ├── electron/            # Electron 主进程、预加载、IPC、运行时装配
+│   ├── tauri/               # Renderer 入口与 Tauri runtime bridge
+│   ├── sidecar/             # Node sidecar 入口与资源路径装配
+│   ├── runtime/             # backend supervisor、plugin host service、automation runtime
 │   ├── host/                # React 宿主壳层、插件挂载、设置页、开发者界面
-│   └── ui/                  # UI 设计令牌、基础控件、复合组件
-├── backend/presto/          # FastAPI 后端、能力处理器、领域模型、Pro Tools 适配
+│   └── ui/                  # UI 设计令牌与基础组件
+├── backend/presto/          # FastAPI 后端、capability handler、作业管理、Pro Tools 适配
 ├── host-plugin-runtime/     # 插件发现、校验、加载、挂载、权限守卫
 ├── packages/
-│   ├── contracts/           # 类型契约、能力协议、插件协议、事件与错误模型
-│   ├── contracts-manifest/  # capability 清单与相关生成产物事实源
-│   ├── sdk-core/            # 能力调用 SDK
-│   └── sdk-runtime/         # Electron Runtime SDK
+│   ├── contracts/           # 类型契约、capability 协议、插件协议
+│   ├── contracts-manifest/  # capability 清单事实源
+│   ├── sdk-core/            # capability 调用 SDK
+│   └── sdk-runtime/         # 宿主 runtime SDK
 ├── plugins/official/        # 官方插件包
-└── assets/                  # 图标与静态资源
+└── docs/                    # 内核开发 / 插件开发与规范文档
 ```
 
 ## 当前运行模型
 
-Presto 不是一个纯前端壳，也不是一个纯后端工具。当前实现是三层协作模型：
-
-- 桌面宿主层负责窗口生命周期、IPC、后端拉起、插件装载、系统能力代理。
-- 后端能力层负责把能力请求落到具体业务 handler 和 DAW 适配器。
-- 插件扩展层负责把工作流、页面、设置页、命令和自动化入口以受限权限方式接入宿主。
-
-简化后的调用链如下：
+当前实现是三段式调用链：
 
 ```text
-Renderer UI / Plugin UI
+React Host / Plugin Page
         │
         ▼
-Electron Runtime Bridge
+Tauri runtime bridge
         │
         ▼
-Electron Main IPC Handlers
+Rust command: runtime_invoke
         │
-        ├── Host Runtime Services
+        ▼
+Node sidecar runtime
         │
-        └── Backend Supervisor
+        ├── plugin host / dialog / shell / fs / window / automation
+        └── backend supervisor
                 │
                 ▼
-         FastAPI /api/v1/*
+          FastAPI /api/v1
                 │
                 ▼
-      Capability Handlers + DAW Adapter
+      capability handlers + job manager + DAW adapter
 ```
 
-## 当前实现边界
+这不是“前端直连后端”的结构，也不是“插件直接拿宿主私有对象”的结构。
 
-以下内容是当前代码已经明确成立的事实：
+## 当前成立的边界
 
-- 当前宿主应用名为 `Presto`，版本基线为 `0.3.0-alpha.2`。
-- 当前能力注册与官方插件的实际目标 DAW 都是 `pro_tools`。
-- 插件系统不是“任意脚本直通宿主”，而是 manifest 驱动、白名单 capability 驱动，插件只负责定义，执行由后端能力层与宿主正式能力承接。
-- 类型接口定义集中在 `packages/contracts`。当前 capability 清单与相关生成产物由 `packages/contracts-manifest` 派生，供 TypeScript、Python 和插件运行时共用。
-- `packages/sdk-core` 面向能力调用，`packages/sdk-runtime` 面向宿主运行时服务，两者职责不同，不能混用。
-- Renderer 侧不是长期持有私有宿主桥，而是从 `__PRESTO_BOOTSTRAP__` 一次性取走 client/runtime/plugin host bridge，再组装宿主应用。
+- 应用版本基线是 `0.3.0-alpha.1`。
+- 当前实际支持的 DAW 目标是 `pro_tools`。
+- 插件能力边界由 manifest 和 capability 白名单共同决定。
+- `packages/contracts` 是跨 TypeScript、Python、插件运行时共享的协议面。
+- `packages/contracts-manifest` 是 capability 清单事实源，上游生成产物会被后端和前端共同消费。
+- `packages/sdk-core` 负责 capability 调用；`packages/sdk-runtime` 负责宿主 runtime 调用；两者职责不同。
+- 插件 `activate(context)` 只能拿到 `PluginContext`，没有 `runtime`。
+- 插件页面组件除了 `context` 之外，还会收到受限的 `host`，当前稳定开放的页面宿主能力是 `host.pickFolder()`。
 
-以下内容在代码中有预留，但当前不应被文档表述为已完成能力：
+以下内容当前只能写成“预留”而不是“已支持”：
 
-- DAW 类型定义里存在 `logic`、`cubase`、`nuendo`，但当前 capability registry 与官方插件并未真正开放这些目标。
-- 插件 Host API 兼容判断已允许 `0.1.0`、`1`、`1.0.0`，但这不等于系统已经完成多代长期兼容治理。
+- `logic`、`cubase`、`nuendo` 只存在类型预留。
+- `hostApiVersion` 兼容白名单存在，但这不代表项目已经完成长期多代兼容治理。
 
-## 文档索引
+## 文档入口
 
-### 面向内部开发者
+文档已经按两块重组：
 
-- [前端架构](docs/frontend-architecture.md)
-- [后端架构](docs/backend-architecture.md)
-- [通信架构](docs/communication-architecture.md)
-- [版本支持](docs/version-support.md)
+- [内核开发文档](docs/kernel-development/README.md)
+- [插件开发与规范](docs/plugin-development/README.md)
 
-### 面向外部接入者
-
-- [SDK 开发](docs/sdk-development.md)
-- [插件开发规范与流程](docs/third-party-plugin-development.md)
+完整索引见 [docs/README.md](docs/README.md)。
 
 ## 建议阅读顺序
 
-如果你是项目内部研发，建议顺序如下：
+如果你在做内核开发：
 
 1. `README.md`
-2. `docs/communication-architecture.md`
-3. `docs/frontend-architecture.md`
-4. `docs/backend-architecture.md`
-5. `docs/version-support.md`
+2. [docs/README.md](docs/README.md)
+3. [docs/kernel-development/README.md](docs/kernel-development/README.md)
 
-如果你是 SDK 或插件接入方，建议顺序如下：
+如果你在做插件开发：
 
 1. `README.md`
-2. `docs/version-support.md`
-3. `docs/sdk-development.md`
-4. `docs/third-party-plugin-development.md`
+2. [docs/README.md](docs/README.md)
+3. [docs/plugin-development/README.md](docs/plugin-development/README.md)
 
-## 本地运行
+## 本地开发
 
-当前仓库的最小启动方式：
+最小开发路径按当前脚本应为：
 
 ```bash
 npm install
-npm run stage1:start
+npm run tauri:dev
 ```
 
-## 项目约束
+测试：
 
-以下约束应当视为项目级规则，而不是“建议”：
+```bash
+npm test
+```
 
-- 新增跨边界能力时，先定义 `contracts` 中的类型面，再更新 `contracts-manifest` 与生成产物，再谈实现。
-- 新插件能力必须先声明权限，再谈调用。
-- 文档中所有“已支持”表述必须对应当前代码事实，不能把预留项写成已交付项。
-- 任何需要跨前后端、跨宿主与插件边界的改动，都必须先明确协议边界，再实施代码。
+## 项目级约束
+
+- 新增跨边界能力时，先定义 `contracts` 类型面，再更新 `contracts-manifest` 与生成产物，再实现。
+- 新插件能力必须先声明 `requiredCapabilities`，再谈调用。
+- 文档中的“已支持”必须对应当前代码事实，不能把预留项写成已交付能力。
+- 涉及宿主、后端、插件三方边界的改动，先明确协议边界，再进入实现。
