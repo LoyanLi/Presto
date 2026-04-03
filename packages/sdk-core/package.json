@@ -1,6 +1,6 @@
 {
   "name": "@presto/sdk-core",
-  "version": "0.3.0-alpha.2",
+  "version": "0.3.0-alpha.1",
   "private": true,
   "type": "module",
   "dependencies": {
