@@ -145,6 +145,32 @@ npm run tauri:build:x64
 - `src-tauri/target/x86_64-apple-darwin/release/bundle/`
 - 默认本机目标仍输出到 `src-tauri/target/release/bundle/`
 
+## 未签名 App 打开方式
+
+当前产物是未签名 macOS App。首次打开如果被系统拦截，按下面做：
+
+1. 在 Finder 里找到 `.app` 或挂载后的 App。
+2. 按住 `Control` 键点按应用，选择“打开”。
+3. 弹窗里再点一次“打开”。
+
+如果还是被拦截：
+
+1. 打开“系统设置 -> 隐私与安全性”。
+2. 在底部找到刚刚被拦截的 Presto。
+3. 点“仍要打开”。
+
+## 捐赠
+
+如果这个项目对你有帮助，可以扫码支持：
+
+微信：
+
+![微信赞赏码](assets/wx.jpg)
+
+支付宝：
+
+![支付宝收款码](assets/zfb.jpg)
+
 ## 项目级约束
 
 - 新增跨边界能力时，先定义 `contracts` 类型面，再更新 `contracts-manifest` 与生成产物，再实现。
