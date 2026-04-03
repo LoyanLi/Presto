@@ -12,6 +12,9 @@ test('tauri sidecar build thins and strips the bundled Node binary for the curre
 
   assert.match(source, /lipo/)
   assert.match(source, /strip/)
+  assert.match(source, /PRESTO_TAURI_TARGET/)
+  assert.match(source, /aarch64-apple-darwin/)
+  assert.match(source, /x86_64-apple-darwin/)
   assert.match(source, /process\.arch/)
   assert.match(source, /arm64|x64/)
   assert.doesNotMatch(source, /cp\(process\.execPath,\s*path\.join\(outDir,\s*'node'\)\)/)

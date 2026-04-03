@@ -9,6 +9,23 @@ const repoRoot = path.resolve(currentDir, '..')
 const outDir = path.join(repoRoot, 'build', 'sidecar')
 const outNodePath = path.join(outDir, 'node')
 
+function resolveTargetArch() {
+  const targetTriple = process.env.PRESTO_TAURI_TARGET?.trim()
+  if (targetTriple === 'aarch64-apple-darwin') {
+    return 'arm64'
+  }
+  if (targetTriple === 'x86_64-apple-darwin') {
+    return 'x86_64'
+  }
+  if (process.arch === 'arm64') {
+    return 'arm64'
+  }
+  if (process.arch === 'x64') {
+    return 'x86_64'
+  }
+  throw new Error(`unsupported_sidecar_arch:${targetTriple || process.arch}`)
+}
+
 function run(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -44,10 +61,6 @@ await esbuild.build({
   },
 })
 
-const currentArch = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x86_64' : null
-if (!currentArch) {
-  throw new Error(`unsupported_sidecar_arch:${process.arch}`)
-}
-
+const currentArch = resolveTargetArch()
 await run('lipo', [process.execPath, '-thin', currentArch, '-output', outNodePath])
 await run('strip', ['-x', outNodePath])
