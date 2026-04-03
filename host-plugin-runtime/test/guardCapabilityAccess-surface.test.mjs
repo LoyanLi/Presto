@@ -152,6 +152,16 @@ function createPrestoFixture(invocations) {
       },
     },
     import: {
+      async analyze(request) {
+        invocations.push({ method: 'import.analyze', request })
+        return { rows: [], folderSummaries: [] }
+      },
+      cache: {
+        async save(request) {
+          invocations.push({ method: 'import.cache.save', request })
+          return { ok: true, saved: true }
+        },
+      },
       run: {
         async start(request) {
           invocations.push({ method: 'import.run.start', request })
@@ -228,7 +238,7 @@ function createPrestoFixture(invocations) {
   }
 }
 
-test('guardCapabilityAccess exposes current clip/import.run/export surfaces and removes stale ai/import legacy methods', async () => {
+test('guardCapabilityAccess exposes current clip/import/export surfaces and removes stale ai/import legacy methods', async () => {
   const guardCapabilityAccess = await loadGuardCapabilityAccess()
   const invocations = []
   const presto = createPrestoFixture(invocations)
@@ -241,8 +251,9 @@ test('guardCapabilityAccess exposes current clip/import.run/export surfaces and 
 
   assert.equal('ai' in guarded, false)
   assert.equal('preflight' in guarded.import, false)
-  assert.equal('analyze' in guarded.import, false)
   assert.equal('finalize' in guarded.import, false)
+  assert.equal('analyze' in guarded.import, true)
+  assert.equal('cache' in guarded.import, true)
 
   await guarded.clip.selectAllOnTrack({ trackName: 'Vox' })
   await guarded.import.run.start({ folderPaths: ['/tmp/import'] })
@@ -278,4 +289,57 @@ test('guardCapabilityAccess still denies undeclared current capabilities', async
       error.code === 'PLUGIN_PERMISSION_DENIED' &&
       String(error.message).includes('clip.selectAllOnTrack()'),
   )
+})
+
+test('guardCapabilityAccess does not require unrelated presto services for declared capabilities', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const invocations = []
+  const presto = {
+    export: {
+      run: {
+        async start(request) {
+          invocations.push({ method: 'export.run.start', request })
+          return { ok: true }
+        },
+      },
+    },
+    jobs: {
+      async get(jobId) {
+        invocations.push({ method: 'jobs.get', jobId })
+        return { jobId }
+      },
+    },
+  }
+  const manifest = {
+    pluginId: 'plugin.guard.minimal-services',
+    requiredCapabilities: ['export.run.start', 'jobs.get'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest)
+  await guarded.export.run.start({ snapshots: [], export_settings: { output_path: '/tmp/out' } })
+  await guarded.jobs.get('job-1')
+
+  assert.deepEqual(invocations, [
+    { method: 'export.run.start', request: { snapshots: [], export_settings: { output_path: '/tmp/out' } } },
+    { method: 'jobs.get', jobId: 'job-1' },
+  ])
+})
+
+test('guardCapabilityAccess exposes backend import analyze and cache save capabilities', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const invocations = []
+  const presto = createPrestoFixture(invocations)
+  const manifest = {
+    pluginId: 'plugin.guard.import-backend',
+    requiredCapabilities: ['import.analyze', 'import.cache.save'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest)
+  await guarded.import.analyze({ folderPaths: ['/tmp/import'], categories: [] })
+  await guarded.import.cache.save({ folderPath: '/tmp/import', payload: { version: 1 } })
+
+  assert.deepEqual(invocations, [
+    { method: 'import.analyze', request: { folderPaths: ['/tmp/import'], categories: [] } },
+    { method: 'import.cache.save', request: { folderPath: '/tmp/import', payload: { version: 1 } } },
+  ])
 })

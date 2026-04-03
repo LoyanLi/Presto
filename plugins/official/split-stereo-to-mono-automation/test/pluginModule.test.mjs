@@ -36,5 +36,7 @@ test('split stereo automation manifest stays aligned with dist entry essentials'
     capabilityId: 'automation.splitStereoToMono.execute',
     minVersion: '2025.10.0',
   })
+  assert.equal(fileManifest.requiredRuntimeServices, undefined)
+  assert.equal(pluginModule.manifest.requiredRuntimeServices, undefined)
   assert.deepEqual(fileManifest.automationItems, pluginModule.manifest.automationItems)
 })

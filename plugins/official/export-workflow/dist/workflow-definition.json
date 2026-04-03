@@ -1,0 +1,27 @@
+{
+  "workflowId": "official.export-workflow.run",
+  "version": "1.0.0",
+  "inputSchemaId": "official.export-workflow.run.v1",
+  "steps": [
+    {
+      "stepId": "run_export",
+      "usesCapability": "export.run.start",
+      "awaitJob": true,
+      "input": {
+        "snapshots": {
+          "$ref": "input.snapshots"
+        },
+        "exportSettings": {
+          "$ref": "input.exportSettings"
+        },
+        "startTime": {
+          "$ref": "input.startTime"
+        },
+        "endTime": {
+          "$ref": "input.endTime"
+        }
+      },
+      "saveAs": "exportJob"
+    }
+  ]
+}

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 
-import type { DawTarget, PluginRuntime, PrestoClient } from '../../packages/contracts/src'
+import type { DawTarget, PrestoClient } from '../../packages/contracts/src'
+import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
 import type { DawAdapterSnapshot } from '../../packages/sdk-runtime/src/clients/backend'
 import { getThemeMode, subscribeThemeMode } from '../ui'
 import { md3ColorSchemes, md3Shape, md3Typography } from '../ui/tokens'
@@ -45,7 +46,7 @@ type LegacySettingsRouteInput = {
 export interface HostShellAppProps {
   state: HostShellState
   developerPresto: PrestoClient
-  developerRuntime: PluginRuntime
+  developerRuntime: PrestoRuntime
   smokeTarget?: string | null
   smokeImportFolder?: string | null
   pluginHomeEntries?: readonly HostPluginHomeEntry[]
@@ -605,7 +606,6 @@ export function HostShellApp({
         ? (
             <HostDeveloperSurface
               developerPresto={developerPresto}
-              developerRuntime={developerRuntime}
               smokeTarget={smokeTarget}
               smokeImportFolder={smokeImportFolder}
               onOpenSettings={() => openSettings()}

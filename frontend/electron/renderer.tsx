@@ -22,7 +22,8 @@ import {
   type PluginHostBridgeUninstallResult,
   loadHostPlugins,
 } from '../../frontend/host/pluginHostRuntime'
-import type { PluginRuntime, PrestoClient } from '../../packages/contracts/src'
+import type { PrestoClient } from '../../packages/contracts/src'
+import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
 
 const smokeSearchParams = new URLSearchParams(window.location.search)
 
@@ -44,7 +45,7 @@ declare global {
   interface Window {
     __PRESTO_BOOTSTRAP__?: {
       takeClient(): PrestoClient
-      takeRuntime(): PluginRuntime
+      takeRuntime(): PrestoRuntime
       takePluginHostBridge(): PluginHostBridge
     }
     __PRESTO_SMOKE__?: PrestoClient
@@ -79,7 +80,7 @@ function requireBootstrap() {
   return bootstrap
 }
 
-function takeBootstrapRuntime(): PluginRuntime {
+function takeBootstrapRuntime(): PrestoRuntime {
   return requireBootstrap().takeRuntime()
 }
 
@@ -138,7 +139,6 @@ function App() {
         catalog,
         locale: pluginLocaleState,
         presto: bootstrapPrestoClient,
-        runtime: bootstrapRuntime,
       })
       setAutomationEntries(loaded.automationEntries)
       setPluginHomeEntries(loaded.homeEntries)

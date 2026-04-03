@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { DawTarget, PluginRuntime, PrestoClient } from '../../packages/contracts/src'
+import type { DawTarget, PrestoClient } from '../../packages/contracts/src'
+import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
 import type { DawAdapterSnapshot } from '../../packages/sdk-runtime/src/clients/backend'
 import { translateHost } from '../i18n'
 
@@ -22,7 +23,7 @@ const DISCONNECTED_DAW_STATUS: HostDawStatusState = {
 
 type UseDawStatusPollingInput = {
   developerPresto: PrestoClient
-  developerRuntime: PluginRuntime
+  developerRuntime: PrestoRuntime
   preferences: { dawTarget: DawTarget }
   resolvedLocale: string
   initialSnapshot?: DawAdapterSnapshot | null

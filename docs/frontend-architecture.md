@@ -76,7 +76,7 @@
 - 承接 RuntimeBridge 和 SDK 客户端
 - 管理宿主级状态，如当前插件模型、DAW 状态、设置页路由等
 
-宿主层不应该直接发明协议。它应当消费 `packages/contracts` 中的类型面，以及由 `packages/contracts-manifest` 生成并注入到运行时的 capability/runtime service 白名单。
+宿主层不应该直接发明协议。它应当消费 `packages/contracts` 中的类型面，以及由 `packages/contracts-manifest` 生成并注入运行时的 capability 定义与相关生成产物。
 
 ### 2.4 UI 组件层
 
@@ -105,7 +105,7 @@
 3. 主进程创建 `automationRuntime`、`macAccessibilityRuntime`、`backendSupervisor`、`pluginHostService` 等运行时依赖。
 4. 主进程通过 `registerRuntimeHandlers.mjs` 注册全部 IPC 处理器。
 5. 预加载层通过 `__PRESTO_BOOTSTRAP__` 暴露一次性 bootstrap 句柄。
-6. Renderer 侧从 bootstrap 句柄取走 client、runtime 与 plugin host bridge，并删除全局入口。
+6. Renderer 侧从 bootstrap 句柄取走 client、宿主 runtime 与 plugin host bridge，并删除全局入口。
 7. 宿主 React 应用加载 `HostShellApp`，再装配内建页面与插件页面。
 
 这一链路里最重要的边界是：
@@ -130,12 +130,12 @@
 - `mobileProgress`
 - `macAccessibility`
 
-这意味着 Renderer 和插件侧不需要记住裸字符串通道名，也不应该直接拼接 IPC channel。调用应统一通过 runtime client 完成。
+这意味着 Renderer 宿主侧不需要记住裸字符串通道名，也不应该直接拼接 IPC channel。宿主内部调用应统一通过 runtime client 完成。
 
 这里要明确当前真实边界：
 
 - `preload.ts` 不再把长期可见的私有 host bridge 暴露到 `window`。
-- Renderer 只从 `window.__PRESTO_BOOTSTRAP__` 一次性取走 `PrestoClient`、`PrestoRuntime` 与插件管理桥。
+- Renderer 只从 `window.__PRESTO_BOOTSTRAP__` 一次性取走 `PrestoClient`、宿主 runtime 与插件管理桥。
 - `frontend/electron/test/plugin-host-bridge-source.test.mjs` 明确约束代码中不应重新出现 `__PRESTO_PLUGIN_HOST__` 或 `__PRESTO_PLUGIN_SANDBOX__`。
 
 这样设计的收益：
@@ -143,7 +143,7 @@
 - 通道名集中管理
 - 类型边界清晰
 - 更容易做权限裁剪
-- Renderer 和插件的调用方式统一
+- Renderer 宿主侧调用路径统一
 
 ## 5. 后端接入在前端中的位置
 

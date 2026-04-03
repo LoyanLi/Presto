@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -20,6 +21,7 @@ from presto.application.handlers.import_workflow import (
     _update_export_run_progress,
     analyze_import,
     finalize_import,
+    persist_import_analysis_cache,
     start_export_run,
     start_import_run,
 )
@@ -291,17 +293,19 @@ def test_import_analyze_scans_source_folders_recursively_and_reuses_cache(tmp_pa
 
     assert first == second
     assert first == {
-        "proposals": [
+        "folderPaths": [str(root.resolve())],
+        "orderedFilePaths": [str((nested / "kick.wav").resolve())],
+        "rows": [
             {
                 "filePath": str(nested / "kick.wav"),
-                "categoryId": "import-src",
-                "originalStem": "kick",
+                "categoryId": "drums",
                 "aiName": "Kick",
                 "finalName": "Kick",
                 "status": "ready",
                 "errorMessage": None,
             }
-        ]
+        ],
+        "cache": {"files": 0, "hits": 0},
     }
 
 
@@ -353,6 +357,85 @@ def test_import_analyze_rejects_items_payload_without_source_folders() -> None:
     except Exception as exc:
         assert getattr(exc, "code", None) == "VALIDATION_ERROR"
         assert str(exc) == "sourceFolders is required."
+
+
+def test_import_analyze_reads_cached_rows(tmp_path: Path) -> None:
+    root = tmp_path / "import-cache"
+    root.mkdir(parents=True)
+    audio_path = root / "kick.wav"
+    audio_path.write_bytes(b"RIFF")
+    cache_payload = {
+        "version": 1,
+        "generated_at": "2026-03-30T12:00:00Z",
+        "folder": str(root),
+        "total": 1,
+        "proposals": [
+            {
+                "file_path": str(audio_path),
+                "category_id": "drums",
+                "ai_name": "Kick AI",
+                "final_name": "Kick Final",
+                "status": "ready",
+                "error_message": None,
+                "relative_path": "kick.wav",
+            }
+        ],
+    }
+    (root / ".presto_ai_analyze.json").write_text(json.dumps(cache_payload))
+
+    app = _app_without_daw()
+    response = analyze_import(
+        app.state.services,
+        {
+            "sourceFolders": [str(root)],
+            "categories": [{"id": "drums", "name": "Drums"}],
+            "analyzeCacheEnabled": True,
+        },
+    )
+
+    assert response["cache"] == {"files": 1, "hits": 1}
+    assert response["rows"] == [
+        {
+            "filePath": str(audio_path.resolve()),
+            "categoryId": "drums",
+            "aiName": "Kick AI",
+            "finalName": "Kick Final",
+            "status": "ready",
+            "errorMessage": None,
+        }
+    ]
+
+
+def test_import_analyze_persists_cache_payload(tmp_path: Path) -> None:
+    root = tmp_path / "import-persist"
+    root.mkdir(parents=True)
+    audio_path = root / "snare.wav"
+    audio_path.write_bytes(b"RIFF")
+    app = _app_without_daw()
+
+    response = persist_import_analysis_cache(
+        app.state.services,
+        {
+            "sourceFolders": [str(root)],
+            "rows": [
+                {
+                    "filePath": str(audio_path),
+                    "categoryId": "drums",
+                    "aiName": "Snare AI",
+                    "finalName": "Snare Final",
+                    "status": "ready",
+                    "errorMessage": None,
+                }
+            ],
+        },
+    )
+
+    assert response == {"saved": True, "cacheFiles": 1}
+    cache_path = root / ".presto_ai_analyze.json"
+    persisted = json.loads(cache_path.read_text())
+    assert persisted["folder"] == str(root)
+    assert persisted["total"] == 1
+    assert persisted["proposals"][0]["relative_path"] == "snare.wav"
 
 
 def test_import_finalize_resolves_manual_names_without_daw() -> None:

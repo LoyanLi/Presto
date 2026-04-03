@@ -16,6 +16,11 @@ export const manifest = {
   description: 'Scan folders, classify files, batch-edit names, and run the import workflow from an official plugin package.',
   entry: 'dist/entry.mjs',
   styleEntry: 'dist/import-workflow.css',
+  workflowDefinition: {
+    workflowId: 'official.import-workflow.run',
+    inputSchemaId: 'official.import-workflow.run.v1',
+    definitionEntry: 'dist/workflow-definition.json',
+  },
   pages: [
     {
       pageId: 'import-workflow.page.main',
@@ -101,6 +106,10 @@ export const manifest = {
     },
   ],
   requiredCapabilities: [
+    'workflow.run.start',
+    'import.analyze',
+    'import.cache.save',
+    'import.planRunItems',
     'import.run.start',
     'jobs.get',
     'jobs.cancel',
@@ -122,6 +131,10 @@ export const manifest = {
     { moduleId: 'session', minVersion: '2025.10.0' },
   ],
   capabilityRequirements: [
+    { capabilityId: 'import.analyze', minVersion: '2025.10.0' },
+    { capabilityId: 'import.cache.save', minVersion: '2025.10.0' },
+    { capabilityId: 'workflow.run.start', minVersion: '2025.10.0' },
+    { capabilityId: 'import.planRunItems', minVersion: '2025.10.0' },
     { capabilityId: 'import.run.start', minVersion: '2025.10.0' },
     { capabilityId: 'jobs.get', minVersion: '2025.10.0' },
     { capabilityId: 'jobs.cancel', minVersion: '2025.10.0' },
@@ -133,14 +146,6 @@ export const manifest = {
     { capabilityId: 'stripSilence.open', minVersion: '2025.10.0' },
     { capabilityId: 'stripSilence.execute', minVersion: '2025.10.0' },
     { capabilityId: 'session.save', minVersion: '2025.10.0' },
-  ],
-  requiredRuntimeServices: [
-    'dialog.openFolder',
-    'fs.readFile',
-    'fs.writeFile',
-    'fs.ensureDir',
-    'fs.readdir',
-    'fs.stat',
   ],
 }
 

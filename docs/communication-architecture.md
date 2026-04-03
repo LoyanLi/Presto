@@ -176,9 +176,9 @@ Presto 跨层通信里最核心的稳定协议不是 IPC channel，也不是 HTT
 - SDK 可以统一封装错误处理
 - 权限声明可以直接绑定 capability ID
 
-## 6. Runtime 服务协议
+## 6. 宿主 Runtime 协议
 
-插件与宿主之间第二类稳定面是 Runtime 服务名集合，即 `PluginRuntimeServiceName`。
+除了 capability 协议之外，当前系统还存在一套宿主内部 runtime 协议，供 Electron 宿主装配与 renderer 宿主调用使用。
 
 当前已出现的 runtime 服务包括：
 
@@ -201,7 +201,7 @@ Presto 跨层通信里最核心的稳定协议不是 IPC channel，也不是 HTT
 - `macAccessibility.runScript`
 - `macAccessibility.runFile`
 
-这些名字不是文档约定，而是实际类型约束。当前事实源位于 `packages/contracts-manifest/runtime-services.json`，并要求与 `packages/contracts-manifest/plugin-permissions.json` 中的 `allowedRuntimeServices` 精确一致。任何新增运行时服务都必须先更新这份 manifest，再进入生成产物、宿主实现和权限守卫。
+这些名字不是文档约定，而是当前宿主实现中的实际类型约束。它们描述的是宿主内部 runtime 面，不等于当前插件正式开放能力。
 
 ## 7. 权限控制是如何落在通信层上的
 
@@ -219,21 +219,7 @@ Presto 跨层通信里最核心的稳定协议不是 IPC channel，也不是 HTT
 - 生成只暴露白名单能力的 `presto` client
 - 插件调用未声明 capability 时直接抛出 `PLUGIN_PERMISSION_DENIED`
 
-### 7.2 Runtime 权限守卫
-
-实现位置：
-
-- `host-plugin-runtime/src/permissions/guardRuntimeAccess.ts`
-
-机制：
-
-- 宿主读取 `requiredRuntimeServices`
-- 仅注入允许访问的 runtime 子服务
-- 未声明服务不可见或调用被拒绝
-
-当前 `guardRuntimeAccess.ts` 已实际覆盖自动化运行时服务，包括 `automation.listDefinitions` 与 `automation.runDefinition`。
-
-这意味着 Presto 的权限控制发生在“API 面装配阶段”，而不是事后审计阶段。
+当前插件边界下，不再存在对外正式开放的 runtime 权限守卫路径。插件权限控制落点就是 capability 裁剪本身，而不是给插件再开放第二条 runtime 通道。
 
 ## 8. 请求追踪与错误传播
 

@@ -22,6 +22,7 @@ export type {
   SystemClient,
   TrackClient,
   TransportClient,
+  WorkflowClient,
 } from './clients'
 export type {
   AutomationSplitStereoToMonoExecuteRequest,
@@ -44,6 +45,9 @@ export type {
   ExportStartRequest,
   ExportVideoRequest,
   CapabilityRequestMap,
+  ImportAnalyzeRequest,
+  ImportCacheSaveRequest,
+  ImportPlanRunItemsRequest,
   ImportRunStartRequest,
   SessionApplySnapshotRequest,
   SessionGetInfoRequest,
@@ -66,6 +70,7 @@ export type {
   TransportPlayRequest,
   TransportRecordRequest,
   TransportStopRequest,
+  WorkflowRunStartRequest,
 } from './requests'
 export type {
   AutomationSplitStereoToMonoExecuteResponse,
@@ -89,6 +94,10 @@ export type {
   ExportRunStartResponse,
   ExportStartResponse,
   HealthStatus,
+  ImportAnalyzeResponse,
+  ImportAnalyzeRow,
+  ImportCacheSaveResponse,
+  ImportPlanRunItemsResponse,
   ImportRunStartResponse,
   SessionApplySnapshotResponse,
   SessionGetInfoResponse,
@@ -113,6 +122,7 @@ export type {
   TrackSelectResponse,
   TrackSoloSetResponse,
   TransportGetStatusResponse,
+  WorkflowRunStartResponse,
   TransportPlayResponse,
   TransportRecordResponse,
   TransportStatus,

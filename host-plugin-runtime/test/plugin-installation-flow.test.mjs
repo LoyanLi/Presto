@@ -48,16 +48,25 @@ async function pathExists(targetPath) {
 async function createPluginFixture(parentDir, options = {}) {
   const pluginId = options.pluginId ?? 'plugin.test.install'
   const displayName = options.displayName ?? 'Plugin Install Test'
+  const extensionType = options.extensionType ?? 'workflow'
   const entryFileContent =
     options.entryFileContent ??
     `export const manifest = ${JSON.stringify({
       pluginId,
+      extensionType,
       version: '1.0.0',
       hostApiVersion: '1.0.0',
       supportedDaws: options.supportedDaws ?? ['pro_tools'],
       uiRuntime: 'react18',
       displayName,
       entry: 'dist/index.js',
+      workflowDefinition: extensionType === 'workflow'
+        ? {
+            workflowId: `${pluginId}.run`,
+            inputSchemaId: `${pluginId}.input.v1`,
+            definitionEntry: 'dist/workflow-definition.json',
+          }
+        : undefined,
       pages: [
         {
           pageId: 'main',
@@ -68,7 +77,6 @@ async function createPluginFixture(parentDir, options = {}) {
         },
       ],
       requiredCapabilities: ['system.health'],
-      requiredRuntimeServices: [],
     })}\nexport async function activate() {}\nexport const MainPage = () => null\n`
 
   const pluginRoot = path.join(parentDir, options.folderName ?? pluginId)
@@ -79,12 +87,20 @@ async function createPluginFixture(parentDir, options = {}) {
     options.manifest ??
     {
       pluginId,
+      extensionType,
       version: '1.0.0',
       hostApiVersion: '1.0.0',
       supportedDaws: options.supportedDaws ?? ['pro_tools'],
       uiRuntime: 'react18',
       displayName,
       entry: 'dist/index.js',
+      workflowDefinition: extensionType === 'workflow'
+        ? {
+            workflowId: `${pluginId}.run`,
+            inputSchemaId: `${pluginId}.input.v1`,
+            definitionEntry: 'dist/workflow-definition.json',
+          }
+        : undefined,
       pages: [
         {
           pageId: 'main',
@@ -95,11 +111,34 @@ async function createPluginFixture(parentDir, options = {}) {
         },
       ],
       requiredCapabilities: ['system.health'],
-      requiredRuntimeServices: [],
     }
 
   await writeFile(path.join(pluginRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8')
   await writeFile(path.join(distDir, 'index.js'), entryFileContent, 'utf8')
+  if (extensionType === 'workflow' && manifest.workflowDefinition) {
+    await writeFile(
+      path.join(distDir, 'workflow-definition.json'),
+      options.workflowDefinitionSource ??
+        JSON.stringify(
+          {
+            workflowId: manifest.workflowDefinition.workflowId,
+            version: '1.0.0',
+            inputSchemaId: manifest.workflowDefinition.inputSchemaId,
+            steps: [
+              {
+                stepId: 'health',
+                usesCapability: 'system.health',
+                input: {},
+                saveAs: 'health',
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+      'utf8',
+    )
+  }
 
   return { pluginRoot, pluginId }
 }

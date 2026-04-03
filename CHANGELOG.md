@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.3.0-alpha.1] - 2026-03-30
+## [0.3.0-alpha.2] - 2026-03-31
 
 ### Added
 - 引入以 `packages/contracts`、`packages/contracts-manifest`、`packages/sdk-core`、`packages/sdk-runtime` 为中心的统一契约层，供 Electron 宿主、Python 后端与插件运行时共用。

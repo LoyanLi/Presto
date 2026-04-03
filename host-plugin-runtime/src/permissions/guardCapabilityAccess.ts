@@ -40,7 +40,7 @@ function createCapabilityGuard<Args extends unknown[], Result>(
   }
 }
 
-function requireService<T>(service: T | undefined, pluginId: string, serviceName: string): T {
+function requireService<T>(service: T | undefined | null, pluginId: string, serviceName: string): T {
   if (service === undefined || service === null) {
     throw new PluginPermissionError(
       pluginId,
@@ -56,26 +56,38 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
   const allowedCapabilities = new Set<string>(manifest.requiredCapabilities)
   const pluginId = manifest.pluginId
 
-  const system = requireService(presto.system, pluginId, 'presto.system')
-  const config = requireService(presto.config, pluginId, 'presto.config')
-  const daw = requireService(presto.daw, pluginId, 'presto.daw')
-  const session = requireService(presto.session, pluginId, 'presto.session')
-  const track = requireService(presto.track, pluginId, 'presto.track')
-  const clip = requireService(presto.clip, pluginId, 'presto.clip')
-  const transport = requireService(presto.transport, pluginId, 'presto.transport')
-  const importClient = requireService(presto.import, pluginId, 'presto.import')
-  const stripSilence = requireService(presto.stripSilence, pluginId, 'presto.stripSilence')
-  const exportClient = requireService(presto.export, pluginId, 'presto.export')
-  const jobs = requireService(presto.jobs, pluginId, 'presto.jobs')
+  const system = () => requireService(presto.system, pluginId, 'presto.system')
+  const config = () => requireService(presto.config, pluginId, 'presto.config')
+  const daw = () => requireService(presto.daw, pluginId, 'presto.daw')
+  const automation = () => requireService(presto.automation, pluginId, 'presto.automation')
+  const session = () => requireService(presto.session, pluginId, 'presto.session')
+  const track = () => requireService(presto.track, pluginId, 'presto.track')
+  const clip = () => requireService(presto.clip, pluginId, 'presto.clip')
+  const transport = () => requireService(presto.transport, pluginId, 'presto.transport')
+  const importClient = () => requireService(presto.import, pluginId, 'presto.import')
+  const stripSilence = () => requireService(presto.stripSilence, pluginId, 'presto.stripSilence')
+  const exportClient = () => requireService(presto.export, pluginId, 'presto.export')
+  const jobs = () => requireService(presto.jobs, pluginId, 'presto.jobs')
 
   return {
+    automation: {
+      splitStereoToMono: {
+        execute: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'automation.splitStereoToMono.execute',
+          'automation.splitStereoToMono.execute()',
+          (request) => automation().splitStereoToMono.execute(request),
+        ),
+      },
+    },
     system: {
       health: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'system.health',
         'system.health()',
-        () => system.health(),
+        () => system().health(),
       ),
     },
     config: {
@@ -84,38 +96,47 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'config.get',
         'config.get()',
-        () => config.get(),
+        () => config().get(),
       ),
       update: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'config.update',
         'config.update()',
-        (request) => config.update(request),
+        (request) => config().update(request),
       ),
     },
     daw: {
+      adapter: {
+        getSnapshot: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'daw.adapter.getSnapshot',
+          'daw.adapter.getSnapshot()',
+          () => daw().adapter.getSnapshot(),
+        ),
+      },
       connection: {
         connect: createCapabilityGuard(
           allowedCapabilities,
           pluginId,
           'daw.connection.connect',
           'daw.connection.connect()',
-          (request) => daw.connection.connect(request),
+          (request) => daw().connection.connect(request),
         ),
         disconnect: createCapabilityGuard(
           allowedCapabilities,
           pluginId,
           'daw.connection.disconnect',
           'daw.connection.disconnect()',
-          () => daw.connection.disconnect(),
+          () => daw().connection.disconnect(),
         ),
         getStatus: createCapabilityGuard(
           allowedCapabilities,
           pluginId,
           'daw.connection.getStatus',
           'daw.connection.getStatus()',
-          () => daw.connection.getStatus(),
+          () => daw().connection.getStatus(),
         ),
       },
     },
@@ -125,35 +146,35 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'session.getInfo',
         'session.getInfo()',
-        () => session.getInfo(),
+        () => session().getInfo(),
       ),
       getLength: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'session.getLength',
         'session.getLength()',
-        () => session.getLength(),
+        () => session().getLength(),
       ),
       save: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'session.save',
         'session.save()',
-        () => session.save(),
+        () => session().save(),
       ),
       applySnapshot: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'session.applySnapshot',
         'session.applySnapshot()',
-        (request) => session.applySnapshot(request),
+        (request) => session().applySnapshot(request),
       ),
       getSnapshotInfo: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'session.getSnapshotInfo',
         'session.getSnapshotInfo()',
-        (request) => session.getSnapshotInfo(request),
+        (request) => session().getSnapshotInfo(request),
       ),
     },
     track: {
@@ -162,28 +183,37 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'track.list',
         'track.list()',
-        () => track.list(),
+        () => track().list(),
       ),
       listNames: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'track.listNames',
         'track.listNames()',
-        () => track.listNames(),
+        () => track().listNames(),
       ),
+      selection: {
+        get: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'track.selection.get',
+          'track.selection.get()',
+          () => track().selection.get(),
+        ),
+      },
       rename: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'track.rename',
         'track.rename()',
-        (request) => track.rename(request),
+        (request) => track().rename(request),
       ),
       select: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'track.select',
         'track.select()',
-        (request) => track.select(request),
+        (request) => track().select(request),
       ),
       color: {
         apply: createCapabilityGuard(
@@ -191,7 +221,16 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'track.color.apply',
           'track.color.apply()',
-          (request) => track.color.apply(request),
+          (request) => track().color.apply(request),
+        ),
+      },
+      pan: {
+        set: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'track.pan.set',
+          'track.pan.set()',
+          (request) => track().pan.set(request),
         ),
       },
       mute: {
@@ -200,7 +239,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'track.mute.set',
           'track.mute.set()',
-          (request) => track.mute.set(request),
+          (request) => track().mute.set(request),
         ),
       },
       solo: {
@@ -209,7 +248,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'track.solo.set',
           'track.solo.set()',
-          (request) => track.solo.set(request),
+          (request) => track().solo.set(request),
         ),
       },
     },
@@ -219,7 +258,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'clip.selectAllOnTrack',
         'clip.selectAllOnTrack()',
-        (request) => clip.selectAllOnTrack(request),
+        (request) => clip().selectAllOnTrack(request),
       ),
     },
     transport: {
@@ -228,38 +267,54 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'transport.play',
         'transport.play()',
-        () => transport.play(),
+        () => transport().play(),
       ),
       stop: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'transport.stop',
         'transport.stop()',
-        () => transport.stop(),
+        () => transport().stop(),
       ),
       record: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'transport.record',
         'transport.record()',
-        () => transport.record(),
+        () => transport().record(),
       ),
       getStatus: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'transport.getStatus',
         'transport.getStatus()',
-        () => transport.getStatus(),
+        () => transport().getStatus(),
       ),
     },
     import: {
+      analyze: createCapabilityGuard(
+        allowedCapabilities,
+        pluginId,
+        'import.analyze',
+        'import.analyze()',
+        (request) => importClient().analyze(request),
+      ),
+      cache: {
+        save: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'import.cache.save',
+          'import.cache.save()',
+          (request) => importClient().cache.save(request),
+        ),
+      },
       run: {
         start: createCapabilityGuard(
           allowedCapabilities,
           pluginId,
           'import.run.start',
           'import.run.start()',
-          (request) => importClient.run.start(request),
+          (request) => importClient().run.start(request),
         ),
       },
     },
@@ -269,14 +324,14 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'stripSilence.open',
         'stripSilence.open()',
-        () => stripSilence.open(),
+        () => stripSilence().open(),
       ),
       execute: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'stripSilence.execute',
         'stripSilence.execute()',
-        (request) => stripSilence.execute(request),
+        (request) => stripSilence().execute(request),
       ),
     },
     export: {
@@ -286,7 +341,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'export.range.set',
           'export.range.set()',
-          (request) => exportClient.range.set(request),
+          (request) => exportClient().range.set(request),
         ),
       },
       start: createCapabilityGuard(
@@ -294,7 +349,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'export.start',
         'export.start()',
-        (request) => exportClient.start(request),
+        (request) => exportClient().start(request),
       ),
       direct: {
         start: createCapabilityGuard(
@@ -302,7 +357,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'export.direct.start',
           'export.direct.start()',
-          (request) => exportClient.direct.start(request),
+          (request) => exportClient().direct.start(request),
         ),
       },
       mixSource: {
@@ -311,7 +366,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'export.mixWithSource',
           'export.mixSource.list()',
-          (request) => exportClient.mixSource.list(request),
+          (request) => exportClient().mixSource.list(request),
         ),
       },
       run: {
@@ -320,7 +375,7 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           pluginId,
           'export.run.start',
           'export.run.start()',
-          (request) => exportClient.run.start(request),
+          (request) => exportClient().run.start(request),
         ),
       },
     },
@@ -330,42 +385,42 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
         pluginId,
         'jobs.create',
         'jobs.create()',
-        (request) => jobs.create(request),
+        (request) => jobs().create(request),
       ),
       update: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'jobs.update',
         'jobs.update()',
-        (request) => jobs.update(request),
+        (request) => jobs().update(request),
       ),
       get: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'jobs.get',
         'jobs.get()',
-        (jobId) => jobs.get(jobId),
+        (jobId) => jobs().get(jobId),
       ),
       list: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'jobs.list',
         'jobs.list()',
-        (filter) => jobs.list(filter),
+        (filter) => jobs().list(filter),
       ),
       cancel: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'jobs.cancel',
         'jobs.cancel()',
-        (jobId) => jobs.cancel(jobId),
+        (jobId) => jobs().cancel(jobId),
       ),
       delete: createCapabilityGuard(
         allowedCapabilities,
         pluginId,
         'jobs.delete',
         'jobs.delete()',
-        (jobId) => jobs.delete(jobId),
+        (jobId) => jobs().delete(jobId),
       ),
     },
   }

@@ -10,6 +10,7 @@ export { createSessionClient } from './clients/session'
 export { createSystemClient } from './clients/system'
 export { createTrackClient } from './clients/track'
 export { createTransportClient } from './clients/transport'
+export { createWorkflowClient } from './clients/workflow'
 export type {
   ClipClient,
   ConfigClient,
@@ -24,4 +25,5 @@ export type {
   SystemClient,
   TrackClient,
   TransportClient,
+  WorkflowClient,
 } from '../../contracts/src'

@@ -1,0 +1,130 @@
+{
+  "workflowId": "official.import-workflow.run",
+  "version": "1.0.0",
+  "inputSchemaId": "official.import-workflow.run.v1",
+  "steps": [
+    {
+      "stepId": "import_files",
+      "usesCapability": "import.run.start",
+      "awaitJob": true,
+      "input": {
+        "folderPaths": {
+          "$ref": "input.sourceFolders"
+        },
+        "orderedFilePaths": {
+          "$ref": "input.orderedFilePaths"
+        }
+      },
+      "saveAs": "importJob"
+    },
+    {
+      "stepId": "plan_items",
+      "usesCapability": "import.planRunItems",
+      "input": {
+        "rows": {
+          "$ref": "input.rows"
+        },
+        "categories": {
+          "$ref": "input.categories"
+        },
+        "importedTrackNames": {
+          "$ref": "importJob.result.importedTrackNames"
+        },
+        "stripAfterImport": {
+          "$ref": "input.ui.stripAfterImport"
+        }
+      },
+      "saveAs": "planned"
+    },
+    {
+      "stepId": "apply_items",
+      "foreach": {
+        "items": {
+          "$ref": "planned.items"
+        },
+        "as": "item"
+      },
+      "steps": [
+        {
+          "stepId": "rename_track",
+          "usesCapability": "track.rename",
+          "input": {
+            "currentName": {
+              "$ref": "item.currentTrackName"
+            },
+            "newName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "apply_color",
+          "usesCapability": "track.color.apply",
+          "when": {
+            "$ref": "item.shouldApplyColor",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            },
+            "colorSlot": {
+              "$ref": "item.colorSlot"
+            }
+          }
+        },
+        {
+          "stepId": "select_track",
+          "usesCapability": "track.select",
+          "when": {
+            "$ref": "item.stripAfterImport",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "select_clips",
+          "usesCapability": "clip.selectAllOnTrack",
+          "when": {
+            "$ref": "item.stripAfterImport",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "strip_silence",
+          "usesCapability": "stripSilence.execute",
+          "when": {
+            "$ref": "item.stripAfterImport",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            },
+            "profile": {
+              "$ref": "input.silenceProfile"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepId": "save_session",
+      "usesCapability": "session.save",
+      "when": {
+        "$ref": "input.ui.autoSaveSession",
+        "equals": true
+      },
+      "input": {}
+    }
+  ]
+}

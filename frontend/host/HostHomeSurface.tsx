@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from 'react'
 
-import type { PluginRuntime, PrestoClient } from '../../packages/contracts/src'
+import type { PrestoClient } from '../../packages/contracts/src'
+import type { PrestoRuntime } from '../../packages/sdk-runtime/src'
 import { Button, EmptyState, ShellSurface } from '../ui'
 import { AutomationSurface } from './automation/AutomationSurface'
 import type { HostShellViewId } from './hostShellState'
@@ -26,7 +27,7 @@ type HostPrimarySurface = Extract<HostShellViewId, 'home' | 'workflows' | 'autom
 export interface HostHomeSurfaceProps {
   surface: HostPrimarySurface
   developerPresto: PrestoClient
-  developerRuntime: PluginRuntime
+  developerRuntime: PrestoRuntime
   sidebarCollapsed: boolean
   connectionStatus: HostSidebarConnectionStatus
   locale: HostLocale

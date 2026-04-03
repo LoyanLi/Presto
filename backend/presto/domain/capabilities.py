@@ -12,6 +12,7 @@ CapabilityDomain = Literal[
     "ai",
     "daw",
     "automation",
+    "workflow",
     "session",
     "track",
     "clip",

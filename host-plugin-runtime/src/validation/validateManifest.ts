@@ -1,7 +1,7 @@
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import type { WorkflowPluginManifest } from '../../../packages/contracts/src'
+import type { WorkflowDefinition, WorkflowPluginManifest } from '../../../packages/contracts/src'
 
 export interface ManifestValidationIssue {
   field: string
@@ -37,6 +37,112 @@ const pathExists = async (path: string): Promise<boolean> => {
   } catch {
     return false
   }
+}
+
+async function loadWorkflowDefinition(definitionEntryPath: string): Promise<unknown> {
+  const raw = await readFile(definitionEntryPath, 'utf8')
+  return JSON.parse(raw) as unknown
+}
+
+function collectWorkflowCapabilityIds(
+  steps: readonly Record<string, unknown>[],
+  collected: Set<string> = new Set<string>(),
+): Set<string> {
+  for (const step of steps) {
+    if (isString(step.usesCapability)) {
+      collected.add(step.usesCapability)
+    }
+
+    if (Array.isArray(step.steps)) {
+      collectWorkflowCapabilityIds(step.steps.filter(isRecord), collected)
+    }
+  }
+
+  return collected
+}
+
+async function validateWorkflowDefinition(
+  manifest: Record<string, unknown>,
+  pluginRoot: string,
+): Promise<ManifestValidationIssue[]> {
+  const issues: ManifestValidationIssue[] = []
+
+  if (manifest.extensionType !== 'workflow') {
+    if (manifest.workflowDefinition !== undefined) {
+      issues.push({ field: 'workflowDefinition', reason: 'unsupported_for_non_workflow_plugins' })
+    }
+    return issues
+  }
+
+  if (!isRecord(manifest.workflowDefinition)) {
+    issues.push({ field: 'workflowDefinition', reason: 'required_for_workflow_plugins' })
+    return issues
+  }
+
+  const definitionRef = manifest.workflowDefinition
+  if (!isString(definitionRef.workflowId)) {
+    issues.push({ field: 'workflowDefinition.workflowId', reason: 'must_be_string' })
+  }
+  if (!isString(definitionRef.inputSchemaId)) {
+    issues.push({ field: 'workflowDefinition.inputSchemaId', reason: 'must_be_string' })
+  }
+  if (!isString(definitionRef.definitionEntry)) {
+    issues.push({ field: 'workflowDefinition.definitionEntry', reason: 'must_be_string' })
+    return issues
+  }
+
+  const definitionEntryPath = join(pluginRoot, definitionRef.definitionEntry)
+  if (!(await pathExists(definitionEntryPath))) {
+    issues.push({ field: 'workflowDefinition.definitionEntry', reason: 'file_not_found' })
+    return issues
+  }
+
+  let loadedDefinition: unknown
+  try {
+    loadedDefinition = await loadWorkflowDefinition(definitionEntryPath)
+  } catch {
+    issues.push({ field: 'workflowDefinition.definitionEntry', reason: 'definition_read_failed' })
+    return issues
+  }
+
+  if (!isRecord(loadedDefinition)) {
+    issues.push({ field: 'workflowDefinition.definitionEntry', reason: 'must_be_object' })
+    return issues
+  }
+
+  const workflowDefinition = loadedDefinition as WorkflowDefinition & Record<string, unknown>
+  if (!isString(workflowDefinition.workflowId)) {
+    issues.push({ field: 'workflowDefinition.workflowId', reason: 'must_be_string' })
+  } else if (isString(definitionRef.workflowId) && workflowDefinition.workflowId !== definitionRef.workflowId) {
+    issues.push({ field: 'workflowDefinition.workflowId', reason: 'must_match_reference' })
+  }
+
+  if (!isString(workflowDefinition.version)) {
+    issues.push({ field: 'workflowDefinition.version', reason: 'must_be_string' })
+  }
+
+  if (!isString(workflowDefinition.inputSchemaId)) {
+    issues.push({ field: 'workflowDefinition.inputSchemaId', reason: 'must_be_string' })
+  } else if (isString(definitionRef.inputSchemaId) && workflowDefinition.inputSchemaId !== definitionRef.inputSchemaId) {
+    issues.push({ field: 'workflowDefinition.inputSchemaId', reason: 'must_match_reference' })
+  }
+
+  if (!Array.isArray(workflowDefinition.steps) || workflowDefinition.steps.length === 0) {
+    issues.push({ field: 'workflowDefinition.steps', reason: 'must_be_non_empty_array' })
+    return issues
+  }
+
+  const requiredCapabilities = new Set(
+    Array.isArray(manifest.requiredCapabilities) ? manifest.requiredCapabilities.filter(isString) : [],
+  )
+  const usedCapabilities = collectWorkflowCapabilityIds(workflowDefinition.steps.filter(isRecord))
+  for (const capabilityId of usedCapabilities) {
+    if (!requiredCapabilities.has(capabilityId)) {
+      issues.push({ field: 'workflowDefinition', reason: `uses_capability_not_declared:${capabilityId}` })
+    }
+  }
+
+  return issues
 }
 
 const validatePage = (page: Record<string, unknown>, index: number): ManifestValidationIssue[] => {
@@ -481,6 +587,8 @@ export async function validateManifest(input: ValidateManifestInput): Promise<Ma
       })
     }
   }
+
+  issues.push(...(await validateWorkflowDefinition(manifest, input.pluginRoot)))
 
   if (issues.length > 0) {
     return { ok: false, issues }

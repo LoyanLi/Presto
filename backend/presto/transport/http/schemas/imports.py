@@ -7,6 +7,34 @@ from pydantic import BaseModel, Field
 
 class ImportAnalyzeRequestSchema(BaseModel):
     sourceFolders: list[str] = Field(default_factory=list)
+    categories: list[dict[str, str]] = Field(default_factory=list)
+    analyzeCacheEnabled: bool = True
+
+
+class ImportAnalyzeRowSchema(BaseModel):
+    filePath: str
+    categoryId: str
+    aiName: str
+    finalName: str
+    status: str
+    errorMessage: str | None = None
+
+
+class ImportAnalyzeResponseSchema(BaseModel):
+    folderPaths: list[str]
+    orderedFilePaths: list[str]
+    rows: list[ImportAnalyzeRowSchema]
+    cache: dict[str, int]
+
+
+class ImportCacheSaveRequestSchema(BaseModel):
+    sourceFolders: list[str] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ImportCacheSaveResponseSchema(BaseModel):
+    saved: bool
+    cacheFiles: int
 
 
 class ImportFinalizeProposalSchema(BaseModel):

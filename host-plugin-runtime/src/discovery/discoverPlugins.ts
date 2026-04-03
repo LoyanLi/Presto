@@ -1,8 +1,8 @@
 import { access, readdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-import { type DawTarget, type PublicCapabilityId, type PluginRuntimeServiceName } from '../../../packages/contracts/src'
-import { FORMAL_PUBLIC_CAPABILITY_IDS, FORMAL_RUNTIME_SERVICE_NAMES } from './generated/runtimeServices'
+import { type DawTarget, type PublicCapabilityId } from '../../../packages/contracts/src'
+import { FORMAL_PUBLIC_CAPABILITY_IDS } from './runtimeServices'
 import { validateDawSupport } from '../validation/validateDawSupport'
 import { validateManifest } from '../validation/validateManifest'
 import { validatePermissions } from '../validation/validatePermissions'
@@ -169,7 +169,6 @@ export async function discoverPlugins(options: DiscoverPluginsOptions): Promise<
       const permissionValidation = validatePermissions({
         manifest: manifestValidation.manifest,
         allowedCapabilities: FORMAL_PUBLIC_CAPABILITY_IDS as readonly PublicCapabilityId[],
-        allowedRuntimeServices: FORMAL_RUNTIME_SERVICE_NAMES as readonly PluginRuntimeServiceName[],
       })
       if (!permissionValidation.ok) {
         issues.push(

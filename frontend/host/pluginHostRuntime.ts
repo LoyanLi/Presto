@@ -5,7 +5,6 @@ import type {
   PluginLocaleContext,
   PluginLogger,
   PluginPageProps,
-  PluginRuntime,
   PluginStorage,
   PrestoClient,
   WorkflowPluginManifest,
@@ -84,7 +83,6 @@ export interface LoadHostPluginsInput {
   catalog: PluginHostBridgeListResult
   locale: PluginLocaleContext
   presto: PrestoClient
-  runtime: PluginRuntime
 }
 
 type PluginModuleNamespace = WorkflowPluginModule & Record<string, unknown>
@@ -291,7 +289,6 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     const context = createPluginRuntime(plugin.manifest, {
       locale: input.locale,
       presto: input.presto,
-      runtime: input.runtime,
       storage,
       logger,
     })

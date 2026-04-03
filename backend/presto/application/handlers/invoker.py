@@ -9,7 +9,7 @@ from .automation import (
 )
 from .common import ensure_daw_connected, safe_connection_status
 from .config import config_payload, update_config_payload
-from .import_workflow import start_export_run, start_import_run
+from .import_workflow import analyze_import, persist_import_analysis_cache, plan_import_run_items, start_export_run, start_import_run
 from .jobs import (
     cancel_job_payload,
     create_job_payload,
@@ -18,6 +18,7 @@ from .jobs import (
     list_jobs_payload,
     update_job_payload,
 )
+from .workflow_executor import start_workflow_run
 from .snapshot import (
     apply_snapshot_payload,
     daw_adapter_snapshot_payload,
@@ -235,6 +236,37 @@ def _strip_silence_open_payload(services: ServiceContainer, payload: dict[str, A
     return open_strip_silence_payload(services)
 
 
+def _import_analyze_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    return analyze_import(services, payload)
+
+
+def _import_cache_save_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    return persist_import_analysis_cache(services, payload)
+
+
+def _import_plan_run_items_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    return plan_import_run_items(services, payload)
+
+
+def _execute_atomic_capability(services: ServiceContainer, capability_id: str, payload: dict[str, Any]) -> Any:
+    handler = _CAPABILITY_HANDLERS.get(capability_id)
+    if handler is None or capability_id == "workflow.run.start":
+        raise NotImplementedError(f"Capability not implemented: {capability_id}")
+    return handler(services, payload)
+
+
+def _workflow_run_start_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    return start_workflow_run(
+        services,
+        payload,
+        invoke_capability=lambda capability_id, request_payload: _execute_atomic_capability(
+            services,
+            capability_id,
+            request_payload,
+        ),
+    )
+
+
 _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
     "system.health": _system_health_payload,
     "daw.connection.getStatus": _daw_connection_get_status_payload,
@@ -247,6 +279,8 @@ _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
     "session.getInfo": _session_get_info_payload,
     "session.getLength": _session_get_length_payload,
     "session.save": _session_save_payload,
+    "import.analyze": _import_analyze_payload,
+    "import.cache.save": _import_cache_save_payload,
     "import.run.start": start_import_run,
     "session.applySnapshot": apply_snapshot_payload,
     "session.getSnapshotInfo": _session_get_snapshot_info_payload,
@@ -269,6 +303,8 @@ _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
     "transport.stop": stop_transport_payload,
     "transport.record": record_transport_payload,
     "transport.getStatus": transport_status_payload,
+    "workflow.run.start": _workflow_run_start_payload,
+    "import.planRunItems": _import_plan_run_items_payload,
     "stripSilence.open": _strip_silence_open_payload,
     "stripSilence.execute": execute_strip_silence_payload,
     "jobs.get": get_job_payload,

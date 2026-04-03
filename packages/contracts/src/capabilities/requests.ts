@@ -83,6 +83,49 @@ export interface TransportRecordRequest {}
 
 export interface TransportGetStatusRequest {}
 
+export interface WorkflowRunStartRequest {
+  pluginId: string
+  workflowId: string
+  input?: Record<string, unknown>
+  host?: string
+  port?: number
+  timeoutSeconds?: number
+}
+
+export interface ImportAnalyzeRequest {
+  sourceFolders: string[]
+  categories?: Array<{ id: string; name?: string }>
+  analyzeCacheEnabled?: boolean
+}
+
+export interface ImportCacheSaveRequest {
+  sourceFolders: string[]
+  rows: Array<{
+    filePath: string
+    categoryId: string
+    aiName?: string | null
+    finalName?: string | null
+    status: string
+    errorMessage?: string | null
+  }>
+}
+
+export interface ImportPlanRunItemsRequest {
+  rows: Array<{
+    filePath: string
+    categoryId: string
+    finalName?: string | null
+    status: string
+    errorMessage?: string | null
+  }>
+  categories?: Array<{
+    id: string
+    colorSlot?: number
+  }>
+  importedTrackNames: string[]
+  stripAfterImport?: boolean
+}
+
 export interface ImportRunStartRequest {
   folderPaths: string[]
   orderedFilePaths?: string[]
@@ -231,6 +274,10 @@ export interface CapabilityRequestMap {
   'transport.stop': TransportStopRequest
   'transport.record': TransportRecordRequest
   'transport.getStatus': TransportGetStatusRequest
+  'workflow.run.start': WorkflowRunStartRequest
+  'import.analyze': ImportAnalyzeRequest
+  'import.cache.save': ImportCacheSaveRequest
+  'import.planRunItems': ImportPlanRunItemsRequest
   'import.run.start': ImportRunStartRequest
   'stripSilence.open': StripSilenceOpenRequest
   'stripSilence.execute': StripSilenceExecuteRequest

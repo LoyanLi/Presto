@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react'
 
-import type { PluginRuntime, PrestoClient } from '../../packages/contracts/src'
+import type { PrestoClient } from '../../packages/contracts/src'
 import {
   Badge,
   Button,
@@ -53,7 +53,6 @@ type ManualJobsPublicClient = {
 
 export interface DeveloperCapabilityConsoleProps {
   presto: PrestoClient
-  runtime: PluginRuntime
   smokeTarget?: string | null
   smokeImportFolder?: string | null
 }
@@ -500,7 +499,6 @@ async function invokePublicCapability(
 
 export function DeveloperCapabilityConsole({
   presto,
-  runtime: _runtime,
   smokeTarget,
   smokeImportFolder,
 }: DeveloperCapabilityConsoleProps) {
