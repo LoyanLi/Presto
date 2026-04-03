@@ -64,3 +64,4 @@ await esbuild.build({
 const currentArch = resolveTargetArch()
 await run('lipo', [process.execPath, '-thin', currentArch, '-output', outNodePath])
 await run('strip', ['-x', outNodePath])
+await run('codesign', ['--force', '--sign', '-', outNodePath])
