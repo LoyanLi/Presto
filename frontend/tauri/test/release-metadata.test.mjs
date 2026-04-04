@@ -78,6 +78,17 @@ test('bundled python metadata tracks runtime requirements only', async () => {
   assert.doesNotMatch(runtimeRequirementsFile, /flake8/)
 })
 
+test('tauri python prep stages a fresh bundled runtime before replacing the existing one', async () => {
+  const prepareSource = await readFile(path.join(repoRoot, 'scripts/prepare-tauri-python.mjs'), 'utf8')
+
+  assert.match(prepareSource, /const stagingPythonRoot = path\.join\(outputRoot, 'python\.staging'\)/)
+  assert.match(prepareSource, /await rm\(stagingPythonRoot,\s*\{\s*recursive: true,\s*force: true\s*\}\s*\)/)
+  assert.match(prepareSource, /await rename\(stagingPythonRoot, pythonRoot\)/)
+  assert.match(prepareSource, /async function hasUsableBundledPython\(\)/)
+  assert.match(prepareSource, /if \(await hasUsableBundledPython\(\)\) \{\s*await writeRuntimeMetadata\(\)\s*return\s*\}/)
+  assert.doesNotMatch(prepareSource, /await rm\(pythonRoot, \{ recursive: true, force: true \} \)\s*await mkdir\(outputRoot, \{ recursive: true \} \)\s*await run\(pythonBin, \['-m', 'venv', '--copies', pythonRoot\]\)/)
+})
+
 test('package.json no longer exposes Electron build and packaging scripts', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
 
