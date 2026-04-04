@@ -82,6 +82,86 @@ async function createWorkflowPluginFixture(root) {
   }
 }
 
+async function createAutomationPluginFixture(root) {
+  const pluginRoot = path.join(root, 'installed.batch-ara-render')
+  const entryPath = path.join(pluginRoot, 'dist/index.mjs')
+  await mkdir(path.dirname(entryPath), { recursive: true })
+
+  const manifest = {
+    pluginId: 'installed.batch-ara-render',
+    extensionType: 'automation',
+    version: '1.0.0',
+    hostApiVersion: '0.1.0',
+    supportedDaws: ['pro_tools'],
+    uiRuntime: 'react18',
+    displayName: 'Batch ARA Render',
+    description: 'Back up selected tracks and render ARA with a host-rendered automation card.',
+    entry: 'dist/index.mjs',
+    pages: [],
+    automationItems: [
+      {
+        itemId: 'batch-ara-render.card',
+        title: 'Batch ARA Render',
+        automationType: 'batchAraRender',
+        description: 'Duplicate, hide, inactivate, and render ARA.',
+        order: 20,
+        runnerExport: 'runBatchAraRender',
+        optionsSchema: [
+          {
+            optionId: 'hideBackupTracks',
+            kind: 'boolean',
+            label: 'Hide backup tracks',
+            defaultValue: true,
+          },
+          {
+            optionId: 'renderPass',
+            kind: 'select',
+            label: 'Render pass',
+            defaultValue: 'all',
+            options: [
+              { value: 'all', label: 'All passes' },
+              { value: 'first', label: 'First pass only' },
+            ],
+          },
+        ],
+      },
+    ],
+    requiredCapabilities: ['track.selection.get'],
+    adapterModuleRequirements: [],
+    capabilityRequirements: [],
+  }
+
+  await writeFile(
+    entryPath,
+    `
+      export const manifest = ${JSON.stringify(manifest, null, 2)}
+
+      export async function activate() {}
+
+      export async function runBatchAraRender(context, input) {
+        return {
+          steps: [
+            { id: 'preflight', status: 'succeeded', message: String(typeof context.macAccessibility?.preflight) },
+            { id: 'input', status: 'succeeded', message: JSON.stringify(input) },
+          ],
+          summary: 'batch-ara-render-finished',
+        }
+      }
+    `,
+  )
+
+  return {
+    pluginId: manifest.pluginId,
+    displayName: manifest.displayName,
+    version: manifest.version,
+    pluginRoot,
+    entryPath,
+    manifest,
+    settingsPages: [],
+    loadable: true,
+  }
+}
+
 test('loadHostPlugins keeps workflow plugins available when host only provides declared backend services', async (t) => {
   const { loadHostPlugins } = await loadPluginHostRuntime()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
@@ -235,4 +315,88 @@ test('loadHostPlugins keeps workflow library entries visible when the workflow p
   assert.equal(result.managerModel.plugins[0]?.status, 'error')
   assert.match(result.managerModel.issues[0]?.reason ?? '', /missing-entry\.mjs|module_import_failed|Cannot find module/)
   assert.match(result.managerModel.issues[0]?.reason ?? '', /importUrl:/)
+})
+
+test('loadHostPlugins wires automation runner entries with host-rendered schema and macAccessibility runtime', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createAutomationPluginFixture(sandbox)
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {
+      track: {
+        selection: {
+          async get() {
+            return { trackNames: ['Lead Vox'] }
+          },
+        },
+      },
+    },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/tmp'] }),
+      },
+      macAccessibility: {
+        async preflight() {
+          return { ok: true, trusted: true }
+        },
+        async runScript(script, args) {
+          return { ok: true, stdout: JSON.stringify({ script, args }) }
+        },
+        async runFile(pathValue, args) {
+          return { ok: true, stdout: JSON.stringify({ pathValue, args }) }
+        },
+      },
+    },
+  })
+
+  assert.equal(result.automationEntries.length, 1)
+  assert.deepEqual(result.automationEntries[0]?.optionsSchema, [
+    {
+      optionId: 'hideBackupTracks',
+      kind: 'boolean',
+      label: 'Hide backup tracks',
+      defaultValue: true,
+    },
+    {
+      optionId: 'renderPass',
+      kind: 'select',
+      label: 'Render pass',
+      defaultValue: 'all',
+      options: [
+        { value: 'all', label: 'All passes' },
+        { value: 'first', label: 'First pass only' },
+      ],
+    },
+  ])
+
+  const execution = await result.automationEntries[0]?.execute({
+    hideBackupTracks: true,
+    renderPass: 'first',
+  })
+
+  assert.deepEqual(execution, {
+    steps: [
+      { id: 'preflight', status: 'succeeded', message: 'function' },
+      {
+        id: 'input',
+        status: 'succeeded',
+        message: JSON.stringify({ hideBackupTracks: true, renderPass: 'first' }),
+      },
+    ],
+    summary: 'batch-ara-render-finished',
+  })
 })

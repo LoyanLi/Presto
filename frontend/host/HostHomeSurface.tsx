@@ -367,7 +367,7 @@ export function HostHomeSurface({
     }
 
     if (surface === 'automation') {
-      return <AutomationSurface locale={locale} presto={developerPresto} automationEntries={automationEntries} />
+      return <AutomationSurface locale={locale} automationEntries={automationEntries} />
     }
 
     if (surface === 'runs') {

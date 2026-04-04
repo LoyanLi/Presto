@@ -90,6 +90,8 @@ function createPluginProps() {
         automationType: 'splitStereoToMono',
         description: 'Use the current Pro Tools selection and keep the chosen channel.',
         order: 10,
+        optionsSchema: [],
+        execute: async () => ({ steps: [], summary: 'done' }),
       },
     ],
     pluginManagerModel: {

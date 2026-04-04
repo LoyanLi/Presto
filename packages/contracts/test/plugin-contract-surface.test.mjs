@@ -59,6 +59,28 @@ test('contracts root index keeps plugin exports type-only', async () => {
   assert.doesNotMatch(source, /export \* from '\.\/plugins'/)
 })
 
+test('automation plugin contracts expose runner and host-rendered option schema types', async () => {
+  const pageSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/page.ts'), 'utf8')
+  const moduleSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/module.ts'), 'utf8')
+  const pluginIndexSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/index.ts'), 'utf8')
+
+  assert.match(pageSource, /runnerExport:\s*string/)
+  assert.match(pageSource, /optionsSchema\??:\s*PluginAutomationOptionDefinition\[\]/)
+  assert.match(pageSource, /export type PluginAutomationOptionDefinition/)
+  assert.match(pageSource, /kind:\s*'boolean'/)
+  assert.match(pageSource, /kind:\s*'select'/)
+  assert.match(moduleSource, /export interface PluginAutomationMacAccessibility/)
+  assert.match(moduleSource, /preflight\(\):\s*Promise<\{ ok: boolean; trusted: boolean; error\?: string \}>/)
+  assert.match(moduleSource, /runScript\(script: string, args\?: string\[\]\):/)
+  assert.match(moduleSource, /runFile\(path: string, args\?: string\[\]\):/)
+  assert.match(moduleSource, /export interface PluginAutomationRunnerContext/)
+  assert.match(moduleSource, /macAccessibility:\s*PluginAutomationMacAccessibility/)
+  assert.match(moduleSource, /export type PluginAutomationRunner =/)
+  assert.match(pluginIndexSource, /PluginAutomationOptionDefinition/)
+  assert.match(pluginIndexSource, /PluginAutomationRunner/)
+  assert.match(pluginIndexSource, /PluginAutomationRunnerContext/)
+})
+
 test('generate-contracts script no longer references runtime service manifest artifacts', async () => {
   const source = await readFile(path.join(repoRoot, 'scripts/generate-contracts.mjs'), 'utf8')
   assert.doesNotMatch(source, /runtime-services\.json/)

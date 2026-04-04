@@ -1,11 +1,11 @@
 import type { CSSProperties } from 'react'
 
-import type { PrestoClient } from '@presto/contracts'
+import { EmptyState } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
 import type { HostAutomationEntry } from '../pluginHostTypes'
-import { SplitStereoToMonoCard } from './cards/SplitStereoToMonoCard'
+import { AutomationRunnerCard } from './cards/AutomationRunnerCard'
 
 const titleBarStyle: CSSProperties = {
   display: 'flex',
@@ -29,27 +29,38 @@ const gridStyle: CSSProperties = {
   gap: 16,
 }
 
+const emptyStateStyle: CSSProperties = {
+  padding: 24,
+  borderRadius: 24,
+  border: `1px solid ${hostShellColors.border}`,
+  background: hostShellColors.surfaceMuted,
+}
+
 export function AutomationSurface({
   locale,
-  presto,
   automationEntries,
 }: {
   locale: HostLocale
-  presto: PrestoClient
   automationEntries: readonly HostAutomationEntry[]
 }) {
-  const supportedEntries = automationEntries.filter((entry) => entry.automationType === 'splitStereoToMono')
-
   return (
     <>
       <div style={titleBarStyle}>
         <h1 style={titleStyle}>{translateHost(locale, 'home.automation.title')}</h1>
       </div>
-      <div style={gridStyle}>
-        {supportedEntries.map((entry) => (
-          <SplitStereoToMonoCard key={entry.itemId} locale={locale} presto={presto} />
-        ))}
-      </div>
+      {automationEntries.length > 0 ? (
+        <div style={gridStyle}>
+          {automationEntries.map((entry) => (
+            <AutomationRunnerCard key={`${entry.pluginId}:${entry.itemId}`} locale={locale} entry={entry} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title={translateHost(locale, 'home.noAutomation')}
+          description={translateHost(locale, 'home.noAutomation.body')}
+          style={emptyStateStyle}
+        />
+      )}
     </>
   )
 }

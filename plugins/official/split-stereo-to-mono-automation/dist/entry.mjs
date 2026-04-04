@@ -17,6 +17,19 @@ export const manifest = {
       automationType: 'splitStereoToMono',
       description: 'Use the current Pro Tools selection and keep either the left or right mono channel.',
       order: 10,
+      runnerExport: 'runSplitStereoToMono',
+      optionsSchema: [
+        {
+          optionId: 'keepChannel',
+          kind: 'select',
+          label: 'Keep Channel',
+          defaultValue: 'left',
+          options: [
+            { value: 'left', label: 'Left' },
+            { value: 'right', label: 'Right' },
+          ],
+        },
+      ],
     },
   ],
   requiredCapabilities: ['automation.splitStereoToMono.execute'],
@@ -33,6 +46,25 @@ export function activate(context) {
 
 export function deactivate() {
   activePluginId = ''
+}
+
+export async function runSplitStereoToMono(context, input = {}) {
+  const keepChannel = input.keepChannel === 'right' ? 'right' : 'left'
+  const response = await context.presto.automation.splitStereoToMono.execute({ keepChannel })
+
+  return {
+    steps: [
+      {
+        id: 'automation.execute',
+        status: 'succeeded',
+        message: 'Split stereo to mono automation finished.',
+      },
+    ],
+    summary:
+      response.items?.length === 1
+        ? `Automation finished. Kept track: ${response.items[0]?.keptTrackName ?? ''}`
+        : `Automation finished. Processed ${response.items?.length ?? 0} tracks.`,
+  }
 }
 
 export function getActivePluginId() {

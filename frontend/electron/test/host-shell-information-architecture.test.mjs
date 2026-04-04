@@ -98,6 +98,8 @@ function createPluginProps() {
         automationType: 'splitStereoToMono',
         description: 'Use the current Pro Tools selection and keep the chosen channel.',
         order: 10,
+        optionsSchema: [],
+        execute: async () => ({ steps: [], summary: 'done' }),
       },
     ],
     pluginManagerModel: {
@@ -280,7 +282,7 @@ test('automation renders the split stereo tool card while runs stays a placehold
 
   assert.match(automationMarkup, /Automation/)
   assert.match(automationMarkup, /Split Stereo To Mono/)
-  assert.match(automationMarkup, /Use the current Pro Tools track selection/)
+  assert.match(automationMarkup, /Use the current Pro Tools selection and keep the chosen channel/)
   assert.match(automationMarkup, /Run Automation/)
   assert.doesNotMatch(automationMarkup, /Target Track|Lead Vox|placeholder=/)
   assert.match(runsMarkup, /Runs/)
