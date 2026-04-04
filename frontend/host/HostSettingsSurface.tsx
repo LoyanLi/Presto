@@ -56,11 +56,11 @@ const appShellStyle = (sidebarCollapsed: boolean): CSSProperties => ({
 
 const settingsViewportStyle: CSSProperties = {
   display: 'grid',
+  gridTemplateRows: 'minmax(0, 1fr)',
   minWidth: 0,
   minHeight: 0,
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  scrollbarGutter: 'stable',
+  height: '100%',
+  overflow: 'hidden',
   background: hostShellColors.canvas,
 }
 
@@ -68,7 +68,7 @@ const screenFrameStyle: CSSProperties = {
   display: 'grid',
   gridTemplateRows: 'minmax(0, 1fr)',
   minHeight: 0,
-  height: '100vh',
+  height: '100%',
   background: hostShellColors.canvas,
   overflow: 'hidden',
 }
@@ -76,6 +76,8 @@ const screenFrameStyle: CSSProperties = {
 const bodyStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'minmax(220px, 304px) minmax(0, 1fr)',
+  gridTemplateRows: 'minmax(0, 1fr)',
+  height: '100%',
   minWidth: 0,
   minHeight: 0,
   overflow: 'hidden',
@@ -131,9 +133,19 @@ const navItemStyle = (active = false): CSSProperties => ({
 
 const contentStyle: CSSProperties = {
   display: 'grid',
+  gridTemplateRows: 'auto minmax(0, 1fr)',
+  minWidth: 0,
+  minHeight: 0,
+  height: '100%',
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+}
+
+const contentBodyStyle: CSSProperties = {
+  display: 'grid',
   alignContent: 'start',
   gap: 24,
-  padding: 32,
+  padding: '0 32px 32px',
   minWidth: 0,
   minHeight: 0,
   overflowY: 'auto',
@@ -149,6 +161,7 @@ const contentHeaderStyle: CSSProperties = {
   flexWrap: 'wrap',
   gap: 16,
   minWidth: 0,
+  padding: '32px 32px 24px',
 }
 
 const contentHeaderMetaStyle: CSSProperties = {
@@ -383,7 +396,9 @@ export function HostSettingsSurface({
                   ) : null}
                 </div>
 
-                {renderSettingsContent()}
+                <div style={contentBodyStyle}>
+                  {renderSettingsContent()}
+                </div>
               </div>
             </div>
           </div>

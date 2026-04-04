@@ -354,6 +354,13 @@ test('extensions settings page groups installed workflow and automation extensio
   assert.doesNotMatch(markup, /Installed Plugins/)
 })
 
+test('extensions settings page renders through a single root stack container', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/settings/ExtensionsSettingsPage.tsx'), 'utf8')
+
+  assert.match(source, /const pageStackStyle: CSSProperties = \{/)
+  assert.match(source, /return \(\s*<div style=\{pageStackStyle\}>/)
+})
+
 test('automation extensions settings page keeps full management controls and workflow page navigation visible', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const markup = renderToStaticMarkup(
@@ -527,9 +534,17 @@ test('settings surface uses a fixed viewport shell so only the content column sc
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostSettingsSurface.tsx'), 'utf8')
 
   assert.match(source, /const appShellStyle = \(sidebarCollapsed: boolean\): CSSProperties => \(\{[\s\S]*height:\s*'100vh'/)
-  assert.match(source, /const screenFrameStyle:[\s\S]*height:\s*'100vh'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*gridTemplateRows:\s*'minmax\(0, 1fr\)'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*height:\s*'100%'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*overflow:\s*'hidden'/)
+  assert.match(source, /const screenFrameStyle:[\s\S]*height:\s*'100%'/)
+  assert.match(source, /const bodyStyle:[\s\S]*gridTemplateRows:\s*'minmax\(0, 1fr\)'/)
+  assert.match(source, /const bodyStyle:[\s\S]*height:\s*'100%'/)
   assert.match(source, /const bodyStyle:[\s\S]*minHeight:\s*0/)
-  assert.match(source, /const contentStyle:[\s\S]*overflowY:\s*'auto'/)
+  assert.match(source, /const contentStyle:[\s\S]*gridTemplateRows:\s*'auto minmax\(0, 1fr\)'/)
+  assert.match(source, /const contentStyle:[\s\S]*height:\s*'100%'/)
+  assert.match(source, /const contentStyle:[\s\S]*overflow:\s*'hidden'/)
+  assert.match(source, /const contentBodyStyle:[\s\S]*overflowY:\s*'auto'/)
   assert.match(source, /const navStyle:[\s\S]*overflowY:\s*'auto'/)
 })
 
