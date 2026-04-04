@@ -5,18 +5,18 @@ export const manifest = {
   hostApiVersion: '0.1.0',
   supportedDaws: ['pro_tools'],
   uiRuntime: 'react18',
-  displayName: 'Batch ARA Backup Render',
+  displayName: 'Batch Backup Rename',
   description:
-    'Duplicate the selected ARA tracks as backups, hide and inactivate the duplicates, then commit ARA render on the source tracks.',
+    'Duplicate the selected tracks as backups, rename the duplicates to .bak, then hide and inactivate them.',
   entry: 'dist/entry.mjs',
   pages: [],
   automationItems: [
     {
       itemId: 'batch-ara-backup-render.card',
-      title: 'Batch ARA Backup Render',
+      title: 'Batch Backup Rename',
       automationType: 'batchAraBackupRender',
       description:
-        'Back up the selected ARA tracks, hide/inactivate the duplicates, then batch-set ARA to None with Commit.',
+        'Back up the selected tracks, rename the duplicates to .bak, then hide/inactivate them.',
       order: 20,
       runnerExport: 'runBatchAraBackupAutomation',
       optionsSchema: [
@@ -35,10 +35,11 @@ export const manifest = {
       ],
     },
   ],
-  requiredCapabilities: ['track.selection.get', 'track.hidden.set', 'track.inactive.set'],
+  requiredCapabilities: ['track.selection.get', 'track.rename', 'track.hidden.set', 'track.inactive.set'],
   adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
   capabilityRequirements: [
     { capabilityId: 'track.selection.get', minVersion: '2025.10.0' },
+    { capabilityId: 'track.rename', minVersion: '2025.10.0' },
     { capabilityId: 'track.hidden.set', minVersion: '2025.10.0' },
     { capabilityId: 'track.inactive.set', minVersion: '2025.10.0' },
   ],
@@ -48,7 +49,7 @@ let activePluginId = ''
 
 export function activate(context) {
   activePluginId = context.pluginId
-  context.logger.info('Batch ARA backup render automation plugin activated.')
+  context.logger.info('Batch backup rename automation plugin activated.')
 }
 
 export function deactivate() {
@@ -79,9 +80,15 @@ async function runMacScript(macAccessibility, script, args = []) {
 function buildDuplicateTracksScript() {
   return `
 on run argv
+  tell application "Pro Tools" to activate
+  delay 0.1
   tell application "System Events"
     tell process "Pro Tools"
-      click menu item "Duplicate..." of menu "Track" of menu bar item "Track" of menu bar 1
+      set frontmost to true
+      delay 0.1
+      click menu bar item "Track" of menu bar 1
+      delay 0.1
+      click menu item "Duplicate..." of menu 1 of menu bar item "Track" of menu bar 1
       repeat 50 times
         if exists (button "OK" of window 1) then
           click button "OK" of window 1
@@ -89,6 +96,8 @@ on run argv
         end if
         delay 0.1
       end repeat
+      delay 0.1
+      key code 53
     end tell
   end tell
   return "duplicated"
@@ -96,42 +105,17 @@ end run
 `.trim()
 }
 
-function buildRestoreSelectionScript() {
-  return `
-on run argv
-  tell application "System Events"
-    tell process "Pro Tools"
-      set trackNames to argv
-      if (count of trackNames) is 0 then return "no-selection"
-      repeat with trackName in trackNames
-        click UI element 1 of window 1
-      end repeat
-    end tell
-  end tell
-  return "selection-restored"
-end run
-`.trim()
+function buildBackupTrackNames(sourceTrackNames) {
+  return sourceTrackNames.map((trackName) => `${trackName}.bak`)
 }
 
-function buildDisableAraScript() {
-  return `
-on run argv
-  tell application "System Events"
-    tell process "Pro Tools"
-      click pop up button "Elastic Audio or ARA Plugin selector" of group 1 of window 1 using {option down, shift down}
-      click menu item "None" of menu 1 of pop up button "Elastic Audio or ARA Plugin selector" of group 1 of window 1
-      repeat 50 times
-        if exists (button "Commit" of window 1) then
-          click button "Commit" of window 1
-          exit repeat
-        end if
-        delay 0.1
-      end repeat
-    end tell
-  end tell
-  return "ara-committed"
-end run
-`.trim()
+async function renameBackupTracks(context, backupTrackNames, renamedBackupTrackNames) {
+  for (let index = 0; index < backupTrackNames.length; index += 1) {
+    await context.presto.track.rename({
+      currentName: backupTrackNames[index],
+      newName: renamedBackupTrackNames[index],
+    })
+  }
 }
 
 async function applyBackupTrackState(context, backupTrackNames, hideBackupTracks, makeBackupTracksInactive) {
@@ -168,10 +152,13 @@ export async function runBatchAraBackupAutomation(context, input = {}) {
   if (backupTrackNames.length === 0) {
     throw new Error('No duplicated backup tracks are selected after duplication.')
   }
+  if (backupTrackNames.length !== sourceTrackNames.length) {
+    throw new Error('Duplicated backup track count does not match the source selection.')
+  }
 
-  await applyBackupTrackState(context, backupTrackNames, hideBackupTracks, makeBackupTracksInactive)
-  await runMacScript(context.macAccessibility, buildRestoreSelectionScript(), sourceTrackNames)
-  await runMacScript(context.macAccessibility, buildDisableAraScript())
+  const renamedBackupTrackNames = buildBackupTrackNames(sourceTrackNames)
+  await renameBackupTracks(context, backupTrackNames, renamedBackupTrackNames)
+  await applyBackupTrackState(context, renamedBackupTrackNames, hideBackupTracks, makeBackupTracksInactive)
 
   return {
     steps: [
@@ -183,19 +170,17 @@ export async function runBatchAraBackupAutomation(context, input = {}) {
         message: `Resolved ${backupTrackNames.length} duplicated backup tracks from the current selection.`,
       },
       {
+        id: 'backup.rename',
+        status: 'succeeded',
+        message: `Renamed ${renamedBackupTrackNames.length} duplicated backup tracks to .bak names.`,
+      },
+      {
         id: 'backup.hideInactive',
         status: 'succeeded',
         message: 'Applied backup-track visibility and activation changes.',
       },
-      { id: 'source.restoreSelection', status: 'succeeded', message: 'Re-selected the original source tracks.' },
-      {
-        id: 'ara.disable',
-        status: 'succeeded',
-        message: 'Batch-set Elastic Audio or ARA Plugin selector to None.',
-      },
-      { id: 'ara.commit', status: 'succeeded', message: 'Committed the ARA processing dialog.' },
     ],
-    summary: `Backed up ${sourceTrackNames.length} selected tracks, hid/inactivated the duplicates, and committed ARA render on the source tracks.`,
+    summary: `Backed up ${sourceTrackNames.length} selected tracks, renamed the duplicated backup tracks to .bak, then hid and inactivated them.`,
   }
 }
 
