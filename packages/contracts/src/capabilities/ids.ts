@@ -50,6 +50,8 @@ export type PublicCapabilityId =
   | 'track.pan.set'
   | 'track.mute.set'
   | 'track.solo.set'
+  | 'track.hidden.set'
+  | 'track.inactive.set'
   | 'clip.selectAllOnTrack'
   | 'transport.play'
   | 'transport.stop'

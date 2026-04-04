@@ -199,6 +199,34 @@ def _track_solo_set_payload(services: ServiceContainer, payload: dict[str, Any])
     }
 
 
+def _track_hidden_set_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    capability_id = "track.hidden.set"
+    daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
+    track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
+    enabled = bool(payload.get("enabled"))
+    for track_name in track_names:
+        daw.set_track_hidden_state(track_name, enabled)
+    return {
+        "updated": True,
+        "trackNames": track_names,
+        "enabled": enabled,
+    }
+
+
+def _track_inactive_set_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+    capability_id = "track.inactive.set"
+    daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
+    track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
+    enabled = bool(payload.get("enabled"))
+    for track_name in track_names:
+        daw.set_track_inactive_state(track_name, enabled)
+    return {
+        "updated": True,
+        "trackNames": track_names,
+        "enabled": enabled,
+    }
+
+
 def _clip_select_all_on_track_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "clip.selectAllOnTrack"
     daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
@@ -293,6 +321,8 @@ _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
     "track.rename": _track_rename_payload,
     "track.mute.set": _track_mute_set_payload,
     "track.solo.set": _track_solo_set_payload,
+    "track.hidden.set": _track_hidden_set_payload,
+    "track.inactive.set": _track_inactive_set_payload,
     "clip.selectAllOnTrack": _clip_select_all_on_track_payload,
     "export.range.set": export_range_set_payload,
     "export.start": _start_export_payload("export.start"),

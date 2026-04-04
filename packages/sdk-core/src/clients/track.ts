@@ -9,6 +9,10 @@ import type {
   TrackListResponse,
   TrackSelectionGetRequest,
   TrackSelectionGetResponse,
+  TrackHiddenSetRequest,
+  TrackHiddenSetResponse,
+  TrackInactiveSetRequest,
+  TrackInactiveSetResponse,
   TrackMuteSetRequest,
   TrackMuteSetResponse,
   TrackPanSetRequest,
@@ -84,5 +88,13 @@ export const createTrackClient = (context: PrestoClientAssemblyContext): TrackCl
   solo: {
     set: (request: TrackSoloSetRequest) =>
       invokeCapability<TrackSoloSetRequest, TrackSoloSetResponse>(context, 'track.solo.set', request),
+  },
+  hidden: {
+    set: (request: TrackHiddenSetRequest) =>
+      invokeCapability<TrackHiddenSetRequest, TrackHiddenSetResponse>(context, 'track.hidden.set', request),
+  },
+  inactive: {
+    set: (request: TrackInactiveSetRequest) =>
+      invokeCapability<TrackInactiveSetRequest, TrackInactiveSetResponse>(context, 'track.inactive.set', request),
   },
 })

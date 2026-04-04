@@ -400,6 +400,10 @@ async function invokePublicCapability(
       return presto.track.select(payload as never)
     case 'track.color.apply':
       return presto.track.color.apply(payload as never)
+    case 'track.hidden.set':
+      return presto.track.hidden.set(payload as never)
+    case 'track.inactive.set':
+      return presto.track.inactive.set(payload as never)
     case 'track.mute.set':
       return presto.track.mute.set(payload as never)
     case 'track.solo.set':
@@ -713,6 +717,14 @@ export function DeveloperCapabilityConsole({
       await invoke('track.color.apply', {
         trackName,
         colorSlot: 1,
+      })
+      await invoke('track.hidden.set', {
+        trackNames: [trackName],
+        enabled: false,
+      })
+      await invoke('track.inactive.set', {
+        trackNames: [trackName],
+        enabled: false,
       })
       await invoke('clip.selectAllOnTrack', { trackName })
       await invoke('track.mute.set', {

@@ -33,6 +33,8 @@ class FakeDawAdapter:
         self.renamed_tracks: list[tuple[str, str]] = []
         self.mute_updates: list[tuple[str, bool]] = []
         self.solo_updates: list[tuple[str, bool]] = []
+        self.hidden_updates: list[tuple[str, bool]] = []
+        self.inactive_updates: list[tuple[str, bool]] = []
         self.selected_clip_tracks: list[str] = []
         self.transport_state = "stopped"
         self.transport_command_calls: list[tuple[int, dict[str, object]]] = []
@@ -207,6 +209,12 @@ class FakeDawAdapter:
 
     def set_track_solo_state(self, track_name: str, soloed: bool) -> None:
         self.solo_updates.append((track_name, soloed))
+
+    def set_track_hidden_state(self, track_name: str, hidden: bool) -> None:
+        self.hidden_updates.append((track_name, hidden))
+
+    def set_track_inactive_state(self, track_name: str, inactive: bool) -> None:
+        self.inactive_updates.append((track_name, inactive))
 
     def select_all_clips_on_track(self, track_name: str) -> None:
         self.selected_clip_tracks.append(track_name)
@@ -1530,6 +1538,43 @@ def test_invoke_track_mute_and_solo_set_return_updated_shape() -> None:
     }
     assert app.state.services.daw.mute_updates == [("Kick", True), ("Snare", True)]
     assert app.state.services.daw.solo_updates == [("Bass", False)]
+
+
+def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    hidden_response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-5ja",
+            capability="track.hidden.set",
+            payload={"trackNames": ["Kick", "Snare"], "enabled": True},
+        ),
+    )
+    inactive_response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-5jb",
+            capability="track.inactive.set",
+            payload={"trackNames": ["Bass"], "enabled": False},
+        ),
+    )
+
+    assert hidden_response.success is True
+    assert hidden_response.data == {
+        "updated": True,
+        "trackNames": ["Kick", "Snare"],
+        "enabled": True,
+    }
+    assert inactive_response.success is True
+    assert inactive_response.data == {
+        "updated": True,
+        "trackNames": ["Bass"],
+        "enabled": False,
+    }
+    assert app.state.services.daw.hidden_updates == [("Kick", True), ("Snare", True)]
+    assert app.state.services.daw.inactive_updates == [("Bass", False)]
 
 
 def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:

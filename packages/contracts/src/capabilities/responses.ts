@@ -217,6 +217,18 @@ export interface TrackSoloSetResponse {
   enabled: boolean
 }
 
+export interface TrackHiddenSetResponse {
+  updated: true
+  trackNames: string[]
+  enabled: boolean
+}
+
+export interface TrackInactiveSetResponse {
+  updated: true
+  trackNames: string[]
+  enabled: boolean
+}
+
 export interface ClipSelectAllOnTrackResponse {
   selected: true
 }
@@ -356,6 +368,8 @@ export interface CapabilityResponseMap {
   'track.pan.set': TrackPanSetResponse
   'track.mute.set': TrackMuteSetResponse
   'track.solo.set': TrackSoloSetResponse
+  'track.hidden.set': TrackHiddenSetResponse
+  'track.inactive.set': TrackInactiveSetResponse
   'clip.selectAllOnTrack': ClipSelectAllOnTrackResponse
   'transport.play': TransportPlayResponse
   'transport.stop': TransportStopResponse

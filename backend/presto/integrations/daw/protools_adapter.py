@@ -1543,6 +1543,122 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             ) from exc
 
+    def set_track_hidden_state(self, track_name: str, hidden: bool) -> None:
+        engine = self._require_engine()
+        self.ensure_session_open()
+        normalized_track_name = str(track_name).strip()
+        if not normalized_track_name:
+            raise PrestoError(
+                "TRACK_NAME_REQUIRED",
+                "Track name is required before updating hidden state.",
+                source="capability",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_NAME_REQUIRED",
+                    "Track name is required before updating hidden state.",
+                ),
+                capability="track.hidden.set",
+                adapter="pro_tools",
+            )
+
+        client = getattr(engine, "client", None)
+        if client is None or not hasattr(client, "run_command"):
+            raise PrestoError(
+                "TRACK_HIDDEN_UNAVAILABLE",
+                "The current Pro Tools engine cannot set hidden state.",
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_HIDDEN_UNAVAILABLE",
+                    "The current Pro Tools engine cannot set hidden state.",
+                    address=self.address,
+                ),
+                capability="track.hidden.set",
+                adapter="pro_tools",
+            )
+
+        try:
+            client.run_command(
+                self._resolve_command_id("SetTrackHiddenState"),
+                {"track_names": [normalized_track_name], "enabled": bool(hidden)},
+            )
+        except Exception as exc:
+            raise PrestoError(
+                "TRACK_HIDDEN_SET_FAILED",
+                str(exc) or f"Failed to update hidden state for '{normalized_track_name}'.",
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_HIDDEN_SET_FAILED",
+                    str(exc) or f"Failed to update hidden state for '{normalized_track_name}'.",
+                    address=self.address,
+                    track_name=normalized_track_name,
+                    enabled=bool(hidden),
+                    exception_type=type(exc).__name__,
+                    raw_exception=str(exc) or None,
+                ),
+                capability="track.hidden.set",
+                adapter="pro_tools",
+            ) from exc
+
+    def set_track_inactive_state(self, track_name: str, inactive: bool) -> None:
+        engine = self._require_engine()
+        self.ensure_session_open()
+        normalized_track_name = str(track_name).strip()
+        if not normalized_track_name:
+            raise PrestoError(
+                "TRACK_NAME_REQUIRED",
+                "Track name is required before updating inactive state.",
+                source="capability",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_NAME_REQUIRED",
+                    "Track name is required before updating inactive state.",
+                ),
+                capability="track.inactive.set",
+                adapter="pro_tools",
+            )
+
+        client = getattr(engine, "client", None)
+        if client is None or not hasattr(client, "run_command"):
+            raise PrestoError(
+                "TRACK_INACTIVE_UNAVAILABLE",
+                "The current Pro Tools engine cannot set inactive state.",
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_INACTIVE_UNAVAILABLE",
+                    "The current Pro Tools engine cannot set inactive state.",
+                    address=self.address,
+                ),
+                capability="track.inactive.set",
+                adapter="pro_tools",
+            )
+
+        try:
+            client.run_command(
+                self._resolve_command_id("SetTrackInactiveState"),
+                {"track_names": [normalized_track_name], "enabled": bool(inactive)},
+            )
+        except Exception as exc:
+            raise PrestoError(
+                "TRACK_INACTIVE_SET_FAILED",
+                str(exc) or f"Failed to update inactive state for '{normalized_track_name}'.",
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_INACTIVE_SET_FAILED",
+                    str(exc) or f"Failed to update inactive state for '{normalized_track_name}'.",
+                    address=self.address,
+                    track_name=normalized_track_name,
+                    enabled=bool(inactive),
+                    exception_type=type(exc).__name__,
+                    raw_exception=str(exc) or None,
+                ),
+                capability="track.inactive.set",
+                adapter="pro_tools",
+            ) from exc
+
     def cancel_export(self) -> None:
         self._unimplemented("cancel_export")
 
