@@ -377,6 +377,17 @@ test('automation extensions settings page keeps full management controls and wor
   assert.match(markup, /Export Workflow/)
 })
 
+test('host shell wires automation extensions settings into the shared extension management callbacks', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+  const automationPageBlock = sliceAfterMatch(source, /const automationExtensionsPage = \(/, 1200)
+
+  assert.match(automationPageBlock, /extensionType="automation"/)
+  assert.match(automationPageBlock, /onInstallPluginDirectory=\{onInstallPluginDirectory\}/)
+  assert.match(automationPageBlock, /onInstallPluginZip=\{onInstallPluginZip\}/)
+  assert.match(automationPageBlock, /onUninstallPlugin=\{onUninstallPlugin\}/)
+  assert.match(automationPageBlock, /onRefreshPlugins=\{onRefreshPlugins\}/)
+})
+
 test('settings surface renders declarative workflow settings through shared host fields', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const importMarkup = renderToStaticMarkup(

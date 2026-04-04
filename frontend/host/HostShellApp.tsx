@@ -368,6 +368,9 @@ export function HostShellApp({
       extensionType="automation"
       pluginManagerModel={filteredPluginManagerModel}
       pluginSettingsEntries={pluginSettingsEntries}
+      onInstallPluginDirectory={onInstallPluginDirectory}
+      onInstallPluginZip={onInstallPluginZip}
+      onUninstallPlugin={onUninstallPlugin}
       onRefreshPlugins={onRefreshPlugins}
     />
   )
