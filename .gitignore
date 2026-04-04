@@ -9,7 +9,10 @@ node_modules/
 dist/
 !plugins/official/*/dist/
 !plugins/official/*/dist/**
-build/
+build/*
+!build/macos/
+build/macos/*
+!build/macos/README.md
 release/
 coverage/
 *.tsbuildinfo
