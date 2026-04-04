@@ -5,16 +5,16 @@
   "hostApiVersion": "0.1.0",
   "supportedDaws": ["pro_tools"],
   "uiRuntime": "react18",
-  "displayName": "Batch ARA Backup Render",
-  "description": "Duplicate the selected ARA tracks as backups, hide and inactivate the duplicates, then commit ARA render on the source tracks.",
+  "displayName": "Batch Backup Rename",
+  "description": "Duplicate the selected tracks as backups, rename the duplicates to .bak, then hide and inactivate them.",
   "entry": "dist/entry.mjs",
   "pages": [],
   "automationItems": [
     {
       "itemId": "batch-ara-backup-render.card",
-      "title": "Batch ARA Backup Render",
+      "title": "Batch Backup Rename",
       "automationType": "batchAraBackupRender",
-      "description": "Back up the selected ARA tracks, hide/inactivate the duplicates, then batch-set ARA to None with Commit.",
+      "description": "Back up the selected tracks, rename the duplicates to .bak, then hide/inactivate them.",
       "order": 20,
       "runnerExport": "runBatchAraBackupAutomation",
       "optionsSchema": [
@@ -35,6 +35,7 @@
   ],
   "requiredCapabilities": [
     "track.selection.get",
+    "track.rename",
     "track.hidden.set",
     "track.inactive.set"
   ],
@@ -43,6 +44,7 @@
   ],
   "capabilityRequirements": [
     { "capabilityId": "track.selection.get", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.rename", "minVersion": "2025.10.0" },
     { "capabilityId": "track.hidden.set", "minVersion": "2025.10.0" },
     { "capabilityId": "track.inactive.set", "minVersion": "2025.10.0" }
   ]
