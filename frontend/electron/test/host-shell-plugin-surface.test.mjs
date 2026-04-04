@@ -335,6 +335,8 @@ test('automation surface renders installed automation entries instead of a split
   assert.match(automationMarkup, /Split Stereo To Mono/)
   assert.match(automationMarkup, /Batch ARA Render/)
   assert.match(automationMarkup, /Hide backup tracks/)
+  assert.match(automationMarkup, /align-items:start/)
+  assert.match(automationMarkup, /align-self:start/)
 
   const automationSurfaceSource = await readFile(
     path.join(repoRoot, 'frontend/host/automation/AutomationSurface.tsx'),
