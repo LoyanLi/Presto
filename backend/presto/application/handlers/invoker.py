@@ -118,7 +118,11 @@ def _track_list_names_payload(services: ServiceContainer, payload: dict[str, Any
 def _track_select_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "track.select"
     daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
-    daw.select_track(str(payload.get("trackName", "")))
+    track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
+    if track_names:
+        daw.select_tracks(track_names)
+    else:
+        daw.select_track(str(payload.get("trackName", "")))
     return {
         "selected": True,
     }
@@ -204,8 +208,7 @@ def _track_hidden_set_payload(services: ServiceContainer, payload: dict[str, Any
     daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
     track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
     enabled = bool(payload.get("enabled"))
-    for track_name in track_names:
-        daw.set_track_hidden_state(track_name, enabled)
+    daw.set_track_hidden_state_batch(track_names, enabled)
     return {
         "updated": True,
         "trackNames": track_names,
@@ -218,8 +221,7 @@ def _track_inactive_set_payload(services: ServiceContainer, payload: dict[str, A
     daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
     track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
     enabled = bool(payload.get("enabled"))
-    for track_name in track_names:
-        daw.set_track_inactive_state(track_name, enabled)
+    daw.set_track_inactive_state_batch(track_names, enabled)
     return {
         "updated": True,
         "trackNames": track_names,

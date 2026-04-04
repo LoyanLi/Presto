@@ -35,6 +35,8 @@ class FakeDawAdapter:
         self.solo_updates: list[tuple[str, bool]] = []
         self.hidden_updates: list[tuple[str, bool]] = []
         self.inactive_updates: list[tuple[str, bool]] = []
+        self.hidden_batch_updates: list[tuple[list[str], bool]] = []
+        self.inactive_batch_updates: list[tuple[list[str], bool]] = []
         self.selected_clip_tracks: list[str] = []
         self.transport_state = "stopped"
         self.transport_command_calls: list[tuple[int, dict[str, object]]] = []
@@ -215,6 +217,12 @@ class FakeDawAdapter:
 
     def set_track_inactive_state(self, track_name: str, inactive: bool) -> None:
         self.inactive_updates.append((track_name, inactive))
+
+    def set_track_hidden_state_batch(self, track_names: list[str], hidden: bool) -> None:
+        self.hidden_batch_updates.append((list(track_names), hidden))
+
+    def set_track_inactive_state_batch(self, track_names: list[str], inactive: bool) -> None:
+        self.inactive_batch_updates.append((list(track_names), inactive))
 
     def select_all_clips_on_track(self, track_name: str) -> None:
         self.selected_clip_tracks.append(track_name)
@@ -690,6 +698,26 @@ def test_invoke_track_select_returns_selected_shape() -> None:
         "selected": True,
     }
     assert app.state.services.daw.selected_tracks == ["Snare"]
+
+
+def test_invoke_track_select_accepts_multiple_track_names() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-5c-batch",
+            capability="track.select",
+            payload={"trackNames": ["Kick", "Piano"]},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data == {
+        "selected": True,
+    }
+    assert app.state.services.daw.selected_tracks == ["Kick", "Piano"]
 
 
 def test_invoke_track_selection_get_returns_selected_track_names() -> None:
@@ -1573,8 +1601,10 @@ def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
         "trackNames": ["Bass"],
         "enabled": False,
     }
-    assert app.state.services.daw.hidden_updates == [("Kick", True), ("Snare", True)]
-    assert app.state.services.daw.inactive_updates == [("Bass", False)]
+    assert app.state.services.daw.hidden_updates == []
+    assert app.state.services.daw.inactive_updates == []
+    assert app.state.services.daw.hidden_batch_updates == [(["Kick", "Snare"], True)]
+    assert app.state.services.daw.inactive_batch_updates == [(["Bass"], False)]
 
 
 def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:
