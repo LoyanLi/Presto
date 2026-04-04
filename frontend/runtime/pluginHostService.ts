@@ -416,7 +416,7 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
           continue
         }
 
-        if (destinationExists && seededFingerprint !== sourceFingerprint) {
+        if (!destinationExists || seededFingerprint !== sourceFingerprint) {
           await rm(destinationRoot, { recursive: true, force: true })
           await cp(candidate.pluginRoot, destinationRoot, {
             recursive: true,

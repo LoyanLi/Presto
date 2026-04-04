@@ -252,6 +252,24 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
           (request) => track().solo.set(request),
         ),
       },
+      hidden: {
+        set: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'track.hidden.set',
+          'track.hidden.set()',
+          (request) => track().hidden.set(request),
+        ),
+      },
+      inactive: {
+        set: createCapabilityGuard(
+          allowedCapabilities,
+          pluginId,
+          'track.inactive.set',
+          'track.inactive.set()',
+          (request) => track().inactive.set(request),
+        ),
+      },
     },
     clip: {
       selectAllOnTrack: createCapabilityGuard(
