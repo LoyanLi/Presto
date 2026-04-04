@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+- 宿主设置中心把 `Workflow Extensions` 与 `Automation Extensions` 收口到同一套 extension management 链路，统一支持刷新、安装目录、安装 zip、启用、禁用与已安装扩展卸载。
+- automation 宿主改为根据已安装 automation 插件渲染卡片，不再继续把 `splitStereoToMono` 作为唯一硬编码入口。
+- automation 首页卡片改为各自独立高度布局，避免单一卡片内容把整页卡片一起拉高。
+- 官方 `batch-ara-backup-automation` 当前先落版备份阶段：批量复制当前选中轨道、把复制出的备份轨统一重命名为 `.bak`，再隐藏并 inactive。
+- 新增 track hidden / inactive 与批量 track state 的内核封装，供 automation 插件直接复用。
+- 修复 `Workflow Extensions` / `Automation Extensions` 设置页在固定宿主壳层中的滚动链。
+- 修复 Tauri 打包前 bundled Python runtime 的 staging 过程，避免资源准备阶段缺失运行时目录。
+
 ## 0.3.0
 
 - 正式以 `Tauri + Node sidecar + Python FastAPI` 作为桌面宿主发布主线，Electron 运行链退出当前发布路径。
