@@ -102,6 +102,7 @@ function createPluginProps() {
           version: '1.0.0',
           origin: 'official',
           status: 'ready',
+          enabled: true,
           description: 'Official import workflow plugin.',
           adapterModuleRequirements: [{ moduleId: 'import', minVersion: '2025.10.0' }],
         },
@@ -112,6 +113,7 @@ function createPluginProps() {
           version: '1.0.0',
           origin: 'official',
           status: 'ready',
+          enabled: true,
           description: 'Official export workflow plugin.',
           adapterModuleRequirements: [{ moduleId: 'export', minVersion: '2026.1.0' }],
         },
@@ -122,9 +124,20 @@ function createPluginProps() {
           version: '1.2.0',
           origin: 'installed',
           status: 'ready',
+          enabled: true,
           description: 'Installed cleanup utility.',
           pluginRoot: '/Users/test/Library/Application Support/Presto/extensions/installed.audio.cleanup',
           adapterModuleRequirements: [{ moduleId: 'export', minVersion: '2026.1.0' }],
+        },
+        {
+          pluginId: 'official.disabled-workflow',
+          extensionType: 'workflow',
+          displayName: 'Disabled Workflow',
+          version: '1.0.0',
+          origin: 'official',
+          status: 'disabled',
+          enabled: false,
+          description: 'Disabled official workflow plugin.',
         },
         {
           pluginId: 'official.split-stereo-to-mono-automation',
@@ -133,6 +146,7 @@ function createPluginProps() {
           version: '1.0.0',
           origin: 'official',
           status: 'ready',
+          enabled: true,
           description: 'Split the selected stereo track into mono and keep the chosen channel.',
           adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
         },
@@ -143,6 +157,7 @@ function createPluginProps() {
           version: '1.0.0',
           origin: 'installed',
           status: 'ready',
+          enabled: true,
           description: 'Duplicate selected tracks, hide backups, then render ARA.',
           pluginRoot: '/Users/test/Library/Application Support/Presto/extensions/installed.batch-ara-render',
           adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
@@ -278,7 +293,9 @@ test('home surface renders plugin launch cards and settings surface renders plug
   assert.match(settingsMarkup, /Install Local Zip/)
   assert.match(settingsMarkup, /Automation/)
   assert.match(settingsMarkup, /Import Workflow/)
-  assert.doesNotMatch(settingsMarkup, /Audio Cleanup/)
+  assert.match(settingsMarkup, /Audio Cleanup/)
+  assert.match(settingsMarkup, /Disabled Workflow/)
+  assert.match(settingsMarkup, /disabled/)
   assert.doesNotMatch(settingsMarkup, /Split Stereo To Mono/)
   assert.match(settingsMarkup, />More</)
   assert.doesNotMatch(settingsMarkup, /Version: 1\.0\.0/)
@@ -406,7 +423,23 @@ test('plugins settings source requires confirmation before uninstalling a plugin
   assert.match(source, /Remove extension from Presto\?/)
   assert.match(source, /expandedPluginId/)
   assert.match(source, /translateHost\(locale, 'extensions\.more'\)/)
+  assert.match(source, /onSetPluginEnabled/)
+  assert.match(source, /translateHost\(locale, 'extensions\.enable'\)/)
+  assert.match(source, /translateHost\(locale, 'extensions\.disable'\)/)
+  assert.match(source, /plugin\.origin === 'installed'/)
   assert.doesNotMatch(source, /title=\"Extension Details\"/)
+})
+
+test('host shell wires enable-disable extension management actions through the desktop runtime', async () => {
+  const [hostShellAppSource, renderHostShellAppSource] = await Promise.all([
+    readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/desktop/renderHostShellApp.tsx'), 'utf8'),
+  ])
+
+  assert.match(hostShellAppSource, /onSetPluginEnabled\?\(pluginId: string, enabled: boolean\)/)
+  assert.match(hostShellAppSource, /onSetPluginEnabled=\{onSetPluginEnabled\}/)
+  assert.match(renderHostShellAppSource, /runtime\.plugins\.setEnabled\(pluginId, enabled\)/)
+  assert.match(renderHostShellAppSource, /onSetPluginEnabled=\{\(pluginId, enabled\) =>/)
 })
 
 test('plugin settings surface shows Back when opened from a workspace route', async () => {

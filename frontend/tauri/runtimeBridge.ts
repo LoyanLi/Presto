@@ -51,6 +51,7 @@ const tauriRuntimeOperations = {
     list: 'plugins.catalog.list',
     installFromDirectory: 'plugins.install.directory',
     installFromZip: 'plugins.install.zip',
+    setEnabled: 'plugins.set-enabled',
     uninstall: 'plugins.uninstall',
   },
   window: {

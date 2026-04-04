@@ -16,6 +16,7 @@ export interface PluginRuntimePluginRecord {
   manifest: WorkflowPluginManifest
   settingsPages?: NonNullable<WorkflowPluginManifest['settingsPages']>
   loadable: boolean
+  enabled: boolean
 }
 
 export interface PluginRuntimeListResult {
@@ -39,9 +40,18 @@ export interface PluginRuntimeUninstallResult {
   issues: PluginRuntimeIssue[]
 }
 
+export interface PluginRuntimeSetEnabledResult {
+  ok: boolean
+  managedPluginsRoot: string
+  pluginId: string
+  enabled: boolean
+  issues: PluginRuntimeIssue[]
+}
+
 export interface PluginRuntimeClient {
   list(): Promise<PluginRuntimeListResult>
   installFromDirectory(overwrite?: boolean): Promise<PluginRuntimeInstallResult>
   installFromZip(overwrite?: boolean): Promise<PluginRuntimeInstallResult>
+  setEnabled(pluginId: string, enabled: boolean): Promise<PluginRuntimeSetEnabledResult>
   uninstall(pluginId: string): Promise<PluginRuntimeUninstallResult>
 }

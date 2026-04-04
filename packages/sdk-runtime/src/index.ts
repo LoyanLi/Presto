@@ -26,6 +26,7 @@ export type {
   PluginRuntimeIssue,
   PluginRuntimeListResult,
   PluginRuntimePluginRecord,
+  PluginRuntimeSetEnabledResult,
   PluginRuntimeUninstallResult,
 } from './clients/plugins'
 export type { ShellRuntimeClient } from './clients/shell'

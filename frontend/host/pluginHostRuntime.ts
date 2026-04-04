@@ -396,7 +396,8 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     displayName: plugin.displayName,
     version: plugin.version,
     origin: determineOrigin(plugin.pluginId),
-    status: plugin.loadable ? 'ready' : 'error',
+    status: plugin.enabled === false ? 'disabled' : plugin.loadable ? 'ready' : 'error',
+    enabled: plugin.enabled !== false,
     description: plugin.manifest.description,
     pluginRoot: plugin.pluginRoot,
     loadable: plugin.loadable,
@@ -414,6 +415,10 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   }
 
   for (const plugin of input.catalog.plugins) {
+    if (plugin.enabled === false) {
+      continue
+    }
+
     const mountedPages = mountPluginPages(plugin.manifest)
     const loaded = await loadRendererPluginModule(plugin.entryPath)
     if (!loaded.ok || !loaded.module) {

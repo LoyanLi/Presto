@@ -255,29 +255,10 @@ export function buildFilteredPluginManagerModel(input: {
     return undefined
   }
 
-  const surfacedPluginIds = new Set<string>()
-  for (const entry of filteredPluginHomeEntries) {
-    surfacedPluginIds.add(entry.pluginId)
-  }
-  for (const entry of filteredAutomationEntries) {
-    surfacedPluginIds.add(entry.pluginId)
-  }
-  for (const entry of filteredPluginSettingsEntries) {
-    surfacedPluginIds.add(entry.pluginId)
-  }
-  for (const page of pluginPages) {
-    surfacedPluginIds.add(page.pluginId)
-  }
-
-  const plugins = pluginManagerModel.plugins.filter(
-    (plugin) => surfacedPluginIds.has(plugin.pluginId) && isPluginAvailable(plugin.pluginId),
-  )
-  const pluginIds = new Set(plugins.map((plugin) => plugin.pluginId))
-
   return {
     ...pluginManagerModel,
-    plugins,
-    settingsEntries: filteredPluginSettingsEntries.filter((entry) => pluginIds.has(entry.pluginId)),
+    plugins: pluginManagerModel.plugins,
+    settingsEntries: filteredPluginSettingsEntries.filter((entry) => isPluginAvailable(entry.pluginId)),
   }
 }
 
