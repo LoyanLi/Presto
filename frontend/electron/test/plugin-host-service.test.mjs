@@ -358,7 +358,57 @@ test('plugin host service preserves adapter and capability requirements from plu
   assert.deepEqual(plugin.manifest.capabilityRequirements, [{ capabilityId: 'session.getInfo', minVersion: '2025.10.0' }])
 })
 
-test('plugin host service uninstalls managed and seeded official workflow plugins', async (t) => {
+test('plugin host service persists enabled state for managed plugins', async (t) => {
+  const { createPluginHostService } = await loadServiceModule()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-enabled-state-'))
+  const managedRoot = path.join(sandbox, 'managed')
+  const sourceRoot = path.join(sandbox, 'source')
+  await mkdir(sourceRoot, { recursive: true })
+
+  const sourcePluginRoot = await createPluginFixture(sourceRoot, {
+    folderName: 'managed-plugin',
+    pluginId: 'plugin.managed.toggle',
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const service = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+
+  const installed = await service.installFromDirectory({ selectedPath: sourcePluginRoot })
+  assert.equal(installed.ok, true)
+  assert.equal(installed.plugin?.enabled, true)
+
+  const initialList = await service.listPlugins()
+  assert.equal(initialList.plugins.find((plugin) => plugin.pluginId === 'plugin.managed.toggle')?.enabled, true)
+
+  const disabled = await service.setEnabled('plugin.managed.toggle', false)
+  assert.equal(disabled.ok, true)
+  assert.equal(disabled.enabled, false)
+
+  const disabledList = await service.listPlugins()
+  assert.equal(disabledList.plugins.find((plugin) => plugin.pluginId === 'plugin.managed.toggle')?.enabled, false)
+
+  const reloadedService = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+  const persistedList = await reloadedService.listPlugins()
+  assert.equal(persistedList.plugins.find((plugin) => plugin.pluginId === 'plugin.managed.toggle')?.enabled, false)
+
+  const reenabled = await reloadedService.setEnabled('plugin.managed.toggle', true)
+  assert.equal(reenabled.ok, true)
+  assert.equal(reenabled.enabled, true)
+
+  const finalList = await reloadedService.listPlugins()
+  assert.equal(finalList.plugins.find((plugin) => plugin.pluginId === 'plugin.managed.toggle')?.enabled, true)
+})
+
+test('plugin host service uninstalls managed plugins and blocks official plugin uninstall', async (t) => {
   const { createPluginHostService } = await loadServiceModule()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-uninstall-'))
   const managedRoot = path.join(sandbox, 'managed')
@@ -399,11 +449,12 @@ test('plugin host service uninstalls managed and seeded official workflow plugin
   assert.equal(postUninstall.plugins.some((plugin) => plugin.pluginId === 'official.reference'), true)
 
   const officialUninstall = await service.uninstall('official.reference')
-  assert.equal(officialUninstall.ok, true)
+  assert.equal(officialUninstall.ok, false)
   assert.equal(officialUninstall.pluginId, 'official.reference')
+  assert.equal(officialUninstall.issues.some((issue) => issue.reason === 'official_plugin_cannot_be_uninstalled'), true)
 
   const postOfficialUninstall = await service.listPlugins()
-  assert.equal(postOfficialUninstall.plugins.some((plugin) => plugin.pluginId === 'official.reference'), false)
+  assert.equal(postOfficialUninstall.plugins.some((plugin) => plugin.pluginId === 'official.reference'), true)
 })
 
 test('plugin host service reseeds official extensions when the managed copy is missing', async (t) => {
@@ -721,4 +772,63 @@ test('plugin host service resolves trusted workflow execution payload from insta
   assert.equal(resolved.definition.workflowId, 'official.import-workflow.run')
   assert.equal(resolved.definition.steps[0]?.usesCapability, 'track.rename')
   assert.equal(resolved.definition.steps[1]?.usesCapability, 'session.save')
+})
+
+test('plugin host service blocks workflow execution resolution for disabled plugins', async (t) => {
+  const { createPluginHostService } = await loadServiceModule()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-disabled-workflow-'))
+  const managedRoot = path.join(sandbox, 'managed')
+  const sourceRoot = path.join(sandbox, 'source')
+  await mkdir(sourceRoot, { recursive: true })
+
+  const sourcePluginRoot = await createPluginFixture(sourceRoot, {
+    folderName: 'workflow-plugin',
+    pluginId: 'plugin.workflow.disabled',
+    requiredCapabilities: ['workflow.run.start'],
+    workflowDefinition: {
+      workflowId: 'plugin.workflow.disabled.run',
+      inputSchemaId: 'plugin.workflow.disabled.input.v1',
+      definitionEntry: 'dist/workflow-definition.json',
+    },
+    workflowDefinitionSource: JSON.stringify(
+      {
+        workflowId: 'plugin.workflow.disabled.run',
+        version: '1.0.0',
+        inputSchemaId: 'plugin.workflow.disabled.input.v1',
+        steps: [
+          {
+            stepId: 'run',
+            usesCapability: 'workflow.run.start',
+            input: {},
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const service = createPluginHostService({
+    managedPluginsRoot: managedRoot,
+    currentDaw: 'pro_tools',
+  })
+
+  const installed = await service.installFromDirectory({ selectedPath: sourcePluginRoot })
+  assert.equal(installed.ok, true)
+
+  const disabled = await service.setEnabled('plugin.workflow.disabled', false)
+  assert.equal(disabled.ok, true)
+
+  await assert.rejects(
+    () =>
+      service.resolveWorkflowExecution({
+        pluginId: 'plugin.workflow.disabled',
+        workflowId: 'plugin.workflow.disabled.run',
+      }),
+    /plugin_disabled:plugin\.workflow\.disabled/,
+  )
 })

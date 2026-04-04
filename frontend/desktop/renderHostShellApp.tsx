@@ -15,7 +15,11 @@ import { getSystemLocaleCandidates, resolveHostLocale } from '../host/i18n'
 import { loadHostPlugins } from '../host/pluginHostRuntime'
 import type { PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
-import type { PluginRuntimeInstallResult, PluginRuntimeUninstallResult } from '@presto/sdk-runtime/clients/plugins'
+import type {
+  PluginRuntimeInstallResult,
+  PluginRuntimeSetEnabledResult,
+  PluginRuntimeUninstallResult,
+} from '@presto/sdk-runtime/clients/plugins'
 
 function getInitialShellViewId(searchParams: URLSearchParams): 'home' | 'settings' | 'developer' {
   const smokeTarget = searchParams.get('smokeTarget')
@@ -220,6 +224,37 @@ export function renderHostShellApp({
       }
     }
 
+    const runSetEnabled = async (
+      pluginId: string,
+      enabled: boolean,
+      setEnabled: () => Promise<PluginRuntimeSetEnabledResult>,
+    ): Promise<void> => {
+      setPluginManagerModel((prev) => ({
+        ...prev,
+        isBusy: true,
+        statusMessage: `${enabled ? 'Enabling' : 'Disabling'} ${pluginId}…`,
+      }))
+
+      try {
+        const result = await setEnabled()
+        await refreshPlugins(result.ok ? `Extension updated: ${pluginId}.` : `Extension update failed: ${pluginId}.`)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'extension_set_enabled_failed'
+        setPluginManagerModel((prev) => ({
+          ...prev,
+          isBusy: false,
+          statusMessage: null,
+          issues: [
+            {
+              scope: 'install',
+              message,
+              reason: message,
+            },
+          ],
+        }))
+      }
+    }
+
     return (
       <HostShellApp
         state={state}
@@ -237,6 +272,9 @@ export function renderHostShellApp({
         }}
         onInstallPluginZip={() => {
           void runInstall('Installing extension from local zip…', () => runtime.plugins.installFromZip())
+        }}
+        onSetPluginEnabled={(pluginId, enabled) => {
+          void runSetEnabled(pluginId, enabled, () => runtime.plugins.setEnabled(pluginId, enabled))
         }}
         onUninstallPlugin={(pluginId) => {
           void runUninstall(pluginId, () => runtime.plugins.uninstall(pluginId))

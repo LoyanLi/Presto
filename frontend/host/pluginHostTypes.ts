@@ -9,7 +9,7 @@ import type {
 } from '@presto/contracts'
 
 export type HostPluginOrigin = 'official' | 'installed'
-export type HostPluginStatus = 'ready' | 'error'
+export type HostPluginStatus = 'ready' | 'error' | 'disabled'
 export type HostExtensionType = 'workflow' | 'automation'
 
 export interface HostPluginHomeEntry {
@@ -82,6 +82,7 @@ export interface HostPluginRecord {
   version: string
   origin: HostPluginOrigin
   status: HostPluginStatus
+  enabled: boolean
   description?: string
   pluginRoot?: string
   loadable?: boolean

@@ -28,6 +28,7 @@ import type {
   PluginRuntimeInstallResult,
   PluginRuntimeListResult,
   PluginRuntimeUninstallResult,
+  PluginRuntimeSetEnabledResult,
 } from '@presto/sdk-runtime/clients/plugins'
 import type { ShellRuntimeClient } from '@presto/sdk-runtime/clients/shell'
 import type { WindowRuntimeClient } from '@presto/sdk-runtime/clients/window'
@@ -75,6 +76,7 @@ export interface DesktopRuntimeOperationMap {
     list: string
     installFromDirectory: string
     installFromZip: string
+    setEnabled: string
     uninstall: string
   }
   window: {
@@ -176,6 +178,8 @@ export function createDesktopRuntimeBridge(
       invokeTyped<PluginRuntimeInstallResult>(invoke, operations.plugins.installFromDirectory, overwrite),
     installFromZip: (overwrite = false) =>
       invokeTyped<PluginRuntimeInstallResult>(invoke, operations.plugins.installFromZip, overwrite),
+    setEnabled: (pluginId: string, enabled: boolean) =>
+      invokeTyped<PluginRuntimeSetEnabledResult>(invoke, operations.plugins.setEnabled, pluginId, enabled),
     uninstall: (pluginId: string) =>
       invokeTyped<PluginRuntimeUninstallResult>(invoke, operations.plugins.uninstall, pluginId),
   }

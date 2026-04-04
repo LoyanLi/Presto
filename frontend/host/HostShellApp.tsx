@@ -54,6 +54,7 @@ export interface HostShellAppProps {
   initialSettingsPageRoute?: HostSettingsPageRoute | LegacySettingsRouteInput | null
   onInstallPluginDirectory?(): void | Promise<void>
   onInstallPluginZip?(): void | Promise<void>
+  onSetPluginEnabled?(pluginId: string, enabled: boolean): void | Promise<void>
   onUninstallPlugin?(pluginId: string): void | Promise<void>
   onRefreshPlugins?(): void | Promise<void>
 }
@@ -74,6 +75,7 @@ export function HostShellApp({
   initialSettingsPageRoute = null,
   onInstallPluginDirectory,
   onInstallPluginZip,
+  onSetPluginEnabled,
   onUninstallPlugin,
   onRefreshPlugins,
 }: HostShellAppProps) {
@@ -159,15 +161,22 @@ export function HostShellApp({
   }, [liveDawAdapterSnapshot, pluginManagerModel?.plugins])
 
   const isPluginAvailable = (pluginId: string): boolean => pluginAvailabilityById.get(pluginId) ?? true
+  const isPluginEnabled = (pluginId: string): boolean =>
+    (pluginManagerModel?.plugins.find((plugin) => plugin.pluginId === pluginId)?.enabled ?? true) !== false
 
   const filteredPluginHomeEntries = useMemo(
-    () => pluginHomeEntries.filter((entry) => isPluginAvailable(entry.pluginId)),
-    [pluginHomeEntries, pluginAvailabilityById],
+    () => pluginHomeEntries.filter((entry) => isPluginAvailable(entry.pluginId) && isPluginEnabled(entry.pluginId)),
+    [pluginHomeEntries, pluginAvailabilityById, pluginManagerModel?.plugins],
   )
 
   const filteredAutomationEntries = useMemo(
-    () => automationEntries.filter((entry) => isPluginAvailable(entry.pluginId)),
-    [automationEntries, pluginAvailabilityById],
+    () => automationEntries.filter((entry) => isPluginAvailable(entry.pluginId) && isPluginEnabled(entry.pluginId)),
+    [automationEntries, pluginAvailabilityById, pluginManagerModel?.plugins],
+  )
+
+  const filteredPluginPages = useMemo(
+    () => pluginPages.filter((page) => isPluginAvailable(page.pluginId) && isPluginEnabled(page.pluginId)),
+    [pluginPages, pluginAvailabilityById, pluginManagerModel?.plugins],
   )
 
   const allPluginSettingsEntries = useMemo(
@@ -176,41 +185,41 @@ export function HostShellApp({
   )
 
   const filteredPluginSettingsEntries = useMemo(
-    () => allPluginSettingsEntries.filter((entry) => isPluginAvailable(entry.pluginId)),
-    [allPluginSettingsEntries, pluginAvailabilityById],
+    () => allPluginSettingsEntries.filter((entry) => isPluginAvailable(entry.pluginId) && isPluginEnabled(entry.pluginId)),
+    [allPluginSettingsEntries, pluginAvailabilityById, pluginManagerModel?.plugins],
   )
 
   const filteredPluginManagerModel: HostPluginManagerModel | undefined = useMemo(() => {
     return buildFilteredPluginManagerModel({
       pluginManagerModel,
-      filteredPluginHomeEntries,
-      filteredAutomationEntries,
-      filteredPluginSettingsEntries,
-      pluginPages,
-      isPluginAvailable,
-    })
-  }, [
-    filteredAutomationEntries,
-    filteredPluginHomeEntries,
-    filteredPluginSettingsEntries,
-    pluginAvailabilityById,
-    pluginManagerModel,
-    pluginPages,
-  ])
+          filteredPluginHomeEntries,
+          filteredAutomationEntries,
+          filteredPluginSettingsEntries,
+          pluginPages: filteredPluginPages,
+          isPluginAvailable,
+        })
+      }, [
+        filteredAutomationEntries,
+        filteredPluginHomeEntries,
+        filteredPluginPages,
+        filteredPluginSettingsEntries,
+        pluginAvailabilityById,
+        pluginManagerModel,
+      ])
 
   const pluginSettingsEntries = filteredPluginSettingsEntries
 
-  const activeWorkspacePage = findActiveWorkspacePage(workspacePageRoute, pluginPages)
+  const activeWorkspacePage = findActiveWorkspacePage(workspacePageRoute, filteredPluginPages)
 
   const activeSettingsEntry =
     settingsRoute.kind === 'plugin'
-      ? allPluginSettingsEntries.find(
+      ? pluginSettingsEntries.find(
           (entry) => entry.pluginId === settingsRoute.pluginId && entry.pageId === settingsRoute.pageId,
         ) ?? null
       : null
 
   const workspaceSettingsEntry: HostPluginSettingsEntry | null = workspacePageRoute
-    ? allPluginSettingsEntries.find((entry) => entry.pluginId === workspacePageRoute.pluginId) ?? null
+    ? pluginSettingsEntries.find((entry) => entry.pluginId === workspacePageRoute.pluginId) ?? null
     : null
 
   const settingsReturnsToWorkspace =
@@ -238,7 +247,7 @@ export function HostShellApp({
 
   const settingsTitle =
     settingsRoute.kind === 'plugin'
-      ? allPluginSettingsEntries.find(
+      ? pluginSettingsEntries.find(
           (entry) => entry.pluginId === settingsRoute.pluginId && entry.pageId === settingsRoute.pageId,
         )?.title ?? translateHost(resolvedLocale, 'home.pluginSettings')
       : builtinSettingsNav.find((entry) => entry.pageId === settingsRoute.pageId)?.title ?? translateHost(resolvedLocale, 'sidebar.settings')
@@ -357,6 +366,7 @@ export function HostShellApp({
       pluginSettingsEntries={pluginSettingsEntries}
       onInstallPluginDirectory={onInstallPluginDirectory}
       onInstallPluginZip={onInstallPluginZip}
+      onSetPluginEnabled={onSetPluginEnabled}
       onUninstallPlugin={onUninstallPlugin}
       onRefreshPlugins={onRefreshPlugins}
     />
@@ -370,6 +380,7 @@ export function HostShellApp({
       pluginSettingsEntries={pluginSettingsEntries}
       onInstallPluginDirectory={onInstallPluginDirectory}
       onInstallPluginZip={onInstallPluginZip}
+      onSetPluginEnabled={onSetPluginEnabled}
       onUninstallPlugin={onUninstallPlugin}
       onRefreshPlugins={onRefreshPlugins}
     />

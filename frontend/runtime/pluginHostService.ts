@@ -32,6 +32,7 @@ export interface PluginHostPluginRecord {
   manifest: WorkflowPluginManifest
   settingsPages: NonNullable<WorkflowPluginManifest['settingsPages']>
   loadable: boolean
+  enabled: boolean
 }
 
 export interface PluginHostListResult {
@@ -54,6 +55,14 @@ export interface PluginUninstallResult {
   issues: PluginHostIssue[]
 }
 
+export interface PluginSetEnabledResult {
+  ok: boolean
+  managedPluginsRoot: string
+  pluginId: string
+  enabled: boolean
+  issues: PluginHostIssue[]
+}
+
 export interface CreatePluginHostServiceOptions {
   managedPluginsRoot: string
   discoveryRoots?: readonly string[]
@@ -68,6 +77,7 @@ export interface PluginHostService {
   installFromDirectory(input: { selectedPath: string; overwrite?: boolean }): Promise<PluginInstallResult>
   installFromZip(input: { zipPath: string; overwrite?: boolean }): Promise<PluginInstallResult>
   syncOfficialExtensions(input: { officialExtensionsRoot: string }): Promise<{ ok: true; managedPluginsRoot: string }>
+  setEnabled(pluginId: string, enabled: boolean): Promise<PluginSetEnabledResult>
   uninstall(pluginId: string): Promise<PluginUninstallResult>
   resolveWorkflowExecution(input: {
     pluginId: string
@@ -80,6 +90,7 @@ export interface PluginHostService {
 
 const unzipExec = promisify(execFile)
 const officialSeedStateFileName = '.presto-official-extension-seed-state.json'
+const pluginEnabledStateFileName = '.presto-plugin-enabled-state.json'
 
 function sanitizePluginFolderName(pluginId: string): string {
   return pluginId.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -161,6 +172,40 @@ async function writeOfficialSeedState(managedPluginsRoot: string, state: Record<
   await writeFile(filePath, `${payload}\n`, 'utf8')
 }
 
+async function readPluginEnabledState(managedPluginsRoot: string): Promise<Record<string, boolean>> {
+  const filePath = path.join(managedPluginsRoot, pluginEnabledStateFileName)
+
+  try {
+    const raw = await readFile(filePath, 'utf8')
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, boolean] => typeof entry[0] === 'string' && typeof entry[1] === 'boolean',
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+async function writePluginEnabledState(managedPluginsRoot: string, state: Record<string, boolean>): Promise<void> {
+  const filePath = path.join(managedPluginsRoot, pluginEnabledStateFileName)
+  const payload = JSON.stringify(
+    Object.fromEntries(Object.entries(state).sort(([left], [right]) => left.localeCompare(right))),
+    null,
+    2,
+  )
+  await writeFile(filePath, `${payload}\n`, 'utf8')
+}
+
+function isPluginEnabled(state: Record<string, boolean>, pluginId: string): boolean {
+  return state[pluginId] !== false
+}
+
 async function collectOfficialPackageFiles(root: string, current = root): Promise<string[]> {
   const entries = await readdir(current, { withFileTypes: true })
   const files: string[] = []
@@ -236,6 +281,7 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
   const buildListResult = async (roots: readonly string[]): Promise<PluginHostListResult> => {
     await mkdir(managedPluginsRoot, { recursive: true })
     const result = await runDiscovery(roots)
+    const enabledState = await readPluginEnabledState(managedPluginsRoot)
     const issues: PluginHostIssue[] = result.issues.map(mapDiscoveryIssue)
     const plugins: PluginHostPluginRecord[] = []
 
@@ -255,6 +301,7 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
         manifest,
         settingsPages: toSettingsPages(manifest),
         loadable: loaded.ok,
+        enabled: isPluginEnabled(enabledState, manifest.pluginId),
       })
     }
 
@@ -432,6 +479,45 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
       return { ok: true, managedPluginsRoot }
     },
 
+    async setEnabled(pluginId: string, enabled: boolean): Promise<PluginSetEnabledResult> {
+      const normalizedPluginId = String(pluginId)
+      const nextEnabled = Boolean(enabled)
+      const destinationRoot = path.join(managedPluginsRoot, sanitizePluginFolderName(normalizedPluginId))
+      const manifestPath = path.join(destinationRoot, 'manifest.json')
+
+      if (!(await exists(manifestPath))) {
+        return {
+          ok: false,
+          managedPluginsRoot,
+          pluginId: normalizedPluginId,
+          enabled: nextEnabled,
+          issues: [
+            {
+              category: 'install',
+              reason: 'plugin_not_installed_in_managed_root',
+              pluginRoot: destinationRoot,
+            },
+          ],
+        }
+      }
+
+      const enabledState = await readPluginEnabledState(managedPluginsRoot)
+      if (nextEnabled) {
+        delete enabledState[normalizedPluginId]
+      } else {
+        enabledState[normalizedPluginId] = false
+      }
+      await writePluginEnabledState(managedPluginsRoot, enabledState)
+
+      return {
+        ok: true,
+        managedPluginsRoot,
+        pluginId: normalizedPluginId,
+        enabled: nextEnabled,
+        issues: [],
+      }
+    },
+
     async uninstall(pluginId: string): Promise<PluginUninstallResult> {
       const normalizedPluginId = String(pluginId)
       const destinationRoot = path.join(managedPluginsRoot, sanitizePluginFolderName(normalizedPluginId))
@@ -452,7 +538,27 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
         }
       }
 
+      if (normalizedPluginId.startsWith('official.')) {
+        return {
+          ok: false,
+          managedPluginsRoot,
+          pluginId: normalizedPluginId,
+          issues: [
+            {
+              category: 'install',
+              reason: 'official_plugin_cannot_be_uninstalled',
+              pluginRoot: destinationRoot,
+            },
+          ],
+        }
+      }
+
       await rm(destinationRoot, { recursive: true, force: true })
+      const enabledState = await readPluginEnabledState(managedPluginsRoot)
+      if (normalizedPluginId in enabledState) {
+        delete enabledState[normalizedPluginId]
+        await writePluginEnabledState(managedPluginsRoot, enabledState)
+      }
 
       return {
         ok: true,
@@ -487,6 +593,10 @@ export function createPluginHostService(options: CreatePluginHostServiceOptions)
       }
 
       const manifest = candidate.manifest as WorkflowPluginManifest
+      const enabledState = await readPluginEnabledState(managedPluginsRoot)
+      if (!isPluginEnabled(enabledState, manifest.pluginId)) {
+        throw new Error(`plugin_disabled:${pluginId}`)
+      }
       if (!manifest.workflowDefinition) {
         throw new Error(`workflow_definition_not_declared:${pluginId}`)
       }

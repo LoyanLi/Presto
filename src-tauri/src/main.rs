@@ -418,6 +418,7 @@ fn runtime_invoke(
         | "mac-accessibility.script.run"
         | "mac-accessibility.file.run"
         | "plugins.catalog.list"
+        | "plugins.set-enabled"
         | "plugins.uninstall" => state.call(&operation, args),
         _ => Err(format!("unsupported_operation:{operation}")),
     }

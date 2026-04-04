@@ -18,6 +18,7 @@ export interface ExtensionsSettingsPageProps {
   pluginSettingsEntries: readonly HostPluginSettingsEntry[]
   onInstallPluginDirectory?(): void | Promise<void>
   onInstallPluginZip?(): void | Promise<void>
+  onSetPluginEnabled?(pluginId: string, enabled: boolean): void | Promise<void>
   onUninstallPlugin?(pluginId: string): void | Promise<void>
   onRefreshPlugins?(): void | Promise<void>
 }
@@ -201,6 +202,27 @@ function confirmUninstall(plugin: HostPluginRecord, onUninstallPlugin?: (pluginI
   void onUninstallPlugin(plugin.pluginId)
 }
 
+function togglePluginEnabled(
+  plugin: HostPluginRecord,
+  onSetPluginEnabled?: (pluginId: string, enabled: boolean) => void | Promise<void>,
+) {
+  if (!onSetPluginEnabled) {
+    return
+  }
+
+  void onSetPluginEnabled(plugin.pluginId, plugin.enabled === false)
+}
+
+function pluginStatusTone(plugin: HostPluginRecord): 'brand' | 'warning' | 'neutral' {
+  if (plugin.status === 'ready') {
+    return 'brand'
+  }
+  if (plugin.status === 'disabled') {
+    return 'neutral'
+  }
+  return 'warning'
+}
+
 function ExtensionList({
   locale,
   extensions,
@@ -208,6 +230,7 @@ function ExtensionList({
   pluginSettingsEntries,
   expandedPluginId,
   onToggleExpanded,
+  onSetPluginEnabled,
   onUninstallPlugin,
 }: {
   locale: HostLocale
@@ -216,6 +239,7 @@ function ExtensionList({
   pluginSettingsEntries: readonly HostPluginSettingsEntry[]
   expandedPluginId: string | null
   onToggleExpanded(pluginId: string): void
+  onSetPluginEnabled?: (pluginId: string, enabled: boolean) => void | Promise<void>
   onUninstallPlugin?: (pluginId: string) => void | Promise<void>
 }) {
   return (
@@ -236,7 +260,7 @@ function ExtensionList({
             </div>
 
             <div style={statusBadgeStyle}>
-              <Badge tone={plugin.status === 'ready' ? 'brand' : 'warning'}>{plugin.status}</Badge>
+              <Badge tone={pluginStatusTone(plugin)}>{plugin.status}</Badge>
             </div>
 
             <div style={actionClusterStyle}>
@@ -269,7 +293,20 @@ function ExtensionList({
                   ) : null}
                 </div>
 
-                {plugin.extensionType === 'workflow' ? (
+                <div style={actionClusterStyle}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={pluginManagerModel?.isBusy}
+                    onClick={() => togglePluginEnabled(plugin, onSetPluginEnabled)}
+                  >
+                    {plugin.enabled === false
+                      ? translateHost(locale, 'extensions.enable')
+                      : translateHost(locale, 'extensions.disable')}
+                  </Button>
+                </div>
+
+                {plugin.origin === 'installed' ? (
                   <div style={actionClusterStyle}>
                     <Button
                       variant="danger"
@@ -304,6 +341,7 @@ export function ExtensionsSettingsPage({
   pluginSettingsEntries,
   onInstallPluginDirectory,
   onInstallPluginZip,
+  onSetPluginEnabled,
   onUninstallPlugin,
   onRefreshPlugins,
 }: ExtensionsSettingsPageProps) {
@@ -346,6 +384,7 @@ export function ExtensionsSettingsPage({
                 onToggleExpanded={(pluginId) => {
                   setExpandedPluginId((current) => current === pluginId ? null : pluginId)
                 }}
+                onSetPluginEnabled={onSetPluginEnabled}
                 onUninstallPlugin={onUninstallPlugin}
               />
             </div>

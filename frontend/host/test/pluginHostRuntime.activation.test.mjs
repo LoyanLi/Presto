@@ -210,6 +210,95 @@ test('loadHostPlugins keeps workflow plugins available when host only provides d
   assert.equal(result.managerModel.plugins[0]?.status, 'ready')
 })
 
+test('loadHostPlugins keeps disabled plugins in management while removing runtime surfaces', async () => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: '/tmp/plugins',
+      plugins: [
+        {
+          pluginId: 'official.import-workflow',
+          displayName: 'Import Workflow',
+          version: '1.0.0',
+          pluginRoot: '/tmp/plugins/official.import-workflow',
+          entryPath: '/tmp/plugins/official.import-workflow/dist/missing-entry.mjs',
+          manifest: {
+            pluginId: 'official.import-workflow',
+            extensionType: 'workflow',
+            version: '1.0.0',
+            hostApiVersion: '0.1.0',
+            supportedDaws: ['pro_tools'],
+            uiRuntime: 'react18',
+            displayName: 'Import Workflow',
+            description: 'Official import workflow plugin.',
+            entry: 'dist/missing-entry.mjs',
+            pages: [
+              {
+                pageId: 'import-workflow.page.main',
+                path: '/plugins/import-workflow',
+                title: 'Import Workflow',
+                mount: 'workspace',
+                componentExport: 'ImportWorkflowPage',
+              },
+            ],
+            settingsPages: [
+              {
+                pageId: 'import-workflow.page.settings',
+                title: 'Import Workflow Settings',
+                storageKey: 'workflow.import.settings',
+                loadExport: 'loadSettings',
+                saveExport: 'saveSettings',
+                defaults: {
+                  enabled: true,
+                },
+                sections: [],
+              },
+            ],
+            requiredCapabilities: [],
+            adapterModuleRequirements: [],
+            capabilityRequirements: [],
+          },
+          settingsPages: [
+            {
+              pageId: 'import-workflow.page.settings',
+              title: 'Import Workflow Settings',
+              storageKey: 'workflow.import.settings',
+              loadExport: 'loadSettings',
+              saveExport: 'saveSettings',
+              defaults: {
+                enabled: true,
+              },
+              sections: [],
+            },
+          ],
+          loadable: true,
+          enabled: false,
+        },
+      ],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: true, paths: [] }),
+      },
+    },
+  })
+
+  assert.deepEqual(result.homeEntries, [])
+  assert.deepEqual(result.automationEntries, [])
+  assert.deepEqual(result.pages, [])
+  assert.deepEqual(result.managerModel.settingsEntries, [])
+  assert.deepEqual(result.managerModel.issues, [])
+  assert.equal(result.managerModel.plugins[0]?.status, 'disabled')
+  assert.equal(result.managerModel.plugins[0]?.enabled, false)
+})
+
 test('loadHostPlugins injects page-scoped host folder picking into workflow pages', async (t) => {
   const { loadHostPlugins } = await loadPluginHostRuntime()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))

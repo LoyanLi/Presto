@@ -264,6 +264,8 @@ async function handleRequest(request: RpcRequest): Promise<unknown> {
         zipPath: String(request.args?.[0] ?? ''),
         overwrite: Boolean(request.args?.[1]),
       })
+    case 'plugins.set-enabled':
+      return pluginHostService.setEnabled(String(request.args?.[0] ?? ''), Boolean(request.args?.[1]))
     case 'plugins.uninstall':
       return pluginHostService.uninstall(String(request.args?.[0] ?? ''))
     case 'automation.definition.list':
