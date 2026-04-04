@@ -71,6 +71,16 @@ export interface TrackSoloSetRequest {
   enabled: boolean
 }
 
+export interface TrackHiddenSetRequest {
+  trackNames: string[]
+  enabled: boolean
+}
+
+export interface TrackInactiveSetRequest {
+  trackNames: string[]
+  enabled: boolean
+}
+
 export interface ClipSelectAllOnTrackRequest {
   trackName: string
 }
@@ -269,6 +279,8 @@ export interface CapabilityRequestMap {
   'track.pan.set': TrackPanSetRequest
   'track.mute.set': TrackMuteSetRequest
   'track.solo.set': TrackSoloSetRequest
+  'track.hidden.set': TrackHiddenSetRequest
+  'track.inactive.set': TrackInactiveSetRequest
   'clip.selectAllOnTrack': ClipSelectAllOnTrackRequest
   'transport.play': TransportPlayRequest
   'transport.stop': TransportStopRequest

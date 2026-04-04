@@ -27,6 +27,8 @@ import type {
   TrackListNamesResponse,
   TrackListResponse,
   TrackSelectionGetResponse,
+  TrackHiddenSetResponse,
+  TrackInactiveSetResponse,
   TrackMuteSetResponse,
   TrackPanSetResponse,
   TrackRenameResponse,
@@ -56,6 +58,8 @@ import type {
   SessionGetSnapshotInfoRequest,
   StripSilenceExecuteRequest,
   TrackColorApplyRequest,
+  TrackHiddenSetRequest,
+  TrackInactiveSetRequest,
   TrackMuteSetRequest,
   TrackPanSetRequest,
   TrackRenameRequest,
@@ -135,6 +139,12 @@ export interface TrackClient {
   }
   solo: {
     set(request: TrackSoloSetRequest): Promise<TrackSoloSetResponse>
+  }
+  hidden: {
+    set(request: TrackHiddenSetRequest): Promise<TrackHiddenSetResponse>
+  }
+  inactive: {
+    set(request: TrackInactiveSetRequest): Promise<TrackInactiveSetResponse>
   }
 }
 

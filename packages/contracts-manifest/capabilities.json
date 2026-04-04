@@ -557,6 +557,56 @@
     "handler": "track.solo.set"
   },
   {
+    "id": "track.hidden.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道隐藏状态",
+    "requestSchema": {
+      "name": "TrackHiddenSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackHiddenSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.hidden.set"
+  },
+  {
+    "id": "track.inactive.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道 inactive 状态",
+    "requestSchema": {
+      "name": "TrackInactiveSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackInactiveSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "handler": "track.inactive.set"
+  },
+  {
     "id": "clip.selectAllOnTrack",
     "version": 1,
     "kind": "command",

@@ -358,6 +358,30 @@ def test_set_track_pan_uses_track_control_breakpoints_command() -> None:
     ]
 
 
+def test_set_track_hidden_state_uses_ptsl_track_names_request() -> None:
+    adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    command_id = adapter._resolve_command_id("SetTrackHiddenState")
+    adapter.set_track_hidden_state("Kick", True)
+
+    assert engine.command_calls == [(command_id, {"track_names": ["Kick"], "enabled": True})]
+
+
+def test_set_track_inactive_state_uses_ptsl_track_names_request() -> None:
+    adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    command_id = adapter._resolve_command_id("SetTrackInactiveState")
+    adapter.set_track_inactive_state("Bass", False)
+
+    assert engine.command_calls == [(command_id, {"track_names": ["Bass"], "enabled": False})]
+
+
 def test_set_track_pan_rejects_out_of_range_values() -> None:
     adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
     engine = FakeSelectionEngine()

@@ -7,6 +7,8 @@ def test_track_color_catalog_does_not_expose_apply_via_ui() -> None:
     capability_ids = {definition.id for definition in DEFAULT_CAPABILITY_DEFINITIONS}
 
     assert "track.color.apply" in capability_ids
+    assert "track.hidden.set" in capability_ids
+    assert "track.inactive.set" in capability_ids
     assert "automation.splitStereoToMono.execute" in capability_ids
     for capability_id in ("workflow.run.start", "import.planRunItems", "import.run.start", "export.range.set", "export.start", "export.direct.start", "export.run.start"):
         assert capability_id in capability_ids
