@@ -406,7 +406,7 @@ test('plugin host service uninstalls managed and seeded official workflow plugin
   assert.equal(postOfficialUninstall.plugins.some((plugin) => plugin.pluginId === 'official.reference'), false)
 })
 
-test('plugin host service seeds official extensions into the managed root only once', async (t) => {
+test('plugin host service reseeds official extensions when the managed copy is missing', async (t) => {
   const { createPluginHostService } = await loadServiceModule()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-official-seed-'))
   const managedRoot = path.join(sandbox, 'managed')
@@ -435,10 +435,8 @@ test('plugin host service seeds official extensions into the managed root only o
   await rm(path.join(managedRoot, 'official.import-workflow'), { recursive: true, force: true })
   await service.syncOfficialExtensions({ officialExtensionsRoot: officialRoot })
 
-  const missingAfterSecondSeed = await readFile(path.join(managedRoot, 'official.import-workflow', 'manifest.json'), 'utf8')
-    .then(() => false)
-    .catch(() => true)
-  assert.equal(missingAfterSecondSeed, true)
+  const reseededManifest = await readFile(path.join(managedRoot, 'official.import-workflow', 'manifest.json'), 'utf8')
+  assert.match(reseededManifest, /"pluginId": "official.import-workflow"/)
 })
 
 test('plugin host service refreshes seeded official extensions when package contents change without a version bump', async (t) => {
