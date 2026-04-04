@@ -1,0 +1,49 @@
+{
+  "pluginId": "official.batch-ara-backup-automation",
+  "extensionType": "automation",
+  "version": "1.0.0",
+  "hostApiVersion": "0.1.0",
+  "supportedDaws": ["pro_tools"],
+  "uiRuntime": "react18",
+  "displayName": "Batch ARA Backup Render",
+  "description": "Duplicate the selected ARA tracks as backups, hide and inactivate the duplicates, then commit ARA render on the source tracks.",
+  "entry": "dist/entry.mjs",
+  "pages": [],
+  "automationItems": [
+    {
+      "itemId": "batch-ara-backup-render.card",
+      "title": "Batch ARA Backup Render",
+      "automationType": "batchAraBackupRender",
+      "description": "Back up the selected ARA tracks, hide/inactivate the duplicates, then batch-set ARA to None with Commit.",
+      "order": 20,
+      "runnerExport": "runBatchAraBackupAutomation",
+      "optionsSchema": [
+        {
+          "optionId": "hideBackupTracks",
+          "kind": "boolean",
+          "label": "Hide backup tracks",
+          "defaultValue": true
+        },
+        {
+          "optionId": "makeBackupTracksInactive",
+          "kind": "boolean",
+          "label": "Make backup tracks inactive",
+          "defaultValue": true
+        }
+      ]
+    }
+  ],
+  "requiredCapabilities": [
+    "track.selection.get",
+    "track.hidden.set",
+    "track.inactive.set"
+  ],
+  "adapterModuleRequirements": [
+    { "moduleId": "automation", "minVersion": "2025.10.0" }
+  ],
+  "capabilityRequirements": [
+    { "capabilityId": "track.selection.get", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.hidden.set", "minVersion": "2025.10.0" },
+    { "capabilityId": "track.inactive.set", "minVersion": "2025.10.0" }
+  ]
+}
