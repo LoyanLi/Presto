@@ -1,18 +1,11 @@
-export type AutomationStepStatus = 'pending' | 'running' | 'succeeded' | 'failed'
+import type { PluginAutomationRunResult, PluginAutomationStepStatus } from '@presto/contracts'
 
-export interface AutomationStepState {
+export type AutomationStepState = {
   id: string
-  status: AutomationStepStatus
+  status: PluginAutomationStepStatus
   message?: string
 }
 
-export interface SplitStereoToMonoResultItemState {
-  sourceTrackName: string
-  keptTrackName: string
-  deletedTrackNames: string[]
-}
-
-export interface SplitStereoToMonoResultState {
-  items?: SplitStereoToMonoResultItemState[]
+export interface AutomationRunState extends PluginAutomationRunResult {
   error?: string
 }

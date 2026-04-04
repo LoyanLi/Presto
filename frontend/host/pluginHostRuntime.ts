@@ -3,6 +3,8 @@ import { convertFileSrc, isTauri } from '@tauri-apps/api/core'
 
 import type {
   PluginAutomationItemDefinition,
+  PluginAutomationRunner,
+  PluginAutomationRunnerContext,
   PluginLocaleContext,
   PluginLogger,
   PluginPageHost,
@@ -45,7 +47,7 @@ export interface LoadHostPluginsInput {
   catalog: PluginRuntimeListResult
   locale: PluginLocaleContext
   presto: PrestoClient
-  runtime: Pick<PrestoRuntime, 'dialog'>
+  runtime: Pick<PrestoRuntime, 'dialog'> & Partial<Pick<PrestoRuntime, 'macAccessibility'>>
 }
 
 type PluginModuleNamespace = WorkflowPluginModule & Record<string, unknown>
@@ -54,6 +56,36 @@ type SettingsSaveFunction = (
   storage: PluginStorage,
   settings: Record<string, unknown>,
 ) => Promise<Record<string, unknown>> | Record<string, unknown>
+
+const unavailableMacAccessibility = {
+  async preflight() {
+    return {
+      ok: false,
+      trusted: false,
+      error: 'macAccessibility runtime is unavailable in this host shell.',
+    }
+  },
+  async runScript() {
+    return {
+      ok: false,
+      stdout: '',
+      error: {
+        code: 'MAC_ACCESSIBILITY_UNAVAILABLE',
+        message: 'macAccessibility runtime is unavailable in this host shell.',
+      },
+    }
+  },
+  async runFile() {
+    return {
+      ok: false,
+      stdout: '',
+      error: {
+        code: 'MAC_ACCESSIBILITY_UNAVAILABLE',
+        message: 'macAccessibility runtime is unavailable in this host shell.',
+      },
+    }
+  },
+}
 
 const inMemoryStorage = new Map<string, string>()
 
@@ -342,6 +374,16 @@ function ensurePluginStyle(pluginId: string, styleEntryPath: string | undefined,
   document.head.append(link)
 }
 
+function createAutomationRunnerContext(
+  context: ReturnType<typeof createPluginRuntime>,
+  runtime: LoadHostPluginsInput['runtime'],
+): PluginAutomationRunnerContext {
+  return {
+    ...context,
+    macAccessibility: runtime.macAccessibility ?? unavailableMacAccessibility,
+  }
+}
+
 export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<LoadedHostPlugins> {
   const automationEntries: HostAutomationEntry[] = []
   const homeEntries: HostPluginHomeEntry[] = []
@@ -431,8 +473,25 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     ensurePluginStyle(plugin.pluginId, plugin.manifest.styleEntry, plugin.pluginRoot)
     mountPluginNavigation(plugin.manifest)
     mountPluginCommands(plugin.manifest)
+    const automationRunnerContext = createAutomationRunnerContext(context, input.runtime)
 
     for (const automationItem of (plugin.manifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {
+      const runner = loaded.module[automationItem.runnerExport]
+      if (typeof runner !== 'function') {
+        issues.push(
+          formatPluginIssue({
+            category: 'entry_load',
+            reason: `missing_automation_runner_export:${automationItem.runnerExport}`,
+            pluginRoot: plugin.pluginRoot,
+          }),
+        )
+        const targetRecord = pluginRecords.find((record) => record.pluginId === plugin.pluginId)
+        if (targetRecord) {
+          targetRecord.status = 'error'
+        }
+        continue
+      }
+
       automationEntries.push({
         pluginId: plugin.pluginId,
         itemId: automationItem.itemId,
@@ -440,6 +499,9 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         description: automationItem.description,
         automationType: automationItem.automationType,
         order: automationItem.order,
+        optionsSchema: automationItem.optionsSchema ?? [],
+        execute: async (automationInput) =>
+          (runner as PluginAutomationRunner)(automationRunnerContext, automationInput),
       })
     }
 

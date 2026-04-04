@@ -71,6 +71,25 @@ function createPluginProps() {
         automationType: 'splitStereoToMono',
         description: 'Use the current Pro Tools selection and keep the chosen channel.',
         order: 10,
+        optionsSchema: [],
+        execute: async () => ({ steps: [], summary: 'split done' }),
+      },
+      {
+        pluginId: 'installed.batch-ara-render',
+        itemId: 'batch-ara-render.card',
+        title: 'Batch ARA Render',
+        automationType: 'batchAraRender',
+        description: 'Duplicate selected tracks, hide backups, then render ARA.',
+        order: 20,
+        optionsSchema: [
+          {
+            optionId: 'hideBackupTracks',
+            kind: 'boolean',
+            label: 'Hide backup tracks',
+            defaultValue: true,
+          },
+        ],
+        execute: async () => ({ steps: [], summary: 'ara done' }),
       },
     ],
     pluginManagerModel: {
@@ -115,6 +134,17 @@ function createPluginProps() {
           origin: 'official',
           status: 'ready',
           description: 'Split the selected stereo track into mono and keep the chosen channel.',
+          adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
+        },
+        {
+          pluginId: 'installed.batch-ara-render',
+          extensionType: 'automation',
+          displayName: 'Batch ARA Render',
+          version: '1.0.0',
+          origin: 'installed',
+          status: 'ready',
+          description: 'Duplicate selected tracks, hide backups, then render ARA.',
+          pluginRoot: '/Users/test/Library/Application Support/Presto/extensions/installed.batch-ara-render',
           adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
         },
       ],
@@ -285,6 +315,33 @@ test('home surface renders plugin launch cards and settings surface renders plug
 
   assert.match(automationMarkup, /Automation/)
   assert.doesNotMatch(automationMarkup, /Single-shot automation tools live here/)
+})
+
+test('automation surface renders installed automation entries instead of a split-stereo hardcode', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const sharedProps = {
+    developerPresto: {},
+    developerRuntime: {},
+    ...createPluginProps(),
+  }
+
+  const automationMarkup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('automation'),
+      ...sharedProps,
+    }),
+  )
+
+  assert.match(automationMarkup, /Split Stereo To Mono/)
+  assert.match(automationMarkup, /Batch ARA Render/)
+  assert.match(automationMarkup, /Hide backup tracks/)
+
+  const automationSurfaceSource = await readFile(
+    path.join(repoRoot, 'frontend/host/automation/AutomationSurface.tsx'),
+    'utf8',
+  )
+  assert.doesNotMatch(automationSurfaceSource, /automationType === 'splitStereoToMono'/)
+  assert.match(automationSurfaceSource, /automationEntries\.map/)
 })
 
 test('workflow and automation entries stay visible even when the live daw adapter snapshot lacks required modules', async () => {

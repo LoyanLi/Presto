@@ -15,7 +15,20 @@
       "title": "Split Stereo To Mono",
       "automationType": "splitStereoToMono",
       "description": "Use the current Pro Tools selection and keep either the left or right mono channel.",
-      "order": 10
+      "order": 10,
+      "runnerExport": "runSplitStereoToMono",
+      "optionsSchema": [
+        {
+          "optionId": "keepChannel",
+          "kind": "select",
+          "label": "Keep Channel",
+          "defaultValue": "left",
+          "options": [
+            { "value": "left", "label": "Left" },
+            { "value": "right", "label": "Right" }
+          ]
+        }
+      ]
     }
   ],
   "requiredCapabilities": [

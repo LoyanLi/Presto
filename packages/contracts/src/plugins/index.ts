@@ -1,17 +1,29 @@
 export type {
+  PluginAutomationBooleanOptionDefinition,
   PluginAutomationItemDefinition,
+  PluginAutomationOptionDefinition,
   PluginCommandDefinition,
   PluginNavigationItem,
   PluginPageDefinition,
   PluginPageHost,
   PluginPageProps,
+  PluginAutomationSelectOptionDefinition,
+  PluginAutomationSelectOptionFieldDefinition,
 } from './page'
 export type {
   PluginAdapterModuleRequirement,
   PluginCapabilityRequirement,
   WorkflowPluginManifest,
 } from './manifest'
-export type { WorkflowPluginModule } from './module'
+export type {
+  PluginAutomationMacAccessibility,
+  PluginAutomationRunResult,
+  PluginAutomationRunner,
+  PluginAutomationRunnerContext,
+  PluginAutomationStepResult,
+  PluginAutomationStepStatus,
+  WorkflowPluginModule,
+} from './module'
 export type {
   WorkflowConditionDefinition,
   WorkflowDefinition,

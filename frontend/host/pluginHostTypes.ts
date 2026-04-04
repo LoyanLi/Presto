@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react'
 import type {
   DawTarget,
+  PluginAutomationOptionDefinition,
+  PluginAutomationRunResult,
   PluginAdapterModuleRequirement,
   PluginCapabilityRequirement,
   WorkflowSettingsSectionDefinition,
@@ -25,6 +27,8 @@ export interface HostAutomationEntry {
   description?: string
   automationType: string
   order?: number
+  optionsSchema: PluginAutomationOptionDefinition[]
+  execute(input: Record<string, unknown>): Promise<PluginAutomationRunResult>
 }
 
 export interface HostWorkspacePageRoute {
