@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -7,17 +7,18 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '..')
 const outputRoot = path.join(repoRoot, 'src-tauri', 'resources', 'backend')
 const pythonRoot = path.join(outputRoot, 'python')
+const stagingPythonRoot = path.join(outputRoot, 'python.staging')
 const runtimeRequirementsPath = path.join(repoRoot, 'backend', 'requirements-runtime.txt')
 const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resources')
 const DEV_ONLY_PACKAGES = ['pytest', 'flake8', 'pyflakes', 'pycodestyle', 'mccabe', 'pluggy', 'iniconfig', 'pygments', 'packaging']
 const UNUSED_VENV_BINARIES = ['pip', 'pip3', 'pip3.13', 'activate', 'activate.csh', 'activate.fish', 'Activate.ps1']
 
-async function pruneBundledPython() {
+async function pruneBundledPython(root) {
   await Promise.all(
-    UNUSED_VENV_BINARIES.map((name) => rm(path.join(pythonRoot, 'bin', name), { force: true })),
+    UNUSED_VENV_BINARIES.map((name) => rm(path.join(root, 'bin', name), { force: true })),
   )
 
-  const libRoot = path.join(pythonRoot, 'lib')
+  const libRoot = path.join(root, 'lib')
   const libEntries = await readdir(libRoot, { withFileTypes: true })
 
   for (const entry of libEntries) {
@@ -87,22 +88,43 @@ async function writeRuntimeMetadata() {
   )
 }
 
+async function validateBundledPython(root) {
+  const bundledPython = path.join(root, 'bin', 'python3')
+  await run(bundledPython, ['-c', 'import fastapi, uvicorn, pydantic, anyio, ptsl'])
+}
+
+async function hasUsableBundledPython() {
+  try {
+    await validateBundledPython(pythonRoot)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function main() {
   const pythonBin = resolveBuildPythonBin()
 
   await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
-  await rm(pythonRoot, { recursive: true, force: true })
-  await mkdir(outputRoot, { recursive: true })
-  await run(pythonBin, ['-m', 'venv', '--copies', pythonRoot])
 
-  const bundledPip = path.join(pythonRoot, 'bin', 'pip3')
-  const bundledPython = path.join(pythonRoot, 'bin', 'python3')
+  if (await hasUsableBundledPython()) {
+    await writeRuntimeMetadata()
+    return
+  }
+
+  await mkdir(outputRoot, { recursive: true })
+  await rm(stagingPythonRoot, { recursive: true, force: true })
+  await run(pythonBin, ['-m', 'venv', '--copies', stagingPythonRoot])
+
+  const bundledPip = path.join(stagingPythonRoot, 'bin', 'pip3')
 
   await run(bundledPip, ['install', '--upgrade', 'pip'])
   await run(bundledPip, ['install', '--no-cache-dir', '-r', runtimeRequirementsPath])
   await run(bundledPip, ['uninstall', '--yes', ...DEV_ONLY_PACKAGES])
-  await run(bundledPython, ['-c', 'import fastapi, uvicorn, pydantic, anyio, ptsl'])
-  await pruneBundledPython()
+  await validateBundledPython(stagingPythonRoot)
+  await pruneBundledPython(stagingPythonRoot)
+  await rm(pythonRoot, { recursive: true, force: true })
+  await rename(stagingPythonRoot, pythonRoot)
   await writeRuntimeMetadata()
 }
 
