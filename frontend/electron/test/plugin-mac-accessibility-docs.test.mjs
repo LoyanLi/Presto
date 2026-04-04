@@ -15,7 +15,7 @@ test('plugin docs describe the current plugin protocol', async () => {
   const guideDoc = await readDoc('docs/plugin-development/plugin-development-spec.md')
 
   assert.match(guideDoc, /插件开发规范/)
-  assert.match(guideDoc, /当前 `0\.3\.0-alpha\.2` 代码已经成立的插件协议/)
+  assert.match(guideDoc, /当前 `0\.3\.0` 代码已经成立的插件协议/)
   assert.match(guideDoc, /插件负责定义，不负责直接执行宿主或外部系统操作/)
 })
 

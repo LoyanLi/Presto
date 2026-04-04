@@ -60,7 +60,7 @@ Node sidecar runtime
 
 ## 当前成立的边界
 
-- 应用版本基线是 `0.3.0-alpha.2`。
+- 应用版本基线是 `0.3.0`。
 - 当前实际支持的 DAW 目标是 `pro_tools`。
 - 插件能力边界由 manifest 和 capability 白名单共同决定。
 - `packages/contracts` 是跨 TypeScript、Python、插件运行时共享的协议面。
@@ -144,6 +144,13 @@ npm run tauri:build:x64
 - `src-tauri/target/aarch64-apple-darwin/release/bundle/`
 - `src-tauri/target/x86_64-apple-darwin/release/bundle/`
 - 默认本机目标仍输出到 `src-tauri/target/release/bundle/`
+
+### macOS 26 发布图标
+
+- `src-tauri/tauri.conf.json` 仍然保留 `icons/icon.icns`，以满足 Tauri 默认打包链和开发构建的需求。
+- 当前发布链直接复用 `v0.2.x` Electron 成功产物里的 macOS 图标资源：`assets/macos-icon/arm64/Assets.car`、`assets/macos-icon/x64/Assets.car`，以及旧包对应的 `icon.icns`。
+- `npm run tauri:build` 之后、首轮签名之前会调用 `scripts/inject-macos-app-icon.mjs --app <build/…/Presto.app>`，该脚本按目标架构复制预编译的 `Assets.car`，同步 `icon.icns`，并把 `Info.plist` 对齐到旧 Electron 包的 `CFBundleIconName=Icon` 与 `CFBundleIconFile=icon.icns`。
+- 这条路径是对旧 Electron 发布包最终 bundle 结果的直接复用，不依赖当前机器重新编译 `.icon`。
 
 ## 未签名 App 打开方式
 

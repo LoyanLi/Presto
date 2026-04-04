@@ -6,7 +6,7 @@
 
 仓库中可以直接确认的版本事实：
 
-- App Version：`0.3.0-alpha.2`
+- App Version：`0.3.0`
 - App Name：`Presto`
 - Backend FastAPI Version：`0.1.0`
 - Capability Schema Version：`1`

@@ -1,4 +1,5 @@
 import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +8,9 @@ import { spawn } from 'node:child_process'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '..')
 const targetTriple = process.env.PRESTO_TAURI_TARGET?.trim() || (process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin')
+const rustToolchainRoot = path.join(os.homedir(), '.rustup', 'toolchains', 'stable-aarch64-apple-darwin', 'bin')
+const rustupCargoPath = path.join(rustToolchainRoot, 'cargo')
+const rustupRustcPath = path.join(rustToolchainRoot, 'rustc')
 
 function resolveArtifactArch(target) {
   if (target === 'aarch64-apple-darwin') {
@@ -18,6 +22,17 @@ function resolveArtifactArch(target) {
   throw new Error(`unsupported_tauri_target:${target}`)
 }
 
+function resolveRustToolchainEnv() {
+  if (!existsSync(rustupCargoPath) || !existsSync(rustupRustcPath)) {
+    return {}
+  }
+
+  return {
+    CARGO: rustupCargoPath,
+    RUSTC: rustupRustcPath,
+  }
+}
+
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -25,6 +40,7 @@ function run(command, args, options = {}) {
       stdio: 'inherit',
       env: {
         ...process.env,
+        ...resolveRustToolchainEnv(),
         PRESTO_TAURI_TARGET: targetTriple,
       },
       ...options,
@@ -54,6 +70,7 @@ const releaseAppPath = path.join(releaseRoot, `${productName}.app`)
 const releaseDmgPath = path.join(releaseRoot, `${productName}_${version}_${artifactArch}.dmg`)
 
 await run('npx', ['tauri', 'build', '--target', targetTriple, '--bundles', 'app', '--no-sign'])
+await run('node', ['scripts/inject-macos-app-icon.mjs', '--app', appPath])
 await run('codesign', ['--force', '--deep', '--sign', '-', appPath])
 await run('codesign', ['--verify', '--deep', '--strict', appPath])
 
