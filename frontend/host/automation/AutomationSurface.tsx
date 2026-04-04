@@ -27,6 +27,7 @@ const gridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
   gap: 16,
+  alignItems: 'start',
 }
 
 const emptyStateStyle: CSSProperties = {

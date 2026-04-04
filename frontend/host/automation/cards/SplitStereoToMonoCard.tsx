@@ -11,6 +11,7 @@ const cardStyle = {
   display: 'grid',
   gap: 16,
   minWidth: 0,
+  alignSelf: 'start',
   padding: 24,
   borderRadius: 24,
   border: `1px solid ${hostShellColors.border}`,
