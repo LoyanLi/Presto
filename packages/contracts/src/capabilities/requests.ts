@@ -48,7 +48,8 @@ export interface TrackRenameRequest {
 }
 
 export interface TrackSelectRequest {
-  trackName: string
+  trackName?: string
+  trackNames?: string[]
 }
 
 export interface TrackColorApplyRequest {

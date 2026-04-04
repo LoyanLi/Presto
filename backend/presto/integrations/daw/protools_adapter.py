@@ -1544,18 +1544,21 @@ class ProToolsDawAdapter:
             ) from exc
 
     def set_track_hidden_state(self, track_name: str, hidden: bool) -> None:
+        self.set_track_hidden_state_batch([track_name], hidden)
+
+    def set_track_hidden_state_batch(self, track_names: list[str], hidden: bool) -> None:
         engine = self._require_engine()
         self.ensure_session_open()
-        normalized_track_name = str(track_name).strip()
-        if not normalized_track_name:
+        normalized_track_names = [str(track_name).strip() for track_name in track_names if str(track_name).strip()]
+        if not normalized_track_names:
             raise PrestoError(
                 "TRACK_NAME_REQUIRED",
-                "Track name is required before updating hidden state.",
+                "At least one track name is required before updating hidden state.",
                 source="capability",
                 retryable=False,
                 details=self._raw_error_details(
                     "TRACK_NAME_REQUIRED",
-                    "Track name is required before updating hidden state.",
+                    "At least one track name is required before updating hidden state.",
                 ),
                 capability="track.hidden.set",
                 adapter="pro_tools",
@@ -1580,19 +1583,19 @@ class ProToolsDawAdapter:
         try:
             client.run_command(
                 self._resolve_command_id("SetTrackHiddenState"),
-                {"track_names": [normalized_track_name], "enabled": bool(hidden)},
+                {"track_names": normalized_track_names, "enabled": bool(hidden)},
             )
         except Exception as exc:
             raise PrestoError(
                 "TRACK_HIDDEN_SET_FAILED",
-                str(exc) or f"Failed to update hidden state for '{normalized_track_name}'.",
+                str(exc) or "Failed to update hidden state for one or more tracks.",
                 source="runtime",
                 retryable=False,
                 details=self._raw_error_details(
                     "TRACK_HIDDEN_SET_FAILED",
-                    str(exc) or f"Failed to update hidden state for '{normalized_track_name}'.",
+                    str(exc) or "Failed to update hidden state for one or more tracks.",
                     address=self.address,
-                    track_name=normalized_track_name,
+                    track_names=normalized_track_names,
                     enabled=bool(hidden),
                     exception_type=type(exc).__name__,
                     raw_exception=str(exc) or None,
@@ -1602,18 +1605,21 @@ class ProToolsDawAdapter:
             ) from exc
 
     def set_track_inactive_state(self, track_name: str, inactive: bool) -> None:
+        self.set_track_inactive_state_batch([track_name], inactive)
+
+    def set_track_inactive_state_batch(self, track_names: list[str], inactive: bool) -> None:
         engine = self._require_engine()
         self.ensure_session_open()
-        normalized_track_name = str(track_name).strip()
-        if not normalized_track_name:
+        normalized_track_names = [str(track_name).strip() for track_name in track_names if str(track_name).strip()]
+        if not normalized_track_names:
             raise PrestoError(
                 "TRACK_NAME_REQUIRED",
-                "Track name is required before updating inactive state.",
+                "At least one track name is required before updating inactive state.",
                 source="capability",
                 retryable=False,
                 details=self._raw_error_details(
                     "TRACK_NAME_REQUIRED",
-                    "Track name is required before updating inactive state.",
+                    "At least one track name is required before updating inactive state.",
                 ),
                 capability="track.inactive.set",
                 adapter="pro_tools",
@@ -1638,19 +1644,19 @@ class ProToolsDawAdapter:
         try:
             client.run_command(
                 self._resolve_command_id("SetTrackInactiveState"),
-                {"track_names": [normalized_track_name], "enabled": bool(inactive)},
+                {"track_names": normalized_track_names, "enabled": bool(inactive)},
             )
         except Exception as exc:
             raise PrestoError(
                 "TRACK_INACTIVE_SET_FAILED",
-                str(exc) or f"Failed to update inactive state for '{normalized_track_name}'.",
+                str(exc) or "Failed to update inactive state for one or more tracks.",
                 source="runtime",
                 retryable=False,
                 details=self._raw_error_details(
                     "TRACK_INACTIVE_SET_FAILED",
-                    str(exc) or f"Failed to update inactive state for '{normalized_track_name}'.",
+                    str(exc) or "Failed to update inactive state for one or more tracks.",
                     address=self.address,
-                    track_name=normalized_track_name,
+                    track_names=normalized_track_names,
                     enabled=bool(inactive),
                     exception_type=type(exc).__name__,
                     raw_exception=str(exc) or None,
