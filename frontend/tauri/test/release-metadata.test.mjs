@@ -20,7 +20,7 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri/tauri.conf.json'), 'utf8'))
 
-  assert.equal(packageJson.version, '0.3.0')
+  assert.equal(packageJson.version, '0.3.1')
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.scripts?.['tauri:prepare:python'], 'node scripts/prepare-tauri-python.mjs')
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')

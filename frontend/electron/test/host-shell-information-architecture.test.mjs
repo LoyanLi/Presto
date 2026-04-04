@@ -230,9 +230,16 @@ test('primary sidebar source uses the custom P logo and keeps the original small
 test('settings shell source keeps the settings viewport and columns scrollable', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostSettingsSurface.tsx'), 'utf8')
 
-  assert.match(source, /const settingsViewportStyle:[\s\S]*overflowY:\s*'auto'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*gridTemplateRows:\s*'minmax\(0, 1fr\)'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*height:\s*'100%'/)
+  assert.match(source, /const settingsViewportStyle:[\s\S]*overflow:\s*'hidden'/)
+  assert.match(source, /const bodyStyle:[\s\S]*gridTemplateRows:\s*'minmax\(0, 1fr\)'/)
+  assert.match(source, /const bodyStyle:[\s\S]*height:\s*'100%'/)
   assert.match(source, /const navStyle:[\s\S]*overflowY:\s*'auto'/)
-  assert.match(source, /const contentStyle:[\s\S]*overflowY:\s*'auto'/)
+  assert.match(source, /const contentStyle:[\s\S]*gridTemplateRows:\s*'auto minmax\(0, 1fr\)'/)
+  assert.match(source, /const contentStyle:[\s\S]*height:\s*'100%'/)
+  assert.match(source, /const contentStyle:[\s\S]*overflow:\s*'hidden'/)
+  assert.match(source, /const contentBodyStyle:[\s\S]*overflowY:\s*'auto'/)
 })
 
 test('workflows page centralizes import and export plugin entry points', async () => {

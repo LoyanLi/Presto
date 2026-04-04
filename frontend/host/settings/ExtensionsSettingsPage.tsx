@@ -30,6 +30,13 @@ const actionRowStyle: CSSProperties = {
   alignItems: 'center',
 }
 
+const pageStackStyle: CSSProperties = {
+  display: 'grid',
+  gap: 24,
+  minWidth: 0,
+  alignContent: 'start',
+}
+
 const groupStackStyle: CSSProperties = {
   display: 'grid',
   gap: 24,
@@ -351,7 +358,7 @@ export function ExtensionsSettingsPage({
   const titleKey = extensionType === 'workflow' ? 'extensions.group.workflow' : 'extensions.group.automation'
 
   return (
-    <>
+    <div style={pageStackStyle}>
       <SettingsSection title={translateHost(locale, 'extensions.management')}>
         <div style={actionRowStyle}>
           <Button variant="secondary" onClick={() => void onRefreshPlugins?.()} disabled={pluginManagerModel?.isBusy}>
@@ -406,6 +413,6 @@ export function ExtensionsSettingsPage({
           )}
         />
       )}
-    </>
+    </div>
   )
 }
