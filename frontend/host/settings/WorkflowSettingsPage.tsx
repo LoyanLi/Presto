@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import type { HostPluginSettingsEntry } from '../pluginHostTypes'
+import { formatHostErrorMessage } from '../errorDisplay'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
@@ -115,7 +116,7 @@ export function WorkflowSettingsPage({
           return
         }
         setStatus('error')
-        setErrorMessage(error instanceof Error ? error.message : translateHost(locale, 'settings.workflow.loadError'))
+        setErrorMessage(formatHostErrorMessage(error, translateHost(locale, 'settings.workflow.loadError')))
       })
 
     return () => {
@@ -206,7 +207,7 @@ export function WorkflowSettingsPage({
                 })
                 .catch((error) => {
                   setStatus('error')
-                  setErrorMessage(error instanceof Error ? error.message : translateHost(locale, 'settings.workflow.error'))
+                  setErrorMessage(formatHostErrorMessage(error, translateHost(locale, 'settings.workflow.error')))
                 })
             }}
           >

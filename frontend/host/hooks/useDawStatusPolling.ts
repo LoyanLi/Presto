@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
+import { formatHostErrorMessage } from '../errorDisplay'
 import { translateHost } from '../i18n'
 
 type HostDawStatusState = {
@@ -111,7 +112,7 @@ export function useDawStatusPolling({
             ...current,
             connected: false,
             statusLabel: translateHost(resolvedLocale, 'general.disconnected'),
-            lastError: error instanceof Error ? error.message : 'Failed to read DAW connection status.',
+            lastError: formatHostErrorMessage(error, 'Failed to read DAW connection status.'),
           }))
         }
       } finally {
