@@ -85,7 +85,7 @@ test('tauri python prep stages a fresh bundled runtime before replacing the exis
   assert.match(prepareSource, /await rm\(stagingPythonRoot,\s*\{\s*recursive: true,\s*force: true\s*\}\s*\)/)
   assert.match(prepareSource, /await rename\(stagingPythonRoot, pythonRoot\)/)
   assert.match(prepareSource, /async function hasUsableBundledPython\(\)/)
-  assert.match(prepareSource, /if \(await hasUsableBundledPython\(\)\) \{\s*await writeRuntimeMetadata\(\)\s*return\s*\}/)
+  assert.match(prepareSource, /if \(await hasUsableBundledPython\(\)\) \{\s*await pruneBundledPython\(pythonRoot\)\s*await writeRuntimeMetadata\(\)\s*return\s*\}/)
   assert.doesNotMatch(prepareSource, /await rm\(pythonRoot, \{ recursive: true, force: true \} \)\s*await mkdir\(outputRoot, \{ recursive: true \} \)\s*await run\(pythonBin, \['-m', 'venv', '--copies', pythonRoot\]\)/)
 })
 

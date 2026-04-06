@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react'
 
-import type { PrestoClient } from '@presto/contracts'
+import { CAPABILITY_REGISTRY, type PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { BackendCapabilityDefinition } from '@presto/sdk-runtime/clients/backend'
 import {
@@ -257,6 +257,28 @@ function createExecutionState(capability: DeveloperCapabilityOverlay): Capabilit
     errorText: '',
     phase: WRITE_STATUSES.has(capability.status) ? 'idle' : 'disabled',
   }
+}
+
+function createSeedDefinitions(
+  overlays: readonly DeveloperCapabilityOverlay[],
+): DeveloperCapabilityDefinition[] {
+  const overlayById = new Map(overlays.map((capability) => [capability.id, capability]))
+
+  return CAPABILITY_REGISTRY
+    .filter((capability) => CORE_CONSOLE_CAPABILITY_ID_SET.has(capability.id as DeveloperCapabilityId))
+    .flatMap((capability) => {
+      const overlay = overlayById.get(capability.id as DeveloperCapabilityId)
+      if (!overlay) {
+        return []
+      }
+
+      return [
+        {
+          ...capability,
+          ...overlay,
+        },
+      ]
+    })
 }
 
 function parsePayload(text: string): unknown {
@@ -581,12 +603,13 @@ export function DeveloperCapabilityConsole({
     () => new Map(DEVELOPER_CAPABILITIES.map((capability) => [capability.id, capability])),
     [],
   )
+  const seededDefinitions = useMemo(() => createSeedDefinitions(DEVELOPER_CAPABILITIES), [])
   const filter: CapabilityFilter = 'all'
   const [searchQuery, setSearchQuery] = useState('')
-  const [definitions, setDefinitions] = useState<DeveloperCapabilityDefinition[]>([])
+  const [definitions, setDefinitions] = useState<DeveloperCapabilityDefinition[]>(() => seededDefinitions)
   const [catalogErrorText, setCatalogErrorText] = useState('')
   const [activeCapabilityId, setActiveCapabilityId] = useState<DeveloperCapabilityId | null>(
-    null,
+    () => seededDefinitions[0]?.id ?? null,
   )
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [states, setStates] = useState<Record<string, CapabilityExecutionState>>({})
@@ -625,14 +648,14 @@ export function DeveloperCapabilityConsole({
           return
         }
 
-        setDefinitions([])
+        setDefinitions(seededDefinitions)
         setCatalogErrorText(pretty(error))
       })
 
     return () => {
       cancelled = true
     }
-  }, [capabilityOverlayById, developerRuntime])
+  }, [capabilityOverlayById, developerRuntime, seededDefinitions])
 
   useEffect(() => {
     setStates((current) => {

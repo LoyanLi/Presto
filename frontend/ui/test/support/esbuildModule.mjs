@@ -1,4 +1,4 @@
-import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { access, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -52,7 +52,7 @@ export async function buildAndImportModule({
   const outfile = path.join(tempDir, outfileName)
 
   try {
-    await symlink(path.join(repoRoot, 'node_modules'), path.join(tempDir, 'node_modules'), 'dir')
+    await symlink(await resolveNodeModulesRoot(repoRoot), path.join(tempDir, 'node_modules'), 'dir')
     await esbuild.build({
       entryPoints: [path.join(repoRoot, entryPoint)],
       bundle: true,
@@ -74,4 +74,25 @@ export async function buildAndImportModule({
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
+}
+
+async function resolveNodeModulesRoot(repoRoot) {
+  const candidates = [path.join(repoRoot, 'node_modules')]
+  let current = path.resolve(repoRoot, '..')
+
+  while (current !== path.dirname(current)) {
+    candidates.push(path.join(current, 'node_modules'))
+    current = path.dirname(current)
+  }
+
+  for (const candidate of candidates) {
+    try {
+      await access(candidate)
+      return candidate
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error(`node_modules_not_found_for:${repoRoot}`)
 }

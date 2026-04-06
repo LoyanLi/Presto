@@ -13,6 +13,27 @@ const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resourc
 const DEV_ONLY_PACKAGES = ['pytest', 'flake8', 'pyflakes', 'pycodestyle', 'mccabe', 'pluggy', 'iniconfig', 'pygments', 'packaging']
 const UNUSED_VENV_BINARIES = ['pip', 'pip3', 'pip3.13', 'activate', 'activate.csh', 'activate.fish', 'Activate.ps1']
 
+async function removeDirectoriesNamed(root, directoryName) {
+  const entries = await readdir(root, { withFileTypes: true })
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isDirectory()) {
+        return
+      }
+
+      const entryPath = path.join(root, entry.name)
+
+      if (entry.name === directoryName) {
+        await rm(entryPath, { recursive: true, force: true })
+        return
+      }
+
+      await removeDirectoriesNamed(entryPath, directoryName)
+    }),
+  )
+}
+
 async function pruneBundledPython(root) {
   await Promise.all(
     UNUSED_VENV_BINARIES.map((name) => rm(path.join(root, 'bin', name), { force: true })),
@@ -33,6 +54,7 @@ async function pruneBundledPython(root) {
     await rm(path.join(stdlibRoot, 'ensurepip'), { recursive: true, force: true })
     await rm(path.join(sitePackagesRoot, '__pycache__'), { recursive: true, force: true })
     await rm(path.join(sitePackagesRoot, 'pip'), { recursive: true, force: true })
+    await removeDirectoriesNamed(sitePackagesRoot, '__pycache__')
 
     const sitePackageEntries = await readdir(sitePackagesRoot, { withFileTypes: true })
     await Promise.all(
@@ -108,6 +130,7 @@ async function main() {
   await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
 
   if (await hasUsableBundledPython()) {
+    await pruneBundledPython(pythonRoot)
     await writeRuntimeMetadata()
     return
   }

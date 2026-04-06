@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { access } from 'node:fs/promises'
+import { access, readdir } from 'node:fs/promises'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
@@ -14,6 +14,33 @@ async function exists(relativePath) {
   } catch {
     return false
   }
+}
+
+async function listDirectoriesNamed(relativeRoot, directoryName) {
+  const matches = []
+  const pending = [path.join(repoRoot, relativeRoot)]
+
+  while (pending.length > 0) {
+    const currentPath = pending.pop()
+    const entries = await readdir(currentPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue
+      }
+
+      const entryPath = path.join(currentPath, entry.name)
+
+      if (entry.name === directoryName) {
+        matches.push(path.relative(repoRoot, entryPath))
+        continue
+      }
+
+      pending.push(entryPath)
+    }
+  }
+
+  return matches.sort()
 }
 
 test('prepared tauri runtime resources keep only packaged backend, plugin, and automation files', async () => {
@@ -32,6 +59,10 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const backendPythonPipPackage = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/pip'
   const backendPythonPipDistInfo = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/pip-26.0.1.dist-info'
   const backendPythonCache = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/__pycache__'
+  const backendPythonCaches = await listDirectoriesNamed(
+    'src-tauri/resources/backend/python/lib/python3.13/site-packages',
+    '__pycache__',
+  )
   const backendPytestBinary = 'src-tauri/resources/backend/python/bin/pytest'
   const backendFlake8Binary = 'src-tauri/resources/backend/python/bin/flake8'
   const backendTests = 'src-tauri/resources/backend/presto/tests'
@@ -62,6 +93,7 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   assert.equal(await exists(backendPythonPipPackage), false)
   assert.equal(await exists(backendPythonPipDistInfo), false)
   assert.equal(await exists(backendPythonCache), false)
+  assert.deepEqual(backendPythonCaches, [])
   assert.equal(await exists(backendPytestBinary), false)
   assert.equal(await exists(backendFlake8Binary), false)
   assert.equal(await exists(pluginTests), false)
