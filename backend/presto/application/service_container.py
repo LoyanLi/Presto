@@ -61,6 +61,7 @@ def create_default_app_config() -> dict[str, Any]:
         "hostPreferences": {
             "language": "system",
             "dawTarget": DEFAULT_DAW_TARGET,
+            "includePrereleaseUpdates": False,
         },
     }
 

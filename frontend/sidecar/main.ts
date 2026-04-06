@@ -20,6 +20,7 @@ import {
   resolveManagedPluginsRoot,
   resolveOfficialPluginsRoot,
 } from './resourcePaths'
+import { fetchGithubUpdateCheck } from './updateCheck'
 
 type RpcRequest = {
   id: string
@@ -197,31 +198,6 @@ async function applyDawTarget(nextTarget: unknown) {
   return currentDawTarget
 }
 
-async function fetchLatestGithubRelease() {
-  const repo = process.env.PRESTO_GITHUB_REPO || 'LoyanLi/Presto'
-  const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'Presto-App',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`github_release_fetch_failed:${response.status}`)
-  }
-
-  const payload = await response.json()
-  return {
-    repo,
-    tagName: typeof payload.tag_name === 'string' ? payload.tag_name : '',
-    name: typeof payload.name === 'string' ? payload.name : '',
-    htmlUrl: typeof payload.html_url === 'string' ? payload.html_url : '',
-    publishedAt: typeof payload.published_at === 'string' ? payload.published_at : '',
-    prerelease: Boolean(payload.prerelease),
-    draft: Boolean(payload.draft),
-  }
-}
-
 async function initialize() {
   process.env.PRESTO_BACKEND_ROOT = resolveBackendRoot()
   await pluginHostService.syncOfficialExtensions({
@@ -231,8 +207,17 @@ async function initialize() {
 
 async function handleRequest(request: RpcRequest): Promise<unknown> {
   switch (request.operation) {
-    case 'app.release.latest.get':
-      return fetchLatestGithubRelease()
+    case 'app.release.check':
+      return fetchGithubUpdateCheck({
+        currentVersion:
+          request.args?.[0] && typeof request.args[0] === 'object' && request.args[0] !== null
+            ? String((request.args[0] as { currentVersion?: unknown }).currentVersion ?? '')
+            : '',
+        includePrerelease:
+          request.args?.[0] && typeof request.args[0] === 'object' && request.args[0] !== null
+            ? Boolean((request.args[0] as { includePrerelease?: unknown }).includePrerelease)
+            : false,
+      })
     case 'app.log.current-path.get':
       return {
         filePath: appLogStore.getCurrentLogPath(),

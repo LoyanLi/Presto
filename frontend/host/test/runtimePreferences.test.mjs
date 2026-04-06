@@ -55,12 +55,14 @@ test('host runtime preferences derive language, developer mode, and daw target f
       hostPreferences: {
         language: 'zh-CN',
         dawTarget: 'pro_tools',
+        includePrereleaseUpdates: true,
       },
     }),
     {
       language: 'zh-CN',
       developerMode: false,
       dawTarget: 'pro_tools',
+      includePrereleaseUpdates: true,
     },
   )
 })
@@ -89,12 +91,14 @@ test('host runtime preferences write shell preferences back into config without 
         hostPreferences: {
           language: 'system',
           dawTarget: 'pro_tools',
+          includePrereleaseUpdates: false,
         },
       },
       {
         language: 'en',
         developerMode: false,
         dawTarget: 'pro_tools',
+        includePrereleaseUpdates: true,
       },
     ),
     {
@@ -116,6 +120,7 @@ test('host runtime preferences write shell preferences back into config without 
       hostPreferences: {
         language: 'en',
         dawTarget: 'pro_tools',
+        includePrereleaseUpdates: true,
       },
     },
   )

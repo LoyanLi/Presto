@@ -12,7 +12,7 @@ import type {
 const tauriRuntimeOperations = {
   app: {
     getVersion: 'app.version.get',
-    getLatestRelease: 'app.release.latest.get',
+    checkForUpdates: 'app.release.check',
     viewLog: 'app.log.view',
   },
   automation: {

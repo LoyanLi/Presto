@@ -290,6 +290,7 @@ test('settings surface renders second-level navigation with required entries', a
   assert.match(markup, /Check Connection/)
   assert.match(markup, /Current version: -/)
   assert.match(markup, /Latest release: not checked/)
+  assert.match(markup, /Include prerelease updates/)
   assert.match(markup, /Check for Updates/)
   assert.match(markup, /View Log/)
   assert.doesNotMatch(markup, /Export Logs/)
@@ -593,4 +594,13 @@ test('host shell settings wires theme preference through runtime mode helpers in
   assert.match(source, /onThemePreferenceChange=/)
   assert.match(source, /setThemePreference\(/)
   assert.doesNotMatch(source, /setHostShellPreferences\(\{\s*theme/)
+})
+
+test('host shell centralizes startup update checks and update prompt state at the app level', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /checkForUpdates/)
+  assert.match(source, /includePrereleaseUpdates/)
+  assert.match(source, /latestRelease/)
+  assert.match(source, /showUpdateDialog/)
 })

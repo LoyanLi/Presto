@@ -7,6 +7,7 @@ export interface HostShellPreferences {
   language: HostShellLanguage
   developerMode: boolean
   dawTarget: DawTarget
+  includePrereleaseUpdates: boolean
 }
 
 const STORAGE_KEY = 'presto.host.shell.preferences'
@@ -16,6 +17,7 @@ const defaultPreferences: HostShellPreferences = {
   language: 'system',
   developerMode: false,
   dawTarget: 'pro_tools',
+  includePrereleaseUpdates: false,
 }
 
 function getStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
@@ -43,6 +45,7 @@ function normalizePreferences(value: unknown): HostShellPreferences {
         : 'system',
     developerMode: candidate.developerMode === true,
     dawTarget: candidate.dawTarget === 'pro_tools' ? 'pro_tools' : 'pro_tools',
+    includePrereleaseUpdates: candidate.includePrereleaseUpdates === true,
   }
 }
 

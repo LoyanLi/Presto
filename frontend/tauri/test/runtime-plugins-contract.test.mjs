@@ -30,7 +30,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
     {
       app: {
         getVersion: 'app.version.get',
-        getLatestRelease: 'app.release.get-latest',
+        checkForUpdates: 'app.release.check',
         viewLog: 'app.log.view',
       },
       automation: {
@@ -98,6 +98,10 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
 
   await runtime.plugins.list()
   await runtime.backend.listCapabilities()
+  await runtime.app.checkForUpdates({
+    currentVersion: '0.3.2-1',
+    includePrerelease: true,
+  })
   await runtime.plugins.installFromDirectory(true)
   await runtime.plugins.installFromZip(false)
   await runtime.plugins.setEnabled('official.export-workflow', false)
@@ -106,6 +110,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   assert.deepEqual(calls, [
     ['plugins.catalog.list'],
     ['backend.capabilities.list'],
+    ['app.release.check', { currentVersion: '0.3.2-1', includePrerelease: true }],
     ['plugins.catalog.install-directory', true],
     ['plugins.catalog.install-zip', false],
     ['plugins.catalog.set-enabled', 'official.export-workflow', false],

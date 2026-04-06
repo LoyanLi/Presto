@@ -8,6 +8,17 @@ export interface AppLatestReleaseInfo {
   draft: boolean
 }
 
+export interface AppReleaseCheckRequest {
+  currentVersion: string
+  includePrerelease: boolean
+}
+
+export interface AppReleaseCheckResult {
+  currentVersion: string
+  hasUpdate: boolean
+  latestRelease: AppLatestReleaseInfo | null
+}
+
 export interface AppViewLogResult {
   ok: true
   filePath: string
@@ -15,6 +26,6 @@ export interface AppViewLogResult {
 
 export interface AppRuntimeClient {
   getVersion(): Promise<string>
-  getLatestRelease(): Promise<AppLatestReleaseInfo>
+  checkForUpdates(request: AppReleaseCheckRequest): Promise<AppReleaseCheckResult>
   viewLog(): Promise<AppViewLogResult>
 }

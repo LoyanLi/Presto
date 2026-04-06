@@ -20,6 +20,9 @@ const PYTHON_HELPER_WRAPPERS = {
 const PYTHON_FRAMEWORK_EXTERNAL_PATTERN = /\/Library\/Frameworks\/Python\.framework\/Versions\/([^/\s]+)\/Python/
 const PYTHON_FRAMEWORK_BUNDLED_PATTERN = /@executable_path\/\.\.\/Frameworks\/Python\.framework\/Versions\/([^/\s]+)\/Python/
 const PYTHON_FRAMEWORK_BUNDLED_TEMPLATE = '@executable_path/../Frameworks/Python.framework/Versions/%VERSION%/Python'
+const PYTHON_FRAMEWORK_INSTALL_ID_TEMPLATE = '@rpath/Python.framework/Versions/%VERSION%/Python'
+const PYTHON_APP_EXTERNAL_TEMPLATE = '/Library/Frameworks/Python.framework/Versions/%VERSION%/Python'
+const PYTHON_APP_BUNDLED_TEMPLATE = '@executable_path/../../../../Python'
 
 async function exists(targetPath) {
   try {
@@ -138,6 +141,23 @@ async function readPythonLinkage(root) {
   return stdout
 }
 
+async function readPythonAppLinkage(root, version) {
+  const bundledPythonApp = path.join(
+    root,
+    'Frameworks',
+    'Python.framework',
+    'Versions',
+    version,
+    'Resources',
+    'Python.app',
+    'Contents',
+    'MacOS',
+    'Python',
+  )
+  const { stdout } = await runCapture('otool', ['-L', bundledPythonApp])
+  return stdout
+}
+
 async function isBundledPythonSelfContained(root) {
   const linkage = await readPythonLinkage(root)
   const match = linkage.match(PYTHON_FRAMEWORK_BUNDLED_PATTERN)
@@ -160,12 +180,17 @@ async function isBundledPythonSelfContained(root) {
     'MacOS',
     'Python',
   )
+  const pythonAppLinkage = await readPythonAppLinkage(root, version)
+  const { stdout: frameworkInstallId } = await runCapture('otool', ['-D', frameworkBinary])
 
   return (
     (await exists(frameworkBinary)) &&
     (await exists(frameworkPythonApp)) &&
     linkage.includes(PYTHON_FRAMEWORK_BUNDLED_TEMPLATE.replace('%VERSION%', version)) &&
-    !PYTHON_FRAMEWORK_EXTERNAL_PATTERN.test(linkage)
+    pythonAppLinkage.includes(PYTHON_APP_BUNDLED_TEMPLATE) &&
+    frameworkInstallId.includes(PYTHON_FRAMEWORK_INSTALL_ID_TEMPLATE.replace('%VERSION%', version)) &&
+    !PYTHON_FRAMEWORK_EXTERNAL_PATTERN.test(linkage) &&
+    !PYTHON_FRAMEWORK_EXTERNAL_PATTERN.test(pythonAppLinkage)
   )
 }
 
@@ -175,28 +200,35 @@ async function adHocSign(targetPath) {
 
 async function vendorPythonFramework(root) {
   const linkage = await readPythonLinkage(root)
-  const match = linkage.match(PYTHON_FRAMEWORK_EXTERNAL_PATTERN)
+  const externalMatch = linkage.match(PYTHON_FRAMEWORK_EXTERNAL_PATTERN)
+  const bundledMatch = linkage.match(PYTHON_FRAMEWORK_BUNDLED_PATTERN)
+  const version = externalMatch?.[1] ?? bundledMatch?.[1]
 
-  if (!match) {
+  if (!version) {
     if (await isBundledPythonSelfContained(root)) {
       return
     }
     throw new Error('Unable to resolve bundled Python framework source from python3 linkage')
   }
 
-  const version = match[1]
-  const externalFrameworkBinary = match[0]
+  const externalFrameworkBinary =
+    externalMatch?.[0] ?? PYTHON_APP_EXTERNAL_TEMPLATE.replace('%VERSION%', version)
   const externalFrameworkVersionRoot = path.dirname(externalFrameworkBinary)
   const externalPythonApp = path.join(externalFrameworkVersionRoot, 'Resources', 'Python.app')
   const bundledFrameworkVersionRoot = path.join(root, 'Frameworks', 'Python.framework', 'Versions', version)
   const bundledFrameworkBinary = path.join(bundledFrameworkVersionRoot, 'Python')
   const bundledPythonApp = path.join(bundledFrameworkVersionRoot, 'Resources', 'Python.app')
+  const bundledPythonAppExecutable = path.join(bundledPythonApp, 'Contents', 'MacOS', 'Python')
   const bundledFrameworkReference = PYTHON_FRAMEWORK_BUNDLED_TEMPLATE.replace('%VERSION%', version)
+  const bundledFrameworkInstallId = PYTHON_FRAMEWORK_INSTALL_ID_TEMPLATE.replace('%VERSION%', version)
+  const bundledPythonAppReference = PYTHON_APP_BUNDLED_TEMPLATE
 
-  await rm(bundledFrameworkVersionRoot, { recursive: true, force: true })
-  await mkdir(path.join(bundledFrameworkVersionRoot, 'Resources'), { recursive: true })
-  await cp(externalFrameworkBinary, bundledFrameworkBinary, { force: true })
-  await cp(externalPythonApp, bundledPythonApp, { recursive: true, force: true })
+  if (externalMatch) {
+    await rm(bundledFrameworkVersionRoot, { recursive: true, force: true })
+    await mkdir(path.join(bundledFrameworkVersionRoot, 'Resources'), { recursive: true })
+    await cp(externalFrameworkBinary, bundledFrameworkBinary, { force: true })
+    await cp(externalPythonApp, bundledPythonApp, { recursive: true, force: true })
+  }
 
   for (const name of PYTHON_BINARIES) {
     const binaryPath = path.join(root, 'bin', name)
@@ -204,6 +236,16 @@ async function vendorPythonFramework(root) {
       continue
     }
     await run('install_name_tool', ['-change', externalFrameworkBinary, bundledFrameworkReference, binaryPath])
+  }
+
+  const pythonAppLinkage = await readPythonAppLinkage(root, version)
+  if (PYTHON_FRAMEWORK_EXTERNAL_PATTERN.test(pythonAppLinkage)) {
+    await run('install_name_tool', ['-change', externalFrameworkBinary, bundledPythonAppReference, bundledPythonAppExecutable])
+  }
+
+  const { stdout: frameworkInstallId } = await runCapture('otool', ['-D', bundledFrameworkBinary])
+  if (!frameworkInstallId.includes(bundledFrameworkInstallId)) {
+    await run('install_name_tool', ['-id', bundledFrameworkInstallId, bundledFrameworkBinary])
   }
 
   await adHocSign(bundledPythonApp)

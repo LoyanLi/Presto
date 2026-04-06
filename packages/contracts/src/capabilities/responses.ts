@@ -40,6 +40,7 @@ export interface UiPreferences {
 export interface HostPreferences {
   language: 'system' | 'zh-CN' | 'en'
   dawTarget: DawTarget
+  includePrereleaseUpdates: boolean
 }
 
 export interface AppConfig {

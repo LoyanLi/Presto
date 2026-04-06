@@ -1,5 +1,10 @@
 import { createPrestoRuntime } from '@presto/sdk-runtime/createPrestoRuntime'
-import type { AppLatestReleaseInfo, AppRuntimeClient, AppViewLogResult } from '@presto/sdk-runtime/clients/app'
+import type {
+  AppReleaseCheckRequest,
+  AppReleaseCheckResult,
+  AppRuntimeClient,
+  AppViewLogResult,
+} from '@presto/sdk-runtime/clients/app'
 import type {
   AutomationDefinition,
   AutomationRunDefinitionRequest,
@@ -38,7 +43,7 @@ import type { CapabilityRequestEnvelope, CapabilityResponseEnvelope } from '@pre
 export interface DesktopRuntimeOperationMap {
   app: {
     getVersion: string
-    getLatestRelease: string
+    checkForUpdates: string
     viewLog: string
   }
   automation: {
@@ -113,7 +118,8 @@ export function createDesktopRuntimeBridge(
 ) {
   const app: AppRuntimeClient = {
     getVersion: () => invokeTyped<string>(invoke, operations.app.getVersion),
-    getLatestRelease: () => invokeTyped<AppLatestReleaseInfo>(invoke, operations.app.getLatestRelease),
+    checkForUpdates: (request: AppReleaseCheckRequest) =>
+      invokeTyped<AppReleaseCheckResult>(invoke, operations.app.checkForUpdates, request),
     viewLog: () => invokeTyped<AppViewLogResult>(invoke, operations.app.viewLog),
   }
 

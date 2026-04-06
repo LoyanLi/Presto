@@ -46,6 +46,7 @@ def test_default_runtime_config_persists_across_service_container_rebuilds(tmp_p
     config["uiPreferences"]["developerModeEnabled"] = False
     config["hostPreferences"]["language"] = "zh-CN"
     config["hostPreferences"]["dawTarget"] = "pro_tools"
+    config["hostPreferences"]["includePrereleaseUpdates"] = True
 
     update_config_payload(services, {"config": config})
 
@@ -55,6 +56,7 @@ def test_default_runtime_config_persists_across_service_container_rebuilds(tmp_p
     assert rebuilt_config["uiPreferences"]["developerModeEnabled"] is False
     assert rebuilt_config["hostPreferences"]["language"] == "zh-CN"
     assert rebuilt_config["hostPreferences"]["dawTarget"] == "pro_tools"
+    assert rebuilt_config["hostPreferences"]["includePrereleaseUpdates"] is True
 
 
 def test_default_runtime_config_creates_backing_file_on_first_load(tmp_path: Path, monkeypatch) -> None:
@@ -66,6 +68,7 @@ def test_default_runtime_config_creates_backing_file_on_first_load(tmp_path: Pat
     config_path = tmp_path / "config.json"
     assert config_path.exists() is True
     assert config["hostPreferences"] == create_default_app_config()["hostPreferences"]
+    assert config["hostPreferences"]["includePrereleaseUpdates"] is False
 
 
 def test_macos_keychain_store_uses_security_cli_contract() -> None:

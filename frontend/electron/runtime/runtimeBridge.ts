@@ -7,7 +7,7 @@ export interface RuntimeBridgeInvoke {
 export const runtimeBridgeChannels = {
   app: {
     getVersion: 'app:get-version',
-    getLatestRelease: 'app:get-latest-release',
+    checkForUpdates: 'app:check-for-updates',
     viewLog: 'app:view-log',
   },
   automation: {

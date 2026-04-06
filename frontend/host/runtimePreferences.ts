@@ -9,6 +9,7 @@ export function getHostShellPreferencesFromConfig(config: Pick<AppConfig, 'uiPre
         : 'system',
     developerMode: config.uiPreferences?.developerModeEnabled === true,
     dawTarget: config.hostPreferences?.dawTarget === 'pro_tools' ? config.hostPreferences.dawTarget : 'pro_tools',
+    includePrereleaseUpdates: config.hostPreferences?.includePrereleaseUpdates === true,
   }
 }
 
@@ -26,6 +27,7 @@ export function applyHostShellPreferencesToConfig(
       ...config.hostPreferences,
       language: preferences.language,
       dawTarget: preferences.dawTarget,
+      includePrereleaseUpdates: preferences.includePrereleaseUpdates,
     },
   }
 }

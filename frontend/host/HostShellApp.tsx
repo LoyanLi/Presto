@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 
 import type { DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
+import type { AppLatestReleaseInfo } from '@presto/sdk-runtime/clients/app'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { getThemeMode, getThemePreference, setThemePreference, subscribeThemeMode, subscribeThemePreference } from '../ui'
 import { md3ColorSchemes, md3Shape, md3Typography } from '../ui/tokens'
@@ -38,6 +39,98 @@ import { getHostShellPreferences, setHostShellPreferences, subscribeHostShellPre
 import { applyHostShellPreferencesToConfig, getHostShellPreferencesFromConfig } from './runtimePreferences'
 import { GeneralSettingsPage, type GeneralSettingsPageProps } from './settings/GeneralSettingsPage'
 import { ExtensionsSettingsPage } from './settings/ExtensionsSettingsPage'
+
+const updateDialogOverlayStyle: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  display: 'grid',
+  placeItems: 'center',
+  padding: 24,
+  background: 'rgba(7, 10, 18, 0.52)',
+  zIndex: 1400,
+}
+
+const updateDialogCardStyle: CSSProperties = {
+  width: 'min(100%, 440px)',
+  display: 'grid',
+  gap: 16,
+  padding: 24,
+  borderRadius: 24,
+  border: `1px solid ${md3ColorSchemes.light.outlineVariant}`,
+  background: hostDialogSurfaceColor(),
+  color: 'var(--md-sys-color-on-surface)',
+  boxShadow: '0 24px 80px rgba(9, 13, 24, 0.28)',
+}
+
+const updateDialogTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 22,
+  fontWeight: 700,
+}
+
+const updateDialogBodyStyle: CSSProperties = {
+  margin: 0,
+  color: 'var(--md-sys-color-on-surface-variant)',
+  fontSize: 14,
+  lineHeight: 1.6,
+}
+
+const updateDialogMetaStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  padding: 16,
+  borderRadius: 18,
+  background: 'var(--md-sys-color-surface-container-low)',
+}
+
+const updateDialogActionsStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 10,
+  flexWrap: 'wrap',
+}
+
+const updateDialogButtonStyle: CSSProperties = {
+  minHeight: 40,
+  padding: '0 14px',
+  borderRadius: 999,
+  border: '1px solid var(--md-sys-color-outline-variant)',
+  background: 'var(--md-sys-color-surface)',
+  color: 'var(--md-sys-color-on-surface)',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
+const updateDialogPrimaryButtonStyle: CSSProperties = {
+  ...updateDialogButtonStyle,
+  borderColor: 'var(--md-sys-color-primary)',
+  background: 'var(--md-sys-color-primary)',
+  color: 'var(--md-sys-color-on-primary)',
+}
+
+function hostDialogSurfaceColor(): string {
+  return 'var(--md-sys-color-surface-container-high)'
+}
+
+function formatPublishedAt(raw: string, locale: string): string {
+  if (!raw) {
+    return '-'
+  }
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) {
+    return raw
+  }
+
+  return date.toLocaleString(locale === 'zh-CN' ? 'zh-CN' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 export interface HostShellAppProps {
   state: HostShellState
@@ -85,6 +178,15 @@ export function HostShellApp({
   const [themePreference, setThemePreferenceState] = useState(() => getThemePreference())
   const [preferences, setPreferencesState] = useState(() => initialPreferences)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [preferencesHydrated, setPreferencesHydrated] = useState(() => !developerPresto?.config?.get)
+  const [appVersion, setAppVersion] = useState('-')
+  const [latestRelease, setLatestRelease] = useState<AppLatestReleaseInfo | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateError, setUpdateError] = useState('')
+  const [hasUpdate, setHasUpdate] = useState(false)
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const startupUpdateCheckCompleteRef = useRef(false)
+  const updatePromptShownRef = useRef(false)
   const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
 
   const {
@@ -94,6 +196,7 @@ export function HostShellApp({
     dawRefreshKey,
     refresh: refreshDawStatus,
     setChecking: setCheckingDawConnection,
+    setStatus: setDawStatus,
   } = useDawStatusPolling({
     developerPresto,
     developerRuntime,
@@ -115,6 +218,7 @@ export function HostShellApp({
   useEffect(() => subscribeHostShellPreferences((nextPreferences) => setPreferencesState(nextPreferences)), [])
   useEffect(() => {
     if (!developerPresto?.config?.get) {
+      setPreferencesHydrated(true)
       return
     }
 
@@ -125,13 +229,41 @@ export function HostShellApp({
           return
         }
         setHostShellPreferences(getHostShellPreferencesFromConfig(response.config))
+        setPreferencesHydrated(true)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (active) {
+          setPreferencesHydrated(true)
+        }
+      })
 
     return () => {
       active = false
     }
   }, [developerPresto])
+
+  useEffect(() => {
+    if (!developerRuntime?.app?.getVersion) {
+      return
+    }
+
+    let cancelled = false
+    void developerRuntime.app.getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(version || '-')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppVersion('-')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [developerRuntime])
 
   const muiTheme = useMemo(() => createHostMuiTheme(themeMode), [themeMode])
 
@@ -259,6 +391,66 @@ export function HostShellApp({
     setSurface('settings')
   }
 
+  const openReleasePage = async (): Promise<boolean> => {
+    const releaseUrl = latestRelease?.htmlUrl
+    if (!releaseUrl || !developerRuntime?.shell?.openExternal) {
+      return false
+    }
+
+    try {
+      setUpdateError('')
+      await developerRuntime.shell.openExternal(releaseUrl)
+      return true
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
+  const checkForUpdates = async ({ silent = false }: { silent?: boolean } = {}): Promise<void> => {
+    if (!developerRuntime?.app?.checkForUpdates || !developerRuntime?.app?.getVersion) {
+      return
+    }
+
+    try {
+      setCheckingUpdate(true)
+      if (!silent) {
+        setUpdateError('')
+      }
+      const currentVersion = await developerRuntime.app.getVersion()
+      const result = await developerRuntime.app.checkForUpdates({
+        currentVersion,
+        includePrerelease: preferences.includePrereleaseUpdates,
+      })
+      setAppVersion(result.currentVersion || currentVersion || '-')
+      setLatestRelease(result.latestRelease)
+      setHasUpdate(result.hasUpdate)
+      if (result.hasUpdate && result.latestRelease && !updatePromptShownRef.current) {
+        updatePromptShownRef.current = true
+        setShowUpdateDialog(true)
+      }
+    } catch (error) {
+      if (!silent) {
+        setUpdateError(error instanceof Error ? error.message : String(error))
+      }
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!preferencesHydrated || startupUpdateCheckCompleteRef.current) {
+      return
+    }
+    if (!developerRuntime?.app?.checkForUpdates || !developerRuntime?.app?.getVersion) {
+      startupUpdateCheckCompleteRef.current = true
+      return
+    }
+
+    startupUpdateCheckCompleteRef.current = true
+    void checkForUpdates({ silent: true })
+  }, [developerRuntime, preferencesHydrated, preferences.includePrereleaseUpdates])
+
   const persistHostShellPreferences = async (nextPreferences: Partial<typeof preferences>): Promise<void> => {
     if (!developerPresto?.config?.get || !developerPresto?.config?.update) {
       setHostShellPreferences(nextPreferences)
@@ -300,6 +492,11 @@ export function HostShellApp({
       dawStatus={dawStatus}
       checkingConnection={checkingDawConnection}
       runtime={developerRuntime as GeneralSettingsPageProps['runtime']}
+      appVersion={appVersion}
+      latestRelease={latestRelease}
+      checkingUpdate={checkingUpdate}
+      updateError={updateError}
+      hasNewRelease={hasUpdate}
       onDeveloperModeChange={(selected) => {
         void persistHostShellPreferences({
           developerMode: selected,
@@ -313,6 +510,14 @@ export function HostShellApp({
           language,
         })
         refreshDawStatus()
+      }}
+      onIncludePrereleaseUpdatesChange={(selected) => {
+        setLatestRelease(null)
+        setHasUpdate(false)
+        setUpdateError('')
+        void persistHostShellPreferences({
+          includePrereleaseUpdates: selected,
+        })
       }}
       onDawTargetChange={async (target) => {
         if (developerRuntime?.backend && typeof developerRuntime.backend.setDawTarget === 'function') {
@@ -347,6 +552,12 @@ export function HostShellApp({
           lastError: '',
         }))
         refreshDawStatus()
+      }}
+      onCheckForUpdates={() => {
+        void checkForUpdates()
+      }}
+      onOpenReleasePage={() => {
+        void openReleasePage()
       }}
     />
   )
@@ -462,7 +673,61 @@ export function HostShellApp({
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline enableColorScheme />
-      {surfaceContent}
+      <>
+        {surfaceContent}
+        {showUpdateDialog && latestRelease ? (
+          <div style={updateDialogOverlayStyle}>
+            <div role="dialog" aria-modal="true" style={updateDialogCardStyle}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <h2 style={updateDialogTitleStyle}>{translateHost(resolvedLocale, 'settings.update.dialog.title')}</h2>
+                <p style={updateDialogBodyStyle}>{translateHost(resolvedLocale, 'settings.update.dialog.body')}</p>
+              </div>
+              <div style={updateDialogMetaStyle}>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.update.dialog.currentVersion', { value: appVersion })}
+                </p>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.update.dialog.latestVersion', { value: latestRelease.tagName })}
+                </p>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.update.dialog.channel', {
+                    value: latestRelease.prerelease
+                      ? translateHost(resolvedLocale, 'settings.update.preview')
+                      : translateHost(resolvedLocale, 'settings.update.stable'),
+                  })}
+                </p>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.update.dialog.publishedAt', {
+                    value: formatPublishedAt(latestRelease.publishedAt, resolvedLocale),
+                  })}
+                </p>
+              </div>
+              <div style={updateDialogActionsStyle}>
+                <button
+                  type="button"
+                  style={updateDialogButtonStyle}
+                  onClick={() => setShowUpdateDialog(false)}
+                >
+                  {translateHost(resolvedLocale, 'settings.update.dialog.later')}
+                </button>
+                <button
+                  type="button"
+                  style={updateDialogPrimaryButtonStyle}
+                  onClick={() => {
+                    void openReleasePage().then((opened) => {
+                      if (opened) {
+                        setShowUpdateDialog(false)
+                      }
+                    })
+                  }}
+                >
+                  {translateHost(resolvedLocale, 'settings.update.dialog.openRelease')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </>
     </ThemeProvider>
   )
 }

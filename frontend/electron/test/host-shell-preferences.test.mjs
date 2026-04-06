@@ -82,6 +82,7 @@ test('shell preferences default to follow-system language, developer mode off, a
     language: 'system',
     developerMode: false,
     dawTarget: 'pro_tools',
+    includePrereleaseUpdates: false,
   })
 })
 
@@ -93,12 +94,14 @@ test('shell preferences persist language, developer mode, and daw target changes
     language: 'zh-CN',
     developerMode: true,
     dawTarget: 'pro_tools',
+    includePrereleaseUpdates: true,
   })
 
   assert.deepEqual(getHostShellPreferences(), {
     language: 'zh-CN',
     developerMode: true,
     dawTarget: 'pro_tools',
+    includePrereleaseUpdates: true,
   })
   assert.equal(
     storage.getItem('presto.host.shell.preferences'),
@@ -106,6 +109,7 @@ test('shell preferences persist language, developer mode, and daw target changes
       language: 'zh-CN',
       developerMode: true,
       dawTarget: 'pro_tools',
+      includePrereleaseUpdates: true,
     }),
   )
 })
@@ -119,12 +123,14 @@ test('shell preferences read and persist through global storage shims without wi
     language: 'en',
     developerMode: true,
     dawTarget: 'pro_tools',
+    includePrereleaseUpdates: true,
   })
 
   assert.deepEqual(getHostShellPreferences(), {
     language: 'en',
     developerMode: true,
     dawTarget: 'pro_tools',
+    includePrereleaseUpdates: true,
   })
   assert.equal(
     storage.getItem('presto.host.shell.preferences'),
@@ -132,6 +138,7 @@ test('shell preferences read and persist through global storage shims without wi
       language: 'en',
       developerMode: true,
       dawTarget: 'pro_tools',
+      includePrereleaseUpdates: true,
     }),
   )
 })

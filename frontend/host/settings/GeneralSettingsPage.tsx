@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { DawTarget } from '@presto/contracts'
-import type { AppViewLogResult } from '@presto/sdk-runtime/clients/app'
+import type { AppLatestReleaseInfo, AppViewLogResult } from '@presto/sdk-runtime/clients/app'
 
 import { Select, Switch, type PrestoThemePreference } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
@@ -52,6 +52,11 @@ export interface GeneralSettingsPageProps {
   locale: HostLocale
   preferences: HostShellPreferences
   themePreference: PrestoThemePreference
+  appVersion: string
+  latestRelease: AppLatestReleaseInfo | null
+  checkingUpdate: boolean
+  updateError: string
+  hasNewRelease: boolean
   dawStatus: {
     connected: boolean
     targetLabel: string
@@ -62,20 +67,7 @@ export interface GeneralSettingsPageProps {
   checkingConnection: boolean
   runtime?: {
     app?: {
-      getVersion(): Promise<string>
-      getLatestRelease(): Promise<{
-        repo: string
-        tagName: string
-        name: string
-        htmlUrl: string
-        publishedAt: string
-        prerelease: boolean
-        draft: boolean
-      }>
       viewLog(): Promise<AppViewLogResult>
-    }
-    shell?: {
-      openExternal(url: string): Promise<boolean>
     }
   }
   onDeveloperModeChange(selected: boolean): void
@@ -83,45 +75,20 @@ export interface GeneralSettingsPageProps {
   onLanguageChange(language: HostShellPreferences['language']): void
   onDawTargetChange(target: DawTarget): void
   onCheckConnection(): void
-}
-
-type LatestReleaseInfo = {
-  repo: string
-  tagName: string
-  name: string
-  htmlUrl: string
-  publishedAt: string
-  prerelease: boolean
-  draft: boolean
-}
-
-function normalizeVersion(raw: string): string {
-  return String(raw || '').trim().replace(/^v/i, '').split('-')[0]
-}
-
-function isLatestVersionNewer(currentRaw: string, latestRaw: string): boolean {
-  const currentParts = normalizeVersion(currentRaw)
-    .split('.')
-    .map((part) => Number.parseInt(part, 10) || 0)
-  const latestParts = normalizeVersion(latestRaw)
-    .split('.')
-    .map((part) => Number.parseInt(part, 10) || 0)
-
-  const maxLen = Math.max(currentParts.length, latestParts.length, 3)
-  for (let index = 0; index < maxLen; index += 1) {
-    const current = currentParts[index] || 0
-    const latest = latestParts[index] || 0
-    if (latest > current) return true
-    if (latest < current) return false
-  }
-
-  return false
+  onCheckForUpdates(): void
+  onOpenReleasePage(): void
+  onIncludePrereleaseUpdatesChange(selected: boolean): void
 }
 
 export function GeneralSettingsPage({
   locale,
   preferences,
   themePreference,
+  appVersion,
+  latestRelease,
+  checkingUpdate,
+  updateError,
+  hasNewRelease,
   dawStatus,
   checkingConnection,
   runtime,
@@ -130,73 +97,11 @@ export function GeneralSettingsPage({
   onLanguageChange,
   onDawTargetChange,
   onCheckConnection,
+  onCheckForUpdates,
+  onOpenReleasePage,
+  onIncludePrereleaseUpdatesChange,
 }: GeneralSettingsPageProps) {
-  const [appVersion, setAppVersion] = useState('-')
-  const [latestRelease, setLatestRelease] = useState<LatestReleaseInfo | null>(null)
-  const [checkingUpdate, setCheckingUpdate] = useState(false)
-  const [updateError, setUpdateError] = useState('')
   const [viewLogError, setViewLogError] = useState('')
-
-  useEffect(() => {
-    if (!runtime?.app?.getVersion) {
-      return
-    }
-
-    let cancelled = false
-    void runtime.app.getVersion().then((version) => {
-      if (!cancelled) {
-        setAppVersion(version || '-')
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setAppVersion('-')
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [runtime])
-
-  const hasNewRelease = useMemo(
-    () => (latestRelease && appVersion !== '-' ? isLatestVersionNewer(appVersion, latestRelease.tagName) : false),
-    [appVersion, latestRelease],
-  )
-
-  const checkForUpdates = async (): Promise<void> => {
-    if (!runtime?.app?.getLatestRelease) {
-      return
-    }
-
-    try {
-      setCheckingUpdate(true)
-      setUpdateError('')
-      const [version, release] = await Promise.all([
-        runtime.app.getVersion?.() ?? Promise.resolve(appVersion),
-        runtime.app.getLatestRelease(),
-      ])
-      setAppVersion(version || '-')
-      setLatestRelease(release)
-    } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setCheckingUpdate(false)
-    }
-  }
-
-  const openReleasePage = async (): Promise<void> => {
-    const releaseUrl = latestRelease?.htmlUrl
-    if (!releaseUrl || !runtime?.shell?.openExternal) {
-      return
-    }
-
-    try {
-      setUpdateError('')
-      await runtime.shell.openExternal(releaseUrl)
-    } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : String(error))
-    }
-  }
 
   const viewLog = async (): Promise<void> => {
     if (!runtime?.app?.viewLog) {
@@ -300,6 +205,12 @@ export function GeneralSettingsPage({
               value: latestRelease?.tagName || translateHost(locale, 'settings.update.notChecked'),
             })}
           </p>
+          <Switch
+            label={translateHost(locale, 'settings.update.includePrerelease')}
+            description={translateHost(locale, 'settings.update.includePrereleaseBody')}
+            selected={preferences.includePrereleaseUpdates}
+            onSelectedChange={onIncludePrereleaseUpdatesChange}
+          />
           {latestRelease ? (
             <p
               style={{
@@ -321,8 +232,8 @@ export function GeneralSettingsPage({
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button
               type="button"
-              onClick={() => void checkForUpdates()}
-              disabled={!runtime?.app?.getLatestRelease || checkingUpdate}
+              onClick={() => void onCheckForUpdates()}
+              disabled={checkingUpdate}
               style={actionButtonStyle}
             >
               {checkingUpdate ? translateHost(locale, 'settings.update.checking') : translateHost(locale, 'settings.update.check')}
@@ -330,7 +241,7 @@ export function GeneralSettingsPage({
             {latestRelease?.htmlUrl ? (
               <button
                 type="button"
-                onClick={() => void openReleasePage()}
+                onClick={() => void onOpenReleasePage()}
                 style={actionButtonStyle}
               >
                 {translateHost(locale, 'settings.update.openRelease')}
