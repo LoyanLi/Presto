@@ -238,15 +238,13 @@ export function GeneralSettingsPage({
             >
               {checkingUpdate ? translateHost(locale, 'settings.update.checking') : translateHost(locale, 'settings.update.check')}
             </button>
-            {latestRelease?.htmlUrl ? (
-              <button
-                type="button"
-                onClick={() => void onOpenReleasePage()}
-                style={actionButtonStyle}
-              >
-                {translateHost(locale, 'settings.update.openRelease')}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => void onOpenReleasePage()}
+              style={actionButtonStyle}
+            >
+              {translateHost(locale, 'settings.update.openRelease')}
+            </button>
           </div>
         </div>
       </section>

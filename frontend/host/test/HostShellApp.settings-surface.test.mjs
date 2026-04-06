@@ -292,6 +292,7 @@ test('settings surface renders second-level navigation with required entries', a
   assert.match(markup, /Latest release: not checked/)
   assert.match(markup, /Include prerelease updates/)
   assert.match(markup, /Check for Updates/)
+  assert.match(markup, /Open Release Page/)
   assert.match(markup, /View Log/)
   assert.doesNotMatch(markup, /Export Logs/)
   assert.match(markup, /Disconnected/)

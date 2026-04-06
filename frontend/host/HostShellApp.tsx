@@ -109,6 +109,8 @@ const updateDialogPrimaryButtonStyle: CSSProperties = {
   color: 'var(--md-sys-color-on-primary)',
 }
 
+const defaultReleasePageUrl = 'https://github.com/LoyanLi/Presto/releases'
+
 function hostDialogSurfaceColor(): string {
   return 'var(--md-sys-color-surface-container-high)'
 }
@@ -392,7 +394,7 @@ export function HostShellApp({
   }
 
   const openReleasePage = async (): Promise<boolean> => {
-    const releaseUrl = latestRelease?.htmlUrl
+    const releaseUrl = latestRelease?.htmlUrl || defaultReleasePageUrl
     if (!releaseUrl || !developerRuntime?.shell?.openExternal) {
       return false
     }
