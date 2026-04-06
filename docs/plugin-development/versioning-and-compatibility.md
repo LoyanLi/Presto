@@ -6,9 +6,9 @@
 
 仓库中可以直接确认的版本事实：
 
-- App Version：`0.3.2`
+- App Version：`0.3.2-1`
 - App Name：`Presto`
-- Backend FastAPI Version：`0.3.2`
+- Backend FastAPI Version：`0.3.2-1`
 - Capability Schema Version：`1`
 
 这三类版本不是一回事，不能混用。
