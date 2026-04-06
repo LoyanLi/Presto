@@ -82,7 +82,7 @@ await cp(appPath, stagingAppPath, { recursive: true })
 await symlink('/Applications', applicationsLinkPath)
 await mkdir(dmgDir, { recursive: true })
 await rm(dmgPath, { force: true })
-await run('hdiutil', ['create', '-volname', productName, '-srcfolder', stagingDir, '-ov', '-format', 'UDZO', dmgPath])
+await run('hdiutil', ['makehybrid', '-hfs', '-hfs-volume-name', productName, '-ov', '-o', dmgPath, stagingDir])
 await rm(stagingDir, { recursive: true, force: true })
 
 await mkdir(releaseRoot, { recursive: true })

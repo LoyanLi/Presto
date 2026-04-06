@@ -89,6 +89,13 @@ test('tauri python prep stages a fresh bundled runtime before replacing the exis
   assert.doesNotMatch(prepareSource, /await rm\(pythonRoot, \{ recursive: true, force: true \} \)\s*await mkdir\(outputRoot, \{ recursive: true \} \)\s*await run\(pythonBin, \['-m', 'venv', '--copies', pythonRoot\]\)/)
 })
 
+test('tauri packaging script builds DMGs without hdiutil create', async () => {
+  const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
+
+  assert.match(packageBuildSource, /await run\('hdiutil', \['makehybrid'/)
+  assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
+})
+
 test('package.json no longer exposes Electron build and packaging scripts', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
 

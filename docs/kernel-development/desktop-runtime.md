@@ -30,6 +30,12 @@
 
 sidecar 的职责是业务宿主装配，而不是 UI 渲染。
 
+当前 sidecar 也负责运行时日志落盘：
+
+- 日志目录位于应用数据目录下的 `logs/`
+- 每次应用启动生成一个新的 `presto-<timestamp>.log`
+- 主日志行优先记录真实错误原因，只有额外上下文才追加紧凑 JSON
+
 ## 3. Renderer 怎样访问宿主
 
 Renderer 侧的关键入口是：
@@ -73,6 +79,14 @@ Renderer 侧的关键入口是：
 - 转发 capability 调用
 
 所以 Renderer 侧看到的是 `backend.invokeCapability(...)`，而不是裸 HTTP 细节。
+
+当前 backend supervisor 的失败路径也会写入运行时日志，包括：
+
+- backend 启动失败
+- health check 失败后的重启
+- capability list / invoke 失败
+- backend stderr
+- backend 进程退出
 
 ## 5. 插件宿主服务在桌面侧的位置
 

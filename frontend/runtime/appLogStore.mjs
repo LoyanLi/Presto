@@ -3,7 +3,6 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const DEFAULT_LOG_LIMIT = 500
-const DEFAULT_LOG_FILE_NAME = 'current.log'
 
 function normalizeLevel(level) {
   return level === 'info' || level === 'warn' || level === 'error' ? level : 'info'
@@ -23,20 +22,48 @@ function normalizeDetails(details) {
   }
 }
 
+function removeRedundantDetailFields(message, details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return details ?? null
+  }
+
+  const filtered = Object.fromEntries(
+    Object.entries(details).filter(([key, value]) => {
+      if (value === null || value === undefined) {
+        return false
+      }
+      if (typeof value !== 'string') {
+        return true
+      }
+      if (key === 'message' && message.includes(value)) {
+        return false
+      }
+      if (key === 'operation' && message.includes(value)) {
+        return false
+      }
+      return true
+    }),
+  )
+
+  return Object.keys(filtered).length > 0 ? filtered : null
+}
+
 function formatEntry(entry) {
   const header = `[${entry.timestamp}] [${entry.level}] [${entry.source}] ${entry.message}`
-  if (!entry.details) {
+  const normalizedDetails = removeRedundantDetailFields(entry.message, entry.details)
+  if (!normalizedDetails) {
     return header
   }
 
-  return `${header}\n${JSON.stringify(entry.details, null, 2)}`
+  return `${header}\n${JSON.stringify(normalizedDetails)}`
 }
 
 export function createAppLogStore({ exportDir, logDir, limit = DEFAULT_LOG_LIMIT } = {}) {
   let nextId = 1
   const entries = []
   const resolvedLogDir = path.resolve(logDir ?? exportDir ?? process.cwd())
-  const currentLogPath = path.join(resolvedLogDir, DEFAULT_LOG_FILE_NAME)
+  const sessionTimestamp = new Date().toISOString().replaceAll(':', '-')
+  const currentLogPath = path.join(resolvedLogDir, `presto-${sessionTimestamp}.log`)
 
   const ensureCurrentLogFile = () => {
     mkdirSync(resolvedLogDir, { recursive: true })

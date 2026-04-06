@@ -8,6 +8,11 @@ import { createBackendSupervisor, type BackendSupervisor } from '../runtime/back
 import { createPluginHostService } from '../runtime/pluginHostService'
 import { enrichCapabilityRequestForBackend } from './capabilityRouting'
 import {
+  createSidecarBootstrapErrorLogEntry,
+  createSidecarParseErrorLogEntry,
+  createSidecarRpcErrorLogEntry,
+} from './logging'
+import {
   resolveAutomationDefinitionsDir,
   resolveAutomationScriptsDir,
   resolveBackendRoot,
@@ -55,13 +60,8 @@ const mobileProgressRuntimeController = createMobileProgressRuntimeController({
   loadJobForMobileProgress,
 })
 
-function appendAppLog(level: 'info' | 'warn' | 'error', source: string, message: string, details?: unknown) {
-  appLogStore.append({
-    level,
-    source,
-    message,
-    details: details ?? null,
-  })
+function appendAppLogEntry(entry: { level: 'info' | 'warn' | 'error'; source: string; message: string; details: unknown }) {
+  appLogStore.append(entry)
 }
 
 async function ensureBackendSupervisor(): Promise<BackendSupervisor> {
@@ -323,6 +323,7 @@ async function main() {
     try {
       request = JSON.parse(line) as RpcRequest
     } catch (error) {
+      appendAppLogEntry(createSidecarParseErrorLogEntry(error))
       const response: RpcResponse = {
         id: 'parse-error',
         ok: false,
@@ -344,10 +345,7 @@ async function main() {
         process.stdout.write(`${JSON.stringify(response)}\n`)
       })
       .catch((error) => {
-        appendAppLog('error', 'sidecar.rpc', 'sidecar_request_failed', {
-          operation: request.operation,
-          message: error instanceof Error ? error.message : String(error),
-        })
+        appendAppLogEntry(createSidecarRpcErrorLogEntry(request, error))
         const response: RpcResponse = {
           id: request.id,
           ok: false,
@@ -365,9 +363,7 @@ process.on('SIGTERM', () => {
 })
 
 void main().catch((error) => {
-  appendAppLog('error', 'sidecar.bootstrap', 'sidecar_boot_failed', {
-    message: error instanceof Error ? error.message : String(error),
-  })
+  appendAppLogEntry(createSidecarBootstrapErrorLogEntry(error))
   process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)
   process.exit(1)
 })

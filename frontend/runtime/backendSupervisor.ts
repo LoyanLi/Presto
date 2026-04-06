@@ -140,6 +140,19 @@ function createStatus(phase: SupervisorPhase, lastError: string | null, logsCoun
   }
 }
 
+function normalizeLogReason(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return normalizeLogReason(error.message)
+  }
+  return normalizeLogReason(error ?? fallback) || fallback
+}
+
 function requestJson<TResponse>(method: string, port: number, pathname: string, body?: unknown): Promise<TResponse> {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : JSON.stringify(body)
@@ -294,6 +307,17 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
       details: details ?? null,
     })
   }
+  const logFailure = (
+    level: 'warn' | 'error',
+    operation: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ): string => {
+    const reason = toErrorMessage(error, `${operation}_failed`)
+    lastError = reason
+    log(level, `${operation} ${reason}`, details)
+    return reason
+  }
 
   const snapshot = (): BackendStatus => ({
     ...createStatus(phase, lastError, logsCount),
@@ -343,9 +367,12 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
       await requestImpl('GET', currentPort, '/api/v1/health')
     } catch (error) {
       if (!isRecoverableRequestError(error)) {
+        logFailure('error', 'backend.ensure_available', error, {
+          port: currentPort,
+        })
         throw error
       }
-      log('warn', error instanceof Error ? error.message : String(error ?? 'backend_health_check_failed'), {
+      logFailure('warn', 'backend.ensure_available', error, {
         operation: 'ensure_available',
         port: currentPort,
       })
@@ -380,10 +407,10 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
       })
       processHandle.stderr.on('data', (chunk) => {
         logsCount += 1
-        lastError = String(chunk).trim() || lastError
-        if (lastError) {
-          log('error', lastError, {
-            operation: 'stderr',
+        const stderrMessage = normalizeLogReason(chunk)
+        if (stderrMessage) {
+          lastError = stderrMessage
+          log('error', `backend.stderr ${stderrMessage}`, {
             port: currentPort,
           })
         }
@@ -399,22 +426,30 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
         })
       })
 
-      await Promise.race([
-        (async () => {
-          for (let attempt = 0; attempt < 30; attempt += 1) {
-            try {
-              await requestImpl('GET', currentPort, '/api/v1/health')
-              return
-            } catch (_error) {
-              await new Promise((resolve) => setTimeout(resolve, 250))
+      try {
+        await Promise.race([
+          (async () => {
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+              try {
+                await requestImpl('GET', currentPort, '/api/v1/health')
+                return
+              } catch (_error) {
+                await new Promise((resolve) => setTimeout(resolve, 250))
+              }
             }
-          }
-          throw new Error(`backend_not_ready_on_port_${currentPort}`)
-        })(),
-        spawnFailed,
-      ])
-      transition('running')
-      return snapshot()
+            throw new Error(`backend_not_ready_on_port_${currentPort}`)
+          })(),
+          spawnFailed,
+        ])
+        transition('running')
+        return snapshot()
+      } catch (error) {
+        phase = 'error'
+        logFailure('error', 'backend.start', error, {
+          port: currentPort,
+        })
+        throw error
+      }
     },
 
     async stop(): Promise<BackendStatus> {
@@ -449,10 +484,12 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
         return (response.capabilities ?? []).map(normalizeCapabilityDefinition)
       } catch (error) {
         if (!isRecoverableRequestError(error)) {
+          logFailure('error', 'backend.list_capabilities', error, {
+            port: currentPort,
+          })
           throw error
         }
-        lastError = error instanceof Error ? error.message : String(error ?? 'backend_capability_list_failed')
-        log('warn', lastError, {
+        logFailure('warn', 'backend.list_capabilities', error, {
           operation: 'list_capabilities',
           port: currentPort,
         })
@@ -479,10 +516,14 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
         )
       } catch (error) {
         if (!isRecoverableRequestError(error)) {
+          logFailure('error', 'backend.invoke_capability', error, {
+            capability: String(request.capability ?? ''),
+            requestId: String(request.requestId ?? ''),
+            port: currentPort,
+          })
           throw error
         }
-        lastError = error instanceof Error ? error.message : String(error ?? 'backend_request_failed')
-        log('warn', lastError, {
+        logFailure('warn', 'backend.invoke_capability', error, {
           operation: 'invoke_capability',
           capability: String(request.capability ?? ''),
           requestId: String(request.requestId ?? ''),

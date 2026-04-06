@@ -34,8 +34,16 @@ async function loadSupervisorModule() {
 function createFakeProcess() {
   const listeners = new Map()
   return {
-    stdout: { on() {} },
-    stderr: { on() {} },
+    stdout: {
+      on(event, handler) {
+        listeners.set(`stdout:${event}`, handler)
+      },
+    },
+    stderr: {
+      on(event, handler) {
+        listeners.set(`stderr:${event}`, handler)
+      },
+    },
     once(event, handler) {
       listeners.set(event, handler)
     },
@@ -47,6 +55,18 @@ function createFakeProcess() {
       const handler = listeners.get(event)
       if (handler) {
         handler(...args)
+      }
+    },
+    emitStdout(chunk) {
+      const handler = listeners.get('stdout:data')
+      if (handler) {
+        handler(chunk)
+      }
+    },
+    emitStderr(chunk) {
+      const handler = listeners.get('stderr:data')
+      if (handler) {
+        handler(chunk)
       }
     },
   }
@@ -353,6 +373,78 @@ test('backend supervisor prefers the packaged python runtime when resources are 
     }
     await rm(tempRoot, { recursive: true, force: true })
   }
+})
+
+test('backend supervisor records stderr output as an error log entry', async (t) => {
+  const { createBackendSupervisor } = await loadSupervisorModule()
+  const logEntries = []
+  let fakeProcess = null
+
+  const supervisor = createBackendSupervisor({
+    resolvePortImpl: async () => 18500,
+    onLog: (entry) => {
+      logEntries.push(entry)
+    },
+    requestJsonImpl: async (method, _port, pathname, _body) => {
+      if (method === 'GET' && pathname === '/api/v1/health') {
+        return { ok: true }
+      }
+      if (method === 'POST' && pathname === '/api/v1/capabilities/invoke') {
+        return { success: true, capability: 'system.health', data: { ok: true } }
+      }
+      throw new Error(`unexpected_request:${method}:${pathname}`)
+    },
+    spawnImpl: () => {
+      fakeProcess = createFakeProcess()
+      return fakeProcess
+    },
+  })
+
+  await supervisor.start()
+  fakeProcess.emitStderr('PT_VERSION_UNSUPPORTED\n')
+
+  assert.equal(
+    logEntries.some(
+      (entry) =>
+        entry.source === 'backend.supervisor' &&
+        entry.level === 'error' &&
+        entry.message === 'backend.stderr PT_VERSION_UNSUPPORTED',
+    ),
+    true,
+  )
+
+  t.after(async () => {
+    await supervisor.stop()
+  })
+})
+
+test('backend supervisor records startup failures before surfacing them', async () => {
+  const { createBackendSupervisor } = await loadSupervisorModule()
+  const logEntries = []
+
+  const supervisor = createBackendSupervisor({
+    resolvePortImpl: async () => 18500,
+    onLog: (entry) => {
+      logEntries.push(entry)
+    },
+    requestJsonImpl: async () => {
+      const error = new Error('connect ECONNREFUSED 127.0.0.1:18500')
+      error.code = 'ECONNREFUSED'
+      throw error
+    },
+    spawnImpl: () => createFakeProcess(),
+  })
+
+  await assert.rejects(() => supervisor.start(), /backend_not_ready_on_port_18500/)
+  assert.equal(
+    logEntries.some(
+      (entry) =>
+        entry.source === 'backend.supervisor' &&
+        entry.level === 'error' &&
+        entry.message === 'backend.start backend_not_ready_on_port_18500',
+    ),
+    true,
+  )
 })
 
 test('backend supervisor resolves backend root when the supervisor is created, not at module load', async (t) => {
