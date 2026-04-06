@@ -20,6 +20,7 @@ from .base import (
     DawTrackInfo,
     DawTransportStatus,
 )
+from .ptsl_runner import PtslCommandRunner
 
 try:  # pragma: no cover - exercised only in a Pro Tools runtime environment
     from ptsl import Engine, PTSL_pb2 as pt, ops
@@ -134,12 +135,14 @@ class ProToolsDawAdapter:
         company_name: str = "Luminous Layers",
         application_name: str = "Presto",
         address: str = "localhost:31416",
+        ptsl_runner: PtslCommandRunner | None = None,
     ) -> None:
         self.company_name = company_name
         self.application_name = application_name
         self.address = address
         self._engine = None
         self._connected = False
+        self._ptsl_runner = ptsl_runner or PtslCommandRunner()
 
     def is_connected(self) -> bool:
         return self._connected and self._engine is not None
@@ -1428,242 +1431,136 @@ class ProToolsDawAdapter:
             ) from exc
 
     def set_track_mute_state(self, track_name: str, muted: bool) -> None:
-        engine = self._require_engine()
-        self.ensure_session_open()
-        normalized_track_name = str(track_name).strip()
-        if not normalized_track_name:
-            raise PrestoError(
-                "TRACK_NAME_REQUIRED",
-                "Track name is required before updating mute state.",
-                source="capability",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_NAME_REQUIRED",
-                    "Track name is required before updating mute state.",
-                ),
-                capability="track.mute.set",
-                adapter="pro_tools",
-            )
+        self.set_track_mute_state_batch([track_name], muted)
 
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRACK_MUTE_UNAVAILABLE",
-                "The current Pro Tools engine cannot set mute state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_MUTE_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set mute state.",
-                    address=self.address,
-                ),
-                capability="track.mute.set",
-                adapter="pro_tools",
-            )
-
-        try:
-            client.run_command(
-                self._resolve_command_id("SetTrackMuteState"),
-                {"track_names": [normalized_track_name], "enabled": bool(muted)},
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_MUTE_SET_FAILED",
-                str(exc) or f"Failed to update mute state for '{normalized_track_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_MUTE_SET_FAILED",
-                    str(exc) or f"Failed to update mute state for '{normalized_track_name}'.",
-                    address=self.address,
-                    track_name=normalized_track_name,
-                    enabled=bool(muted),
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.mute.set",
-                adapter="pro_tools",
-            ) from exc
+    def set_track_mute_state_batch(self, track_names: list[str], muted: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.mute.set",
+            command_name="CId_SetTrackMuteState",
+            track_names=track_names,
+            enabled=muted,
+            unavailable_code="TRACK_MUTE_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set mute state.",
+            failed_code="TRACK_MUTE_SET_FAILED",
+            failed_message="Failed to update mute state for one or more tracks.",
+        )
 
     def set_track_solo_state(self, track_name: str, soloed: bool) -> None:
-        engine = self._require_engine()
-        self.ensure_session_open()
-        normalized_track_name = str(track_name).strip()
-        if not normalized_track_name:
-            raise PrestoError(
-                "TRACK_NAME_REQUIRED",
-                "Track name is required before updating solo state.",
-                source="capability",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_NAME_REQUIRED",
-                    "Track name is required before updating solo state.",
-                ),
-                capability="track.solo.set",
-                adapter="pro_tools",
-            )
+        self.set_track_solo_state_batch([track_name], soloed)
 
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRACK_SOLO_UNAVAILABLE",
-                "The current Pro Tools engine cannot set solo state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_SOLO_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set solo state.",
-                    address=self.address,
-                ),
-                capability="track.solo.set",
-                adapter="pro_tools",
-            )
-
-        try:
-            client.run_command(
-                self._resolve_command_id("SetTrackSoloState"),
-                {"track_names": [normalized_track_name], "enabled": bool(soloed)},
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_SOLO_SET_FAILED",
-                str(exc) or f"Failed to update solo state for '{normalized_track_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_SOLO_SET_FAILED",
-                    str(exc) or f"Failed to update solo state for '{normalized_track_name}'.",
-                    address=self.address,
-                    track_name=normalized_track_name,
-                    enabled=bool(soloed),
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.solo.set",
-                adapter="pro_tools",
-            ) from exc
+    def set_track_solo_state_batch(self, track_names: list[str], soloed: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.solo.set",
+            command_name="CId_SetTrackSoloState",
+            track_names=track_names,
+            enabled=soloed,
+            unavailable_code="TRACK_SOLO_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set solo state.",
+            failed_code="TRACK_SOLO_SET_FAILED",
+            failed_message="Failed to update solo state for one or more tracks.",
+        )
 
     def set_track_hidden_state(self, track_name: str, hidden: bool) -> None:
         self.set_track_hidden_state_batch([track_name], hidden)
 
     def set_track_hidden_state_batch(self, track_names: list[str], hidden: bool) -> None:
-        engine = self._require_engine()
-        self.ensure_session_open()
-        normalized_track_names = [str(track_name).strip() for track_name in track_names if str(track_name).strip()]
-        if not normalized_track_names:
-            raise PrestoError(
-                "TRACK_NAME_REQUIRED",
-                "At least one track name is required before updating hidden state.",
-                source="capability",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_NAME_REQUIRED",
-                    "At least one track name is required before updating hidden state.",
-                ),
-                capability="track.hidden.set",
-                adapter="pro_tools",
-            )
-
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRACK_HIDDEN_UNAVAILABLE",
-                "The current Pro Tools engine cannot set hidden state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_HIDDEN_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set hidden state.",
-                    address=self.address,
-                ),
-                capability="track.hidden.set",
-                adapter="pro_tools",
-            )
-
-        try:
-            client.run_command(
-                self._resolve_command_id("SetTrackHiddenState"),
-                {"track_names": normalized_track_names, "enabled": bool(hidden)},
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_HIDDEN_SET_FAILED",
-                str(exc) or "Failed to update hidden state for one or more tracks.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_HIDDEN_SET_FAILED",
-                    str(exc) or "Failed to update hidden state for one or more tracks.",
-                    address=self.address,
-                    track_names=normalized_track_names,
-                    enabled=bool(hidden),
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.hidden.set",
-                adapter="pro_tools",
-            ) from exc
+        self._set_track_toggle_state_batch(
+            capability="track.hidden.set",
+            command_name="CId_SetTrackHiddenState",
+            track_names=track_names,
+            enabled=hidden,
+            unavailable_code="TRACK_HIDDEN_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set hidden state.",
+            failed_code="TRACK_HIDDEN_SET_FAILED",
+            failed_message="Failed to update hidden state for one or more tracks.",
+        )
 
     def set_track_inactive_state(self, track_name: str, inactive: bool) -> None:
         self.set_track_inactive_state_batch([track_name], inactive)
 
     def set_track_inactive_state_batch(self, track_names: list[str], inactive: bool) -> None:
-        engine = self._require_engine()
-        self.ensure_session_open()
-        normalized_track_names = [str(track_name).strip() for track_name in track_names if str(track_name).strip()]
-        if not normalized_track_names:
-            raise PrestoError(
-                "TRACK_NAME_REQUIRED",
-                "At least one track name is required before updating inactive state.",
-                source="capability",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_NAME_REQUIRED",
-                    "At least one track name is required before updating inactive state.",
-                ),
-                capability="track.inactive.set",
-                adapter="pro_tools",
-            )
+        self._set_track_toggle_state_batch(
+            capability="track.inactive.set",
+            command_name="CId_SetTrackInactiveState",
+            track_names=track_names,
+            enabled=inactive,
+            unavailable_code="TRACK_INACTIVE_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set inactive state.",
+            failed_code="TRACK_INACTIVE_SET_FAILED",
+            failed_message="Failed to update inactive state for one or more tracks.",
+        )
 
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRACK_INACTIVE_UNAVAILABLE",
-                "The current Pro Tools engine cannot set inactive state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_INACTIVE_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set inactive state.",
-                    address=self.address,
-                ),
-                capability="track.inactive.set",
-                adapter="pro_tools",
-            )
+    def set_track_record_enable_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.recordEnable.set",
+            command_name="CId_SetTrackRecordEnableState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_RECORD_ENABLE_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set record enable state.",
+            failed_code="TRACK_RECORD_ENABLE_SET_FAILED",
+            failed_message="Failed to update record enable state for one or more tracks.",
+        )
 
-        try:
-            client.run_command(
-                self._resolve_command_id("SetTrackInactiveState"),
-                {"track_names": normalized_track_names, "enabled": bool(inactive)},
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_INACTIVE_SET_FAILED",
-                str(exc) or "Failed to update inactive state for one or more tracks.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_INACTIVE_SET_FAILED",
-                    str(exc) or "Failed to update inactive state for one or more tracks.",
-                    address=self.address,
-                    track_names=normalized_track_names,
-                    enabled=bool(inactive),
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.inactive.set",
-                adapter="pro_tools",
-            ) from exc
+    def set_track_record_safe_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.recordSafe.set",
+            command_name="CId_SetTrackRecordSafeEnableState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_RECORD_SAFE_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set record safe state.",
+            failed_code="TRACK_RECORD_SAFE_SET_FAILED",
+            failed_message="Failed to update record safe state for one or more tracks.",
+        )
+
+    def set_track_input_monitor_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.inputMonitor.set",
+            command_name="CId_SetTrackInputMonitorState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_INPUT_MONITOR_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set input monitor state.",
+            failed_code="TRACK_INPUT_MONITOR_SET_FAILED",
+            failed_message="Failed to update input monitor state for one or more tracks.",
+        )
+
+    def set_track_online_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.online.set",
+            command_name="CId_SetTrackOnlineState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_ONLINE_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set online state.",
+            failed_code="TRACK_ONLINE_SET_FAILED",
+            failed_message="Failed to update online state for one or more tracks.",
+        )
+
+    def set_track_frozen_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.frozen.set",
+            command_name="CId_SetTrackFrozenState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_FROZEN_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set frozen state.",
+            failed_code="TRACK_FROZEN_SET_FAILED",
+            failed_message="Failed to update frozen state for one or more tracks.",
+        )
+
+    def set_track_open_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self._set_track_toggle_state_batch(
+            capability="track.open.set",
+            command_name="CId_SetTrackOpenState",
+            track_names=track_names,
+            enabled=enabled,
+            unavailable_code="TRACK_OPEN_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set open state.",
+            failed_code="TRACK_OPEN_SET_FAILED",
+            failed_message="Failed to update open state for one or more tracks.",
+        )
 
     def cancel_export(self) -> None:
         self._unimplemented("cancel_export")
@@ -2432,6 +2329,70 @@ class ProToolsDawAdapter:
             if value is not None:
                 details[key] = value
         return details
+
+    def _set_track_toggle_state_batch(
+        self,
+        *,
+        capability: str,
+        command_name: str,
+        track_names: list[str],
+        enabled: bool,
+        unavailable_code: str,
+        unavailable_message: str,
+        failed_code: str,
+        failed_message: str,
+    ) -> None:
+        engine = self._require_engine()
+        self.ensure_session_open()
+        normalized_track_names = [str(track_name).strip() for track_name in track_names if str(track_name).strip()]
+        if not normalized_track_names:
+            raise PrestoError(
+                "TRACK_NAME_REQUIRED",
+                "At least one track name is required before updating track state.",
+                source="capability",
+                retryable=False,
+                details=self._raw_error_details(
+                    "TRACK_NAME_REQUIRED",
+                    "At least one track name is required before updating track state.",
+                ),
+                capability=capability,
+                adapter="pro_tools",
+            )
+
+        try:
+            self._ptsl_runner.run(
+                engine,
+                command_name,
+                {"track_names": normalized_track_names, "enabled": bool(enabled)},
+                capability=capability,
+            )
+        except PrestoError as exc:
+            if exc.code in {"PTSL_CLIENT_UNAVAILABLE", "PTSL_COMMAND_UNAVAILABLE"}:
+                raise PrestoError(
+                    unavailable_code,
+                    unavailable_message,
+                    source="runtime",
+                    retryable=False,
+                    details=self._raw_error_details(unavailable_code, unavailable_message, address=self.address),
+                    capability=capability,
+                    adapter="pro_tools",
+                ) from exc
+            raise PrestoError(
+                failed_code,
+                str(exc) or failed_message,
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    failed_code,
+                    str(exc) or failed_message,
+                    address=self.address,
+                    track_names=normalized_track_names,
+                    enabled=bool(enabled),
+                    raw_exception=str(exc) or None,
+                ),
+                capability=capability,
+                adapter="pro_tools",
+            ) from exc
 
     @staticmethod
     def _read_track_color_success_count(response: Any) -> int | None:

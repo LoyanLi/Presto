@@ -16,6 +16,7 @@ export const runtimeBridgeChannels = {
   },
   backend: {
     getStatus: 'backend:get-status',
+    listCapabilities: 'backend:list-capabilities',
     getDawAdapterSnapshot: 'backend:get-daw-adapter-snapshot',
     restart: 'backend:restart',
     setDawTarget: 'backend:set-daw-target',

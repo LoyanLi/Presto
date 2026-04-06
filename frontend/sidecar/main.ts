@@ -96,8 +96,8 @@ async function loadJobForMobileProgress(taskId: string) {
     },
     meta: {
       clientName: 'mobile-progress',
-      clientVersion: '0.1.0',
-      sdkVersion: '0.1.0',
+      clientVersion: '0.3.2',
+      sdkVersion: '0.3.2',
     },
   })
 
@@ -115,8 +115,8 @@ async function loadDawAdapterSnapshot() {
     payload: {},
     meta: {
       clientName: 'tauri-sidecar',
-      clientVersion: '0.1.0',
-      sdkVersion: '0.1.0',
+      clientVersion: '0.3.2',
+      sdkVersion: '0.3.2',
     },
   })
 
@@ -127,12 +127,17 @@ async function loadDawAdapterSnapshot() {
   return response.data
 }
 
+async function loadCapabilityCatalog() {
+  const supervisor = await ensureBackendSupervisor()
+  return supervisor.listCapabilities()
+}
+
 async function setBackendDeveloperMode(enabled: unknown) {
   const resolvedEnabled = Boolean(enabled)
   const runtimeMeta = {
     clientName: 'tauri-sidecar',
-    clientVersion: '0.1.0',
-    sdkVersion: '0.1.0',
+    clientVersion: '0.3.2',
+    sdkVersion: '0.3.2',
   }
   const requestIdSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const getConfigResponse = await invokeCapability({
@@ -234,6 +239,8 @@ async function handleRequest(request: RpcRequest): Promise<unknown> {
       }
     case 'backend.status.get':
       return (await ensureBackendSupervisor()).getStatus()
+    case 'backend.capabilities.list':
+      return loadCapabilityCatalog()
     case 'backend.lifecycle.restart': {
       const supervisor = await ensureBackendSupervisor()
       await supervisor.stop()

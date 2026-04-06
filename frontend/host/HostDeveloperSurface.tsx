@@ -1,11 +1,14 @@
 import type { CSSProperties } from 'react'
 
 import type { PrestoClient } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
 import { Button, ShellSurface } from '../ui'
 import { DeveloperCapabilityConsole } from './DeveloperCapabilityConsole'
 
 export interface HostDeveloperSurfaceProps {
   developerPresto: PrestoClient
+  developerRuntime: PrestoRuntime
+  activeDawTarget?: string | null
   smokeTarget?: string | null
   smokeImportFolder?: string | null
   onOpenSettings(): void
@@ -38,6 +41,8 @@ const developerToolbarStyle: CSSProperties = {
 
 export function HostDeveloperSurface({
   developerPresto,
+  developerRuntime,
+  activeDawTarget,
   smokeTarget,
   smokeImportFolder,
   onOpenSettings: _onOpenSettings,
@@ -55,6 +60,8 @@ export function HostDeveloperSurface({
         <div style={developerMainPaneStyle}>
           <DeveloperCapabilityConsole
             presto={developerPresto}
+            developerRuntime={developerRuntime}
+            activeDawTarget={activeDawTarget}
             smokeTarget={smokeTarget}
             smokeImportFolder={smokeImportFolder}
           />

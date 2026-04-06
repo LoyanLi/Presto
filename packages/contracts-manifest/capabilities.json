@@ -529,6 +529,20 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
     "handler": "track.mute.set"
   },
   {
@@ -554,6 +568,20 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
     "handler": "track.solo.set"
   },
   {
@@ -579,6 +607,20 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
     "handler": "track.hidden.set"
   },
   {
@@ -604,6 +646,254 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.open.set"
+  },
+  {
+    "id": "track.recordEnable.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道录音使能状态",
+    "requestSchema": {
+      "name": "TrackRecordEnableSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackRecordEnableSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.recordEnable.set"
+  },
+  {
+    "id": "track.recordSafe.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道录音保护状态",
+    "requestSchema": {
+      "name": "TrackRecordSafeSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackRecordSafeSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.recordSafe.set"
+  },
+  {
+    "id": "track.inputMonitor.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道输入监听状态",
+    "requestSchema": {
+      "name": "TrackInputMonitorSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackInputMonitorSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.inputMonitor.set"
+  },
+  {
+    "id": "track.online.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道 online 状态",
+    "requestSchema": {
+      "name": "TrackOnlineSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackOnlineSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.online.set"
+  },
+  {
+    "id": "track.frozen.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道冻结状态",
+    "requestSchema": {
+      "name": "TrackFrozenSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackFrozenSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
+    "handler": "track.frozen.set"
+  },
+  {
+    "id": "track.open.set",
+    "version": 1,
+    "kind": "command",
+    "domain": "track",
+    "visibility": "public",
+    "description": "设置轨道展开状态",
+    "requestSchema": {
+      "name": "TrackOpenSetRequest",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "responseSchema": {
+      "name": "TrackOpenSetResponse",
+      "package": "@presto/contracts",
+      "version": 1
+    },
+    "dependsOn": [
+      "daw"
+    ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [
+          "trackNames",
+          "enabled"
+        ],
+        "responseFields": [
+          "updated",
+          "trackNames",
+          "enabled"
+        ]
+      }
+    },
     "handler": "track.inactive.set"
   },
   {

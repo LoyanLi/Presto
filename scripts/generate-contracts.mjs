@@ -42,6 +42,29 @@ function schemaName(schemaRef, fieldName, capabilityId) {
   throw new Error(`capability ${capabilityId} has invalid ${fieldName}`)
 }
 
+function canonicalSource(capability) {
+  if (typeof capability.canonicalSource === 'string' && capability.canonicalSource.trim()) {
+    return capability.canonicalSource.trim()
+  }
+  if (Array.isArray(capability.supportedDaws) && capability.supportedDaws.length > 0) {
+    return capability.supportedDaws[0]
+  }
+  throw new Error(`capability ${capability.id} must declare supportedDaws or canonicalSource`)
+}
+
+function fieldSupport(capability) {
+  if (capability.fieldSupport && typeof capability.fieldSupport === 'object' && !Array.isArray(capability.fieldSupport)) {
+    return capability.fieldSupport
+  }
+  const resolvedCanonicalSource = canonicalSource(capability)
+  return {
+    [resolvedCanonicalSource]: {
+      requestFields: [],
+      responseFields: [],
+    },
+  }
+}
+
 function generateTsCapabilityRegistry() {
   const outDir = path.join(repoRoot, 'packages', 'contracts', 'src', 'generated')
   ensureDir(outDir)
@@ -50,6 +73,8 @@ function generateTsCapabilityRegistry() {
     .map((capability) => {
       const requestSchema = schemaName(capability.requestSchema, 'requestSchema', capability.id)
       const responseSchema = schemaName(capability.responseSchema, 'responseSchema', capability.id)
+      const resolvedCanonicalSource = canonicalSource(capability)
+      const resolvedFieldSupport = fieldSupport(capability)
       const emitsBlock =
         Array.isArray(capability.emitsEvents) && capability.emitsEvents.length > 0
           ? `\n    emitsEvents: ${JSON.stringify(capability.emitsEvents)} as const,`
@@ -66,6 +91,8 @@ function generateTsCapabilityRegistry() {
     responseSchema: schemaRef('${responseSchema}'),
     dependsOn: ${JSON.stringify(capability.dependsOn)} as const,
     supportedDaws: ${JSON.stringify(capability.supportedDaws)} as const,
+    canonicalSource: ${JSON.stringify(resolvedCanonicalSource)},
+    fieldSupport: ${JSON.stringify(resolvedFieldSupport)} as const,
     handler: '${capability.handler}',${emitsBlock}
   },`
     })
@@ -100,10 +127,18 @@ function generatePyCapabilityCatalog() {
     .map((capability) => {
       const requestSchema = schemaName(capability.requestSchema, 'requestSchema', capability.id)
       const responseSchema = schemaName(capability.responseSchema, 'responseSchema', capability.id)
+      const resolvedCanonicalSource = canonicalSource(capability)
+      const resolvedFieldSupport = fieldSupport(capability)
       const emitsBlock =
         Array.isArray(capability.emitsEvents) && capability.emitsEvents.length > 0
           ? `,\n        emits_events=${toPyTuple(capability.emitsEvents)}`
           : ''
+      const fieldSupportBlock = Object.entries(resolvedFieldSupport)
+        .map(
+          ([daw, support]) =>
+            `            ${JSON.stringify(daw)}: CapabilityFieldSupport(request_fields=${toPyTuple(support.requestFields)}, response_fields=${toPyTuple(support.responseFields)}),`,
+        )
+        .join('\n')
 
       return `    definition(
         "${capability.id}",
@@ -115,6 +150,10 @@ function generatePyCapabilityCatalog() {
         response_schema="${responseSchema}",
         depends_on=${toPyTuple(capability.dependsOn)},
         supported_daws=${toPyTuple(capability.supportedDaws)},
+        canonical_source="${resolvedCanonicalSource}",
+        field_support={
+${fieldSupportBlock}
+        },
         handler="${capability.handler}"${emitsBlock},
     ),`
     })
@@ -123,6 +162,7 @@ function generatePyCapabilityCatalog() {
   const content = `"""Auto-generated from contracts-manifest; do not edit by hand."""
 from __future__ import annotations
 
+from ...domain.capabilities import CapabilityFieldSupport
 from .factory import definition
 
 DEFAULT_CAPABILITY_DEFINITIONS = (

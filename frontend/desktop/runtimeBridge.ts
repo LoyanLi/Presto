@@ -7,6 +7,7 @@ import type {
   AutomationRuntimeClient,
 } from '@presto/sdk-runtime/clients/automation'
 import type {
+  BackendCapabilityDefinition,
   BackendRuntimeClient,
   BackendStatus,
   DawAdapterSnapshot,
@@ -46,6 +47,7 @@ export interface DesktopRuntimeOperationMap {
   }
   backend: {
     getStatus: string
+    listCapabilities: string
     getDawAdapterSnapshot: string
     restart: string
     setDawTarget: string
@@ -124,6 +126,8 @@ export function createDesktopRuntimeBridge(
 
   const backend = {
     getStatus: () => invokeTyped<BackendStatus>(invoke, operations.backend.getStatus),
+    listCapabilities: () =>
+      invokeTyped<BackendCapabilityDefinition[]>(invoke, operations.backend.listCapabilities),
     getDawAdapterSnapshot: () =>
       invokeTyped<DawAdapterSnapshot>(invoke, operations.backend.getDawAdapterSnapshot),
     restart: () => invokeTyped<{ ok: true }>(invoke, operations.backend.restart),

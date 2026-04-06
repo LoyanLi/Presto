@@ -6,7 +6,13 @@ export type {
   AutomationRunDefinitionStepResult,
   AutomationRuntimeClient,
 } from './clients/automation'
-export type { BackendLogEntry, BackendRuntimeClient, BackendStatus } from './clients/backend'
+export type {
+  BackendCapabilityDefinition,
+  BackendCapabilityFieldSupport,
+  BackendLogEntry,
+  BackendRuntimeClient,
+  BackendStatus,
+} from './clients/backend'
 export type { DialogOpenFolderResult, DialogRuntimeClient } from './clients/dialog'
 export type { FsRuntimeClient, FsStat } from './clients/fs'
 export type {

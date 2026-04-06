@@ -46,6 +46,12 @@ class CapabilitySchemaRef:
 
 
 @dataclass(frozen=True)
+class CapabilityFieldSupport:
+    request_fields: tuple[str, ...] = field(default_factory=tuple)
+    response_fields: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
 class CapabilityDefinition:
     id: str
     version: int
@@ -57,6 +63,8 @@ class CapabilityDefinition:
     response_schema: CapabilitySchemaRef
     depends_on: tuple[CapabilityDependency, ...] = field(default_factory=tuple)
     supported_daws: tuple[DawTarget, ...] = field(default_factory=tuple)
+    canonical_source: DawTarget = DEFAULT_DAW_TARGET
+    field_support: dict[DawTarget, CapabilityFieldSupport] = field(default_factory=dict)
     handler: str = ""
     emits_events: tuple[str, ...] = field(default_factory=tuple)
 

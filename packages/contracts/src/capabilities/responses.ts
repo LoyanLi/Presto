@@ -229,6 +229,18 @@ export interface TrackInactiveSetResponse {
   enabled: boolean
 }
 
+export type TrackRecordEnableSetResponse = TrackMuteSetResponse
+
+export type TrackRecordSafeSetResponse = TrackMuteSetResponse
+
+export type TrackInputMonitorSetResponse = TrackMuteSetResponse
+
+export type TrackOnlineSetResponse = TrackMuteSetResponse
+
+export type TrackFrozenSetResponse = TrackMuteSetResponse
+
+export type TrackOpenSetResponse = TrackMuteSetResponse
+
 export interface ClipSelectAllOnTrackResponse {
   selected: true
 }
@@ -370,6 +382,12 @@ export interface CapabilityResponseMap {
   'track.solo.set': TrackSoloSetResponse
   'track.hidden.set': TrackHiddenSetResponse
   'track.inactive.set': TrackInactiveSetResponse
+  'track.recordEnable.set': TrackRecordEnableSetResponse
+  'track.recordSafe.set': TrackRecordSafeSetResponse
+  'track.inputMonitor.set': TrackInputMonitorSetResponse
+  'track.online.set': TrackOnlineSetResponse
+  'track.frozen.set': TrackFrozenSetResponse
+  'track.open.set': TrackOpenSetResponse
   'clip.selectAllOnTrack': ClipSelectAllOnTrackResponse
   'transport.play': TransportPlayResponse
   'transport.stop': TransportStopResponse

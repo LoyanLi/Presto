@@ -11,18 +11,30 @@ import type {
   TrackSelectionGetResponse,
   TrackHiddenSetRequest,
   TrackHiddenSetResponse,
+  TrackInputMonitorSetRequest,
+  TrackInputMonitorSetResponse,
   TrackInactiveSetRequest,
   TrackInactiveSetResponse,
   TrackMuteSetRequest,
   TrackMuteSetResponse,
+  TrackOnlineSetRequest,
+  TrackOnlineSetResponse,
   TrackPanSetRequest,
   TrackPanSetResponse,
+  TrackRecordEnableSetRequest,
+  TrackRecordEnableSetResponse,
+  TrackRecordSafeSetRequest,
+  TrackRecordSafeSetResponse,
   TrackRenameRequest,
   TrackRenameResponse,
   TrackSelectRequest,
   TrackSelectResponse,
   TrackSoloSetRequest,
   TrackSoloSetResponse,
+  TrackFrozenSetRequest,
+  TrackFrozenSetResponse,
+  TrackOpenSetRequest,
+  TrackOpenSetResponse,
 } from '@presto/contracts'
 import type { PrestoClientAssemblyContext } from '../createPrestoClient'
 
@@ -96,5 +108,29 @@ export const createTrackClient = (context: PrestoClientAssemblyContext): TrackCl
   inactive: {
     set: (request: TrackInactiveSetRequest) =>
       invokeCapability<TrackInactiveSetRequest, TrackInactiveSetResponse>(context, 'track.inactive.set', request),
+  },
+  recordEnable: {
+    set: (request: TrackRecordEnableSetRequest) =>
+      invokeCapability<TrackRecordEnableSetRequest, TrackRecordEnableSetResponse>(context, 'track.recordEnable.set', request),
+  },
+  recordSafe: {
+    set: (request: TrackRecordSafeSetRequest) =>
+      invokeCapability<TrackRecordSafeSetRequest, TrackRecordSafeSetResponse>(context, 'track.recordSafe.set', request),
+  },
+  inputMonitor: {
+    set: (request: TrackInputMonitorSetRequest) =>
+      invokeCapability<TrackInputMonitorSetRequest, TrackInputMonitorSetResponse>(context, 'track.inputMonitor.set', request),
+  },
+  online: {
+    set: (request: TrackOnlineSetRequest) =>
+      invokeCapability<TrackOnlineSetRequest, TrackOnlineSetResponse>(context, 'track.online.set', request),
+  },
+  frozen: {
+    set: (request: TrackFrozenSetRequest) =>
+      invokeCapability<TrackFrozenSetRequest, TrackFrozenSetResponse>(context, 'track.frozen.set', request),
+  },
+  open: {
+    set: (request: TrackOpenSetRequest) =>
+      invokeCapability<TrackOpenSetRequest, TrackOpenSetResponse>(context, 'track.open.set', request),
   },
 })

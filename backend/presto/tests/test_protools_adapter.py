@@ -274,6 +274,59 @@ def test_select_track_uses_ptsl_selection_by_name() -> None:
     ]
 
 
+def test_set_track_mute_state_batch_uses_single_ptsl_command() -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    adapter.set_track_mute_state_batch(["Kick", "Snare"], True)
+
+    assert engine.command_calls[-1] == (
+        _pt_constant("CId_SetTrackMuteState"),
+        {"track_names": ["Kick", "Snare"], "enabled": True},
+    )
+
+
+def test_set_track_solo_state_batch_uses_single_ptsl_command() -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    adapter.set_track_solo_state_batch(["Kick", "Snare"], False)
+
+    assert engine.command_calls[-1] == (
+        _pt_constant("CId_SetTrackSoloState"),
+        {"track_names": ["Kick", "Snare"], "enabled": False},
+    )
+
+
+@pytest.mark.parametrize(
+    ("method_name", "command_name"),
+    [
+        ("set_track_record_enable_state_batch", "CId_SetTrackRecordEnableState"),
+        ("set_track_record_safe_state_batch", "CId_SetTrackRecordSafeEnableState"),
+        ("set_track_input_monitor_state_batch", "CId_SetTrackInputMonitorState"),
+        ("set_track_online_state_batch", "CId_SetTrackOnlineState"),
+        ("set_track_frozen_state_batch", "CId_SetTrackFrozenState"),
+        ("set_track_open_state_batch", "CId_SetTrackOpenState"),
+    ],
+)
+def test_new_track_toggle_batches_use_expected_ptsl_command(method_name: str, command_name: str) -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    getattr(adapter, method_name)(["Kick"], True)
+
+    assert engine.command_calls[-1] == (
+        _pt_constant(command_name),
+        {"track_names": ["Kick"], "enabled": True},
+    )
+
+
 def test_list_tracks_exposes_track_format_from_ptsl_track_list() -> None:
     adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
     engine = FakeImportEngine()

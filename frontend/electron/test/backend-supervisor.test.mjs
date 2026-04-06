@@ -145,6 +145,83 @@ test('backend supervisor starts backend before first capability invoke', async (
   })
 })
 
+test('backend supervisor lists public capabilities from the backend metadata route', async (t) => {
+  const { createBackendSupervisor } = await loadSupervisorModule()
+  const requests = []
+
+  const supervisor = createBackendSupervisor({
+    resolvePortImpl: async () => 18500,
+    requestJsonImpl: async (method, port, pathname, body) => {
+      requests.push({ method, port, pathname, body })
+      if (method === 'GET' && pathname === '/api/v1/health') {
+        return { ok: true }
+      }
+      if (method === 'GET' && pathname === '/api/v1/capabilities') {
+        return {
+          capabilities: [
+            {
+              id: 'track.mute.set',
+              version: 1,
+              kind: 'command',
+              domain: 'track',
+              visibility: 'public',
+              description: 'Sets mute state for one or more tracks.',
+              request_schema: 'TrackMuteSetRequest',
+              response_schema: 'TrackToggleSetResponse',
+              depends_on: ['daw'],
+              supported_daws: ['pro_tools'],
+              canonical_source: 'pro_tools',
+              field_support: {
+                pro_tools: {
+                  request_fields: ['trackNames', 'enabled'],
+                  response_fields: ['updated', 'trackNames', 'enabled'],
+                },
+              },
+              handler: 'track.mute.set',
+              emits_events: [],
+            },
+          ],
+        }
+      }
+      throw new Error(`unexpected_request:${method}:${pathname}`)
+    },
+    spawnImpl: () => createFakeProcess(),
+  })
+
+  const capabilities = await supervisor.listCapabilities()
+
+  assert.deepEqual(capabilities, [
+    {
+      id: 'track.mute.set',
+      version: 1,
+      kind: 'command',
+      domain: 'track',
+      visibility: 'public',
+      description: 'Sets mute state for one or more tracks.',
+      requestSchema: 'TrackMuteSetRequest',
+      responseSchema: 'TrackToggleSetResponse',
+      dependsOn: ['daw'],
+      supportedDaws: ['pro_tools'],
+      canonicalSource: 'pro_tools',
+      fieldSupport: {
+        pro_tools: {
+          requestFields: ['trackNames', 'enabled'],
+          responseFields: ['updated', 'trackNames', 'enabled'],
+        },
+      },
+      handler: 'track.mute.set',
+      emitsEvents: [],
+    },
+  ])
+  assert.equal(requests[0].method, 'GET')
+  assert.equal(requests[0].pathname, '/api/v1/health')
+  assert.equal(requests[1].method, 'GET')
+  assert.equal(requests[1].pathname, '/api/v1/capabilities')
+  t.after(async () => {
+    await supervisor.stop()
+  })
+})
+
 test('backend supervisor uses an alternate port when the default port is already occupied', async (t) => {
   const { createBackendSupervisor } = await loadSupervisorModule()
   const requests = []

@@ -100,3 +100,16 @@ test('developer capability inventory declares minimum DAW versions per command',
   assert.match(source, /id:\s*'import\.run\.start'[\s\S]*minimumDawVersion:\s*'2025\.06\.0'/)
   assert.match(source, /id:\s*'jobs\.get'[\s\S]*minimumDawVersion:\s*'Host only'/)
 })
+
+test('developer console loads capability facts from runtime backend metadata instead of hardcoded registry facts', async () => {
+  const consoleSource = await readFile(path.join(repoRoot, 'frontend/host/DeveloperCapabilityConsole.tsx'), 'utf8')
+  const hostSurfaceSource = await readFile(path.join(repoRoot, 'frontend/host/HostDeveloperSurface.tsx'), 'utf8')
+
+  assert.match(consoleSource, /listCapabilities\(\)/)
+  assert.match(consoleSource, /supportedDaws/)
+  assert.match(consoleSource, /canonicalSource/)
+  assert.match(consoleSource, /fieldSupport/)
+  assert.doesNotMatch(consoleSource, /const definitions = useMemo\(\s*\(\) =>\s*DEVELOPER_CAPABILITIES\.filter/)
+  assert.match(hostSurfaceSource, /developerRuntime/)
+  assert.match(hostSurfaceSource, /developerRuntime=\{developerRuntime\}/)
+})

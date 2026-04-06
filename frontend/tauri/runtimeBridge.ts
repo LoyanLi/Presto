@@ -21,6 +21,7 @@ const tauriRuntimeOperations = {
   },
   backend: {
     getStatus: 'backend.status.get',
+    listCapabilities: 'backend.capabilities.list',
     getDawAdapterSnapshot: 'backend.daw-adapter.snapshot.get',
     restart: 'backend.lifecycle.restart',
     setDawTarget: 'backend.daw-target.set',
@@ -93,6 +94,6 @@ export function createTauriPrestoClient(): PrestoClient {
   return createPrestoClient({
     transport,
     clientName: 'tauri-renderer',
-    clientVersion: '0.1.0',
+    clientVersion: '0.3.2',
   })
 }

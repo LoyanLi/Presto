@@ -39,6 +39,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
       },
       backend: {
         getStatus: 'backend.status.get',
+        listCapabilities: 'backend.capabilities.list',
         getDawAdapterSnapshot: 'backend.daw.snapshot.get',
         restart: 'backend.process.restart',
         setDawTarget: 'backend.daw.target.set',
@@ -96,6 +97,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   )
 
   await runtime.plugins.list()
+  await runtime.backend.listCapabilities()
   await runtime.plugins.installFromDirectory(true)
   await runtime.plugins.installFromZip(false)
   await runtime.plugins.setEnabled('official.export-workflow', false)
@@ -103,6 +105,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
 
   assert.deepEqual(calls, [
     ['plugins.catalog.list'],
+    ['backend.capabilities.list'],
     ['plugins.catalog.install-directory', true],
     ['plugins.catalog.install-zip', false],
     ['plugins.catalog.set-enabled', 'official.export-workflow', false],

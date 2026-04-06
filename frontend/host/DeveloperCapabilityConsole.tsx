@@ -1,6 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import type { PrestoClient } from '@presto/contracts'
+import type { PrestoRuntime } from '@presto/sdk-runtime'
+import type { BackendCapabilityDefinition } from '@presto/sdk-runtime/clients/backend'
 import {
   Badge,
   Button,
@@ -15,7 +17,7 @@ import {
   CORE_CONSOLE_CAPABILITY_IDS,
   DEVELOPER_CAPABILITIES,
   type CapabilityStatus,
-  type DeveloperCapabilityDefinition,
+  type DeveloperCapabilityDefinition as DeveloperCapabilityOverlay,
   type DeveloperCapabilityId,
 } from './developerCapabilityInventory'
 
@@ -28,6 +30,8 @@ interface CapabilityExecutionState {
   errorText: string
   phase: ExecutionPhase
 }
+
+type DeveloperCapabilityDefinition = BackendCapabilityDefinition & DeveloperCapabilityOverlay
 
 type CoreIoPublicClient = {
   import: {
@@ -53,6 +57,8 @@ type ManualJobsPublicClient = {
 
 export interface DeveloperCapabilityConsoleProps {
   presto: PrestoClient
+  developerRuntime: PrestoRuntime
+  activeDawTarget?: string | null
   smokeTarget?: string | null
   smokeImportFolder?: string | null
 }
@@ -244,6 +250,15 @@ function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+function createExecutionState(capability: DeveloperCapabilityOverlay): CapabilityExecutionState {
+  return {
+    payloadText: pretty(capability.defaultPayload),
+    resultText: '',
+    errorText: '',
+    phase: WRITE_STATUSES.has(capability.status) ? 'idle' : 'disabled',
+  }
+}
+
 function parsePayload(text: string): unknown {
   if (!text.trim()) {
     return {}
@@ -337,6 +352,42 @@ function formatCapabilitySegment(segment: string): string {
     .replace(/^./, (value) => value.toUpperCase())
 }
 
+function formatDawTarget(target: string): string {
+  return target
+    .split('_')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function resolveCapabilityFieldSupport(
+  capability: DeveloperCapabilityDefinition,
+  activeDawTarget?: string | null,
+) {
+  if (activeDawTarget && capability.fieldSupport[activeDawTarget]) {
+    return {
+      dawTarget: activeDawTarget,
+      support: capability.fieldSupport[activeDawTarget],
+    }
+  }
+
+  if (capability.fieldSupport[capability.canonicalSource]) {
+    return {
+      dawTarget: capability.canonicalSource,
+      support: capability.fieldSupport[capability.canonicalSource],
+    }
+  }
+
+  const [fallbackTarget, fallbackSupport] = Object.entries(capability.fieldSupport)[0] ?? []
+  if (!fallbackTarget || !fallbackSupport) {
+    return null
+  }
+
+  return {
+    dawTarget: fallbackTarget,
+    support: fallbackSupport,
+  }
+}
+
 function formatCapabilityTitle(capability: DeveloperCapabilityDefinition): string {
   const segments = capability.id.split('.')
   const labelSegments = segments.length > 1 ? segments.slice(1) : segments
@@ -408,6 +459,18 @@ async function invokePublicCapability(
       return presto.track.mute.set(payload as never)
     case 'track.solo.set':
       return presto.track.solo.set(payload as never)
+    case 'track.recordEnable.set':
+      return presto.track.recordEnable.set(payload as never)
+    case 'track.recordSafe.set':
+      return presto.track.recordSafe.set(payload as never)
+    case 'track.inputMonitor.set':
+      return presto.track.inputMonitor.set(payload as never)
+    case 'track.online.set':
+      return presto.track.online.set(payload as never)
+    case 'track.frozen.set':
+      return presto.track.frozen.set(payload as never)
+    case 'track.open.set':
+      return presto.track.open.set(payload as never)
     case 'clip.selectAllOnTrack':
       return presto.clip.selectAllOnTrack(payload as never)
     case 'transport.play':
@@ -503,6 +566,8 @@ async function invokePublicCapability(
 
 export function DeveloperCapabilityConsole({
   presto,
+  developerRuntime,
+  activeDawTarget,
   smokeTarget,
   smokeImportFolder,
 }: DeveloperCapabilityConsoleProps) {
@@ -512,27 +577,74 @@ export function DeveloperCapabilityConsole({
     smokeTarget === 'track-write' ||
     smokeTarget === 'strip-silence' ||
     smokeTarget === 'core-io-write'
-  const definitions = useMemo(
-    () => DEVELOPER_CAPABILITIES.filter((capability) => CORE_CONSOLE_CAPABILITY_ID_SET.has(capability.id)),
+  const capabilityOverlayById = useMemo(
+    () => new Map(DEVELOPER_CAPABILITIES.map((capability) => [capability.id, capability])),
     [],
   )
   const filter: CapabilityFilter = 'all'
   const [searchQuery, setSearchQuery] = useState('')
+  const [definitions, setDefinitions] = useState<DeveloperCapabilityDefinition[]>([])
+  const [catalogErrorText, setCatalogErrorText] = useState('')
   const [activeCapabilityId, setActiveCapabilityId] = useState<DeveloperCapabilityId | null>(
-    () => definitions[0]?.id ?? null,
+    null,
   )
   const deferredSearchQuery = useDeferredValue(searchQuery)
-  const [states, setStates] = useState<Record<string, CapabilityExecutionState>>(() =>
-    definitions.reduce<Record<string, CapabilityExecutionState>>((acc, capability) => {
-      acc[capability.id] = {
-        payloadText: pretty(capability.defaultPayload),
-        resultText: '',
-        errorText: '',
-        phase: WRITE_STATUSES.has(capability.status) ? 'idle' : 'disabled',
+  const [states, setStates] = useState<Record<string, CapabilityExecutionState>>({})
+
+  useEffect(() => {
+    let cancelled = false
+
+    void developerRuntime.backend
+      .listCapabilities()
+      .then((capabilities) => {
+        if (cancelled) {
+          return
+        }
+
+        const nextDefinitions = capabilities
+          .filter((capability) => CORE_CONSOLE_CAPABILITY_ID_SET.has(capability.id as DeveloperCapabilityId))
+          .flatMap((capability) => {
+            const overlay = capabilityOverlayById.get(capability.id as DeveloperCapabilityId)
+            if (!overlay) {
+              return []
+            }
+
+            return [
+              {
+                ...capability,
+                ...overlay,
+              },
+            ]
+          })
+
+        setDefinitions(nextDefinitions)
+        setCatalogErrorText('')
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+
+        setDefinitions([])
+        setCatalogErrorText(pretty(error))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [capabilityOverlayById, developerRuntime])
+
+  useEffect(() => {
+    setStates((current) => {
+      const nextStates = { ...current }
+      for (const capability of definitions) {
+        if (!nextStates[capability.id]) {
+          nextStates[capability.id] = createExecutionState(capability)
+        }
       }
-      return acc
-    }, {}),
-  )
+      return nextStates
+    })
+  }, [definitions])
 
   const visibleDefinitions = useMemo(
     () =>
@@ -551,9 +663,15 @@ export function DeveloperCapabilityConsole({
     [visibleDefinitions],
   )
   const activeCapability = useMemo(
-    () => (activeCapabilityId ? definitions.find((capability) => capability.id === activeCapabilityId) ?? null : null),
+    () =>
+      activeCapabilityId ? definitions.find((capability) => capability.id === activeCapabilityId) ?? null : null,
     [activeCapabilityId, definitions],
   )
+  const activeCapabilityFieldSupport = useMemo(
+    () => (activeCapability ? resolveCapabilityFieldSupport(activeCapability, activeDawTarget) : null),
+    [activeCapability, activeDawTarget],
+  )
+  const activeCapabilityState = activeCapability ? states[activeCapability.id] ?? createExecutionState(activeCapability) : null
 
   useEffect(() => {
     if (activeCapabilityId && visibleCapabilityIds.includes(activeCapabilityId)) {
@@ -568,7 +686,21 @@ export function DeveloperCapabilityConsole({
   ) => {
     setStates((prev) => ({
       ...prev,
-      [capabilityId]: updater(prev[capabilityId]),
+      [capabilityId]:
+        updater(
+          prev[capabilityId] ??
+            createExecutionState(
+              capabilityOverlayById.get(capabilityId) ?? {
+                id: capabilityId,
+                domain: 'system',
+                status: 'live',
+                minimumDawVersion: 'Unknown',
+                sideEffect: false,
+                defaultPayload: {},
+                note: '',
+              },
+            ),
+        ),
     }))
   }
 
@@ -915,8 +1047,12 @@ export function DeveloperCapabilityConsole({
           <div className="developer-console-scrollless" style={developerConsoleListStyle}>
             {visibleDefinitions.length === 0 ? (
               <EmptyState
-                title="No commands match the current search"
-                description="Try another search term to inspect a different command."
+                title={catalogErrorText ? 'Capability metadata unavailable' : 'No commands match the current search'}
+                description={
+                  catalogErrorText
+                    ? catalogErrorText
+                    : 'Try another search term to inspect a different command.'
+                }
               />
             ) : null}
 
@@ -951,7 +1087,11 @@ export function DeveloperCapabilityConsole({
                 description={activeCapability.id}
                 muted={true}
                 style={developerConsoleInspectorSummaryCardStyle}
-                actions={<Badge tone={phaseTone(states[activeCapability.id].phase)}>{states[activeCapability.id].phase}</Badge>}
+                actions={
+                  <Badge tone={phaseTone(activeCapabilityState?.phase ?? 'idle')}>
+                    {activeCapabilityState?.phase ?? 'idle'}
+                  </Badge>
+                }
               >
                 <div className="developer-console-scrollless" style={developerConsoleInspectorCardBodyStyle}>
                   <div style={{ display: 'grid', gap: 8 }}>
@@ -963,26 +1103,41 @@ export function DeveloperCapabilityConsole({
                       <Badge tone={statusTone(activeCapability.status)}>{activeCapability.status}</Badge>
                       <Badge tone={categoryTone(activeCapability.domain)}>{formatCategoryLabel(activeCapability.domain)}</Badge>
                       <Badge tone="neutral">Min DAW {activeCapability.minimumDawVersion}</Badge>
+                      <Badge tone="neutral">
+                        Canonical {formatDawTarget(activeCapability.canonicalSource)}
+                      </Badge>
                       {CORE_IO_CAPABILITY_ID_SET.has(activeCapability.id) ? (
                         <Badge tone="brand">PTSL-backed core I/O producer</Badge>
                       ) : null}
                     </div>
                     <p style={developerConsoleInspectorCopyStyle}>{activeCapability.note}</p>
+                    <p style={developerConsoleInspectorCopyStyle}>
+                      Supported DAWs: {activeCapability.supportedDaws.map(formatDawTarget).join(', ')}
+                    </p>
+                    {activeCapabilityFieldSupport ? (
+                      <p style={developerConsoleInspectorCopyStyle}>
+                        Field support ({formatDawTarget(activeCapabilityFieldSupport.dawTarget)}): request [
+                        {activeCapabilityFieldSupport.support.requestFields.join(', ') || 'none'}], response [
+                        {activeCapabilityFieldSupport.support.responseFields.join(', ') || 'none'}]
+                      </p>
+                    ) : (
+                      <p style={developerConsoleInspectorCopyStyle}>Field support: none declared.</p>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <Button
                         variant={activeCapability.sideEffect ? 'danger' : 'primary'}
                         size="sm"
                         disabled={
                           !WRITE_STATUSES.has(activeCapability.status) ||
-                          states[activeCapability.id].phase === 'running'
+                          activeCapabilityState?.phase === 'running'
                         }
-                        busy={states[activeCapability.id].phase === 'running'}
+                        busy={activeCapabilityState?.phase === 'running'}
                         onClick={() => {
                           void executeCapability(activeCapability)
                         }}
                       >
                         {!WRITE_STATUSES.has(activeCapability.status) &&
-                        states[activeCapability.id].phase !== 'running'
+                        activeCapabilityState?.phase !== 'running'
                           ? 'Unavailable'
                           : 'Execute'}
                       </Button>
@@ -1009,7 +1164,7 @@ export function DeveloperCapabilityConsole({
                   <Textarea
                     label="Payload JSON"
                     hint="Editable request payload"
-                    value={states[activeCapability.id].payloadText}
+                    value={activeCapabilityState?.payloadText ?? pretty(activeCapability.defaultPayload)}
                     onChange={(event) =>
                       updateState(activeCapability.id, (prev) => ({
                         ...prev,
@@ -1027,24 +1182,24 @@ export function DeveloperCapabilityConsole({
                     <div style={developerConsoleOutputHeaderStyle}>
                       <Badge tone="success">Result</Badge>
                     </div>
-                    <JsonView
-                      className="developer-console-output-surface"
-                      title="Result"
-                      tone="success"
-                      value={states[activeCapability.id].resultText || 'No result yet.'}
-                    />
-                  </div>
+                        <JsonView
+                          className="developer-console-output-surface"
+                          title="Result"
+                          tone="success"
+                          value={activeCapabilityState?.resultText || 'No result yet.'}
+                        />
+                      </div>
 
-                  <div style={developerConsoleOutputSectionStyle}>
-                    <div style={developerConsoleOutputHeaderStyle}>
-                      <Badge tone={states[activeCapability.id].errorText ? 'danger' : 'neutral'}>Error</Badge>
-                    </div>
-                    <JsonView
-                      className="developer-console-output-surface"
-                      title="Error"
-                      tone="error"
-                      value={states[activeCapability.id].errorText || 'No error.'}
-                    />
+                      <div style={developerConsoleOutputSectionStyle}>
+                        <div style={developerConsoleOutputHeaderStyle}>
+                          <Badge tone={activeCapabilityState?.errorText ? 'danger' : 'neutral'}>Error</Badge>
+                        </div>
+                        <JsonView
+                          className="developer-console-output-surface"
+                          title="Error"
+                          tone="error"
+                          value={activeCapabilityState?.errorText || 'No error.'}
+                        />
                   </div>
                 </div>
               </Panel>

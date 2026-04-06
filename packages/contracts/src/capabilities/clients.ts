@@ -146,6 +146,24 @@ export interface TrackClient {
   inactive: {
     set(request: TrackInactiveSetRequest): Promise<TrackInactiveSetResponse>
   }
+  recordEnable: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
+  recordSafe: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
+  inputMonitor: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
+  online: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
+  frozen: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
+  open: {
+    set(request: TrackMuteSetRequest): Promise<TrackMuteSetResponse>
+  }
 }
 
 export interface ClipClient {

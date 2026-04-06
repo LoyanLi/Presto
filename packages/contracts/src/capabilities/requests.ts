@@ -82,6 +82,18 @@ export interface TrackInactiveSetRequest {
   enabled: boolean
 }
 
+export type TrackRecordEnableSetRequest = TrackMuteSetRequest
+
+export type TrackRecordSafeSetRequest = TrackMuteSetRequest
+
+export type TrackInputMonitorSetRequest = TrackMuteSetRequest
+
+export type TrackOnlineSetRequest = TrackMuteSetRequest
+
+export type TrackFrozenSetRequest = TrackMuteSetRequest
+
+export type TrackOpenSetRequest = TrackMuteSetRequest
+
 export interface ClipSelectAllOnTrackRequest {
   trackName: string
 }
@@ -282,6 +294,12 @@ export interface CapabilityRequestMap {
   'track.solo.set': TrackSoloSetRequest
   'track.hidden.set': TrackHiddenSetRequest
   'track.inactive.set': TrackInactiveSetRequest
+  'track.recordEnable.set': TrackRecordEnableSetRequest
+  'track.recordSafe.set': TrackRecordSafeSetRequest
+  'track.inputMonitor.set': TrackInputMonitorSetRequest
+  'track.online.set': TrackOnlineSetRequest
+  'track.frozen.set': TrackFrozenSetRequest
+  'track.open.set': TrackOpenSetRequest
   'clip.selectAllOnTrack': ClipSelectAllOnTrackRequest
   'transport.play': TransportPlayRequest
   'transport.stop': TransportStopRequest

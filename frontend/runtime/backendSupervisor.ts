@@ -6,13 +6,18 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { CapabilityRequestEnvelope, CapabilityResponseEnvelope, DawTarget } from '@presto/contracts'
-import type { BackendLogEntry, BackendStatus } from '@presto/sdk-runtime/clients/backend'
+import type {
+  BackendCapabilityDefinition,
+  BackendLogEntry,
+  BackendStatus,
+} from '@presto/sdk-runtime/clients/backend'
 
 export interface BackendSupervisor {
   start(): Promise<BackendStatus>
   stop(): Promise<BackendStatus>
   health(): Promise<BackendStatus>
   getStatus(): BackendStatus
+  listCapabilities(): Promise<BackendCapabilityDefinition[]>
   invokeCapability<TRequest, TResponse>(
     request: CapabilityRequestEnvelope<TRequest>
   ): Promise<CapabilityResponseEnvelope<TResponse>>
@@ -170,6 +175,61 @@ function requestJson<TResponse>(method: string, port: number, pathname: string, 
     }
     req.end()
   })
+}
+
+type RawBackendCapabilityFieldSupport = {
+  request_fields?: string[]
+  response_fields?: string[]
+}
+
+type RawBackendCapabilityDefinition = {
+  id: string
+  version: number
+  kind: string
+  domain: string
+  visibility: string
+  description: string
+  request_schema: string
+  response_schema: string
+  depends_on?: string[]
+  supported_daws?: string[]
+  canonical_source: string
+  field_support?: Record<string, RawBackendCapabilityFieldSupport>
+  handler: string
+  emits_events?: string[]
+}
+
+type RawBackendCapabilitiesResponse = {
+  capabilities?: RawBackendCapabilityDefinition[]
+}
+
+function normalizeCapabilityDefinition(
+  capability: RawBackendCapabilityDefinition,
+): BackendCapabilityDefinition {
+  return {
+    id: capability.id,
+    version: capability.version,
+    kind: capability.kind,
+    domain: capability.domain,
+    visibility: capability.visibility,
+    description: capability.description,
+    requestSchema: capability.request_schema,
+    responseSchema: capability.response_schema,
+    dependsOn: capability.depends_on ?? [],
+    supportedDaws: capability.supported_daws ?? [],
+    canonicalSource: capability.canonical_source,
+    fieldSupport: Object.fromEntries(
+      Object.entries(capability.field_support ?? {}).map(([target, support]) => [
+        target,
+        {
+          requestFields: support.request_fields ?? [],
+          responseFields: support.response_fields ?? [],
+        },
+      ]),
+    ),
+    handler: capability.handler,
+    emitsEvents: capability.emits_events ?? [],
+  }
 }
 
 async function resolveAvailablePort(preferredPort: number): Promise<number> {
@@ -376,6 +436,34 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
 
     getStatus(): BackendStatus {
       return snapshot()
+    },
+
+    async listCapabilities(): Promise<BackendCapabilityDefinition[]> {
+      await ensureAvailable()
+      try {
+        const response = await requestImpl<RawBackendCapabilitiesResponse>(
+          'GET',
+          currentPort,
+          '/api/v1/capabilities',
+        )
+        return (response.capabilities ?? []).map(normalizeCapabilityDefinition)
+      } catch (error) {
+        if (!isRecoverableRequestError(error)) {
+          throw error
+        }
+        lastError = error instanceof Error ? error.message : String(error ?? 'backend_capability_list_failed')
+        log('warn', lastError, {
+          operation: 'list_capabilities',
+          port: currentPort,
+        })
+        await restart()
+        const response = await requestImpl<RawBackendCapabilitiesResponse>(
+          'GET',
+          currentPort,
+          '/api/v1/capabilities',
+        )
+        return (response.capabilities ?? []).map(normalizeCapabilityDefinition)
+      }
     },
 
     async invokeCapability<TRequest, TResponse>(

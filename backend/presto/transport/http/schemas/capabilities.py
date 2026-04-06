@@ -15,6 +15,10 @@ class HealthResponseSchema(BaseModel):
 
 
 class CapabilitySchema(BaseModel):
+    class CapabilityFieldSupportSchema(BaseModel):
+        request_fields: List[str] = Field(default_factory=list)
+        response_fields: List[str] = Field(default_factory=list)
+
     id: str
     version: int
     kind: str
@@ -25,6 +29,8 @@ class CapabilitySchema(BaseModel):
     response_schema: str
     depends_on: List[str] = Field(default_factory=list)
     supported_daws: List[str] = Field(default_factory=list)
+    canonical_source: str
+    field_support: dict[str, CapabilityFieldSupportSchema] = Field(default_factory=dict)
     handler: str
     emits_events: List[str] = Field(default_factory=list)
 
@@ -41,6 +47,14 @@ class CapabilitySchema(BaseModel):
             response_schema=definition.response_schema.name,
             depends_on=list(definition.depends_on),
             supported_daws=list(definition.supported_daws),
+            canonical_source=definition.canonical_source,
+            field_support={
+                daw: cls.CapabilityFieldSupportSchema(
+                    request_fields=list(support.request_fields),
+                    response_fields=list(support.response_fields),
+                )
+                for daw, support in definition.field_support.items()
+            },
             handler=definition.handler,
             emits_events=list(definition.emits_events),
         )

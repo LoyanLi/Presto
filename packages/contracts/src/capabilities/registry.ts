@@ -18,6 +18,11 @@ export interface SchemaRef<T = unknown> {
   example?: T
 }
 
+export interface CapabilityFieldSupport {
+  requestFields: readonly string[]
+  responseFields: readonly string[]
+}
+
 export interface CapabilityDefinition<TRequest = unknown, TResponse = unknown> {
   id: CapabilityId
   version: 1
@@ -29,6 +34,8 @@ export interface CapabilityDefinition<TRequest = unknown, TResponse = unknown> {
   responseSchema: SchemaRef<TResponse>
   dependsOn: readonly CapabilityDependency[]
   supportedDaws: readonly DawTarget[]
+  canonicalSource: DawTarget
+  fieldSupport: Partial<Record<DawTarget, CapabilityFieldSupport>>
   handler: string
   emitsEvents?: readonly PrestoEventName[]
 }

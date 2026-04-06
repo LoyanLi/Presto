@@ -1,6 +1,7 @@
 """Auto-generated from contracts-manifest; do not edit by hand."""
 from __future__ import annotations
 
+from ...domain.capabilities import CapabilityFieldSupport
 from .factory import definition
 
 DEFAULT_CAPABILITY_DEFINITIONS = (
@@ -14,6 +15,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SystemHealthResponse",
         depends_on=(),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="system.health",
     ),
     definition(
@@ -26,6 +31,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ConfigGetResponse",
         depends_on=("config_store",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="config.get",
     ),
     definition(
@@ -38,6 +47,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ConfigUpdateResponse",
         depends_on=("config_store", "keychain_store"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="config.update",
     ),
     definition(
@@ -50,6 +63,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="DawConnectionConnectResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="daw.connection.connect",
         emits_events=("daw.connection.changed",),
     ),
@@ -63,6 +80,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="DawConnectionDisconnectResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="daw.connection.disconnect",
         emits_events=("daw.connection.changed",),
     ),
@@ -76,6 +97,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="DawConnectionGetStatusResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="daw.connection.getStatus",
     ),
     definition(
@@ -88,6 +113,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="DawAdapterGetSnapshotResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="daw.adapter.getSnapshot",
     ),
     definition(
@@ -100,6 +129,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="AutomationSplitStereoToMonoExecuteResponse",
         depends_on=("daw", "mac_automation", "daw_ui_profile"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="automation.splitStereoToMono.execute",
     ),
     definition(
@@ -112,6 +145,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SessionGetInfoResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="session.getInfo",
     ),
     definition(
@@ -124,6 +161,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SessionGetLengthResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="session.getLength",
     ),
     definition(
@@ -136,6 +177,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SessionSaveResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="session.save",
     ),
     definition(
@@ -148,6 +193,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SessionApplySnapshotResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="session.applySnapshot",
     ),
     definition(
@@ -160,6 +209,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="SessionGetSnapshotInfoResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="session.getSnapshotInfo",
     ),
     definition(
@@ -172,6 +225,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackListResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.list",
     ),
     definition(
@@ -184,6 +241,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackListNamesResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.listNames",
     ),
     definition(
@@ -196,6 +257,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackSelectionGetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.selection.get",
     ),
     definition(
@@ -208,6 +273,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackRenameResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.rename",
     ),
     definition(
@@ -220,6 +289,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackSelectResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.select",
     ),
     definition(
@@ -232,6 +305,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackColorApplyResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.color.apply",
     ),
     definition(
@@ -244,6 +321,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackPanSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="track.pan.set",
     ),
     definition(
@@ -256,6 +337,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackMuteSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
         handler="track.mute.set",
     ),
     definition(
@@ -268,6 +353,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackSoloSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
         handler="track.solo.set",
     ),
     definition(
@@ -280,6 +369,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackHiddenSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
         handler="track.hidden.set",
     ),
     definition(
@@ -292,6 +385,106 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TrackInactiveSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.open.set",
+    ),
+    definition(
+        "track.recordEnable.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道录音使能状态",
+        request_schema="TrackRecordEnableSetRequest",
+        response_schema="TrackRecordEnableSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.recordEnable.set",
+    ),
+    definition(
+        "track.recordSafe.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道录音保护状态",
+        request_schema="TrackRecordSafeSetRequest",
+        response_schema="TrackRecordSafeSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.recordSafe.set",
+    ),
+    definition(
+        "track.inputMonitor.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道输入监听状态",
+        request_schema="TrackInputMonitorSetRequest",
+        response_schema="TrackInputMonitorSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.inputMonitor.set",
+    ),
+    definition(
+        "track.online.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道 online 状态",
+        request_schema="TrackOnlineSetRequest",
+        response_schema="TrackOnlineSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.online.set",
+    ),
+    definition(
+        "track.frozen.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道冻结状态",
+        request_schema="TrackFrozenSetRequest",
+        response_schema="TrackFrozenSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
+        handler="track.frozen.set",
+    ),
+    definition(
+        "track.open.set",
+        kind="command",
+        domain="track",
+        visibility="public",
+        description="设置轨道展开状态",
+        request_schema="TrackOpenSetRequest",
+        response_schema="TrackOpenSetResponse",
+        depends_on=("daw",),
+        supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
+        },
         handler="track.inactive.set",
     ),
     definition(
@@ -304,6 +497,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ClipSelectAllOnTrackResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="clip.selectAllOnTrack",
     ),
     definition(
@@ -316,6 +513,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TransportPlayResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="transport.play",
     ),
     definition(
@@ -328,6 +529,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TransportStopResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="transport.stop",
     ),
     definition(
@@ -340,6 +545,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TransportRecordResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="transport.record",
     ),
     definition(
@@ -352,6 +561,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="TransportGetStatusResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="transport.getStatus",
     ),
     definition(
@@ -364,6 +577,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="WorkflowRunStartResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="workflow.run.start",
     ),
     definition(
@@ -376,6 +593,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ImportAnalyzeResponse",
         depends_on=(),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="import.analyze",
     ),
     definition(
@@ -388,6 +609,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ImportCacheSaveResponse",
         depends_on=(),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="import.cache.save",
     ),
     definition(
@@ -400,6 +625,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ImportPlanRunItemsResponse",
         depends_on=(),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="import.planRunItems",
     ),
     definition(
@@ -412,6 +641,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ImportRunStartResponse",
         depends_on=("daw", "jobs"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="import.run.start",
     ),
     definition(
@@ -424,6 +657,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="StripSilenceOpenResponse",
         depends_on=("daw_ui_profile",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="stripSilence.open",
     ),
     definition(
@@ -436,6 +673,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="StripSilenceExecuteResponse",
         depends_on=("mac_automation", "daw"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="stripSilence.execute",
     ),
     definition(
@@ -448,6 +689,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ExportRangeSetResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="export.range.set",
     ),
     definition(
@@ -460,6 +705,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ExportStartResponse",
         depends_on=("daw", "jobs"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="export.start",
     ),
     definition(
@@ -472,6 +721,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ExportDirectStartResponse",
         depends_on=("daw", "jobs"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="export.direct.start",
     ),
     definition(
@@ -484,6 +737,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ExportRunStartResponse",
         depends_on=("daw", "jobs"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="export.run.start",
     ),
     definition(
@@ -496,6 +753,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsCreateResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.create",
     ),
     definition(
@@ -508,6 +769,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsUpdateResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.update",
     ),
     definition(
@@ -520,6 +785,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsGetResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.get",
     ),
     definition(
@@ -532,6 +801,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsListResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.list",
     ),
     definition(
@@ -544,6 +817,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsCancelResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.cancel",
     ),
     definition(
@@ -556,6 +833,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="JobsDeleteResponse",
         depends_on=("jobs",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="jobs.delete",
     ),
     definition(
@@ -568,6 +849,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="ExportMixWithSourceResponse",
         depends_on=("daw",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="export.mixWithSource",
     ),
     definition(
@@ -580,6 +865,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="StripSilenceOpenViaUiResponse",
         depends_on=("daw_ui_profile",),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="stripSilence.openViaUi",
     ),
     definition(
@@ -592,6 +881,10 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         response_schema="StripSilenceExecuteViaUiResponse",
         depends_on=("mac_automation", "daw_ui_profile"),
         supported_daws=("pro_tools",),
+        canonical_source="pro_tools",
+        field_support={
+            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+        },
         handler="stripSilence.executeViaUi",
     ),
 )

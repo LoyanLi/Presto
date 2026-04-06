@@ -403,6 +403,7 @@ fn runtime_invoke(
         }
         "app.release.latest.get"
         | "backend.status.get"
+        | "backend.capabilities.list"
         | "backend.daw-adapter.snapshot.get"
         | "backend.lifecycle.restart"
         | "backend.daw-target.set"

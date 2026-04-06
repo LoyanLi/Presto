@@ -1,3 +1,12 @@
+export interface BackendLogEntry {
+  id: string
+  timestamp: string
+  level: 'info' | 'warn' | 'error'
+  source: string
+  message: string
+  details: Record<string, unknown> | null
+}
+
 export interface BackendStatus {
   running: boolean
   ready: boolean
@@ -20,6 +29,28 @@ export interface DawAdapterCapabilitySnapshot {
   version: string
 }
 
+export interface BackendCapabilityFieldSupport {
+  requestFields: string[]
+  responseFields: string[]
+}
+
+export interface BackendCapabilityDefinition {
+  id: string
+  version: number
+  kind: string
+  domain: string
+  visibility: string
+  description: string
+  requestSchema: string
+  responseSchema: string
+  dependsOn: string[]
+  supportedDaws: string[]
+  canonicalSource: string
+  fieldSupport: Record<string, BackendCapabilityFieldSupport>
+  handler: string
+  emitsEvents: string[]
+}
+
 export interface DawAdapterSnapshot {
   targetDaw: string
   adapterVersion: string
@@ -30,6 +61,7 @@ export interface DawAdapterSnapshot {
 
 export interface BackendRuntimeClient {
   getStatus(): Promise<BackendStatus>
+  listCapabilities(): Promise<BackendCapabilityDefinition[]>
   getDawAdapterSnapshot(): Promise<DawAdapterSnapshot>
   restart(): Promise<{ ok: true }>
   setDawTarget(target: string): Promise<{ ok: true; target: string }>

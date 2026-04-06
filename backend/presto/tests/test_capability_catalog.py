@@ -59,3 +59,37 @@ def test_capability_catalog_only_declares_handlers_implemented_by_backend() -> N
     declared_handlers = {definition.handler for definition in DEFAULT_CAPABILITY_DEFINITIONS}
 
     assert declared_handlers.issubset(set(_CAPABILITY_HANDLERS))
+
+
+def test_public_capabilities_declare_canonical_metadata() -> None:
+    public_definitions = [definition for definition in DEFAULT_CAPABILITY_DEFINITIONS if definition.visibility == "public"]
+
+    assert public_definitions
+
+    for definition in public_definitions:
+        assert definition.supported_daws
+        assert definition.canonical_source in definition.supported_daws
+        assert definition.field_support
+        assert definition.canonical_source in definition.field_support
+
+
+def test_track_toggle_capabilities_expose_canonical_toggle_shape() -> None:
+    definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+
+    for capability_id in (
+        "track.mute.set",
+        "track.solo.set",
+        "track.hidden.set",
+        "track.inactive.set",
+        "track.recordEnable.set",
+        "track.recordSafe.set",
+        "track.inputMonitor.set",
+        "track.online.set",
+        "track.frozen.set",
+        "track.open.set",
+    ):
+        definition = definitions[capability_id]
+        support = definition.field_support[definition.canonical_source]
+
+        assert support.request_fields == ("trackNames", "enabled")
+        assert support.response_fields == ("updated", "trackNames", "enabled")

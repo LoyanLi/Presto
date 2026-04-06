@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from presto.main_api import create_app
+from presto.transport.http.routes.capabilities import get_capability, list_capabilities
 from presto.transport.http.routes.health import health
 from presto.transport.http.routes.invoke import invoke_capability
 from presto.transport.http.schemas.capabilities import CapabilityInvokeRequestSchema
@@ -35,8 +36,16 @@ class FakeDawAdapter:
         self.solo_updates: list[tuple[str, bool]] = []
         self.hidden_updates: list[tuple[str, bool]] = []
         self.inactive_updates: list[tuple[str, bool]] = []
+        self.mute_batch_updates: list[tuple[list[str], bool]] = []
+        self.solo_batch_updates: list[tuple[list[str], bool]] = []
         self.hidden_batch_updates: list[tuple[list[str], bool]] = []
         self.inactive_batch_updates: list[tuple[list[str], bool]] = []
+        self.record_enable_batch_updates: list[tuple[list[str], bool]] = []
+        self.record_safe_batch_updates: list[tuple[list[str], bool]] = []
+        self.input_monitor_batch_updates: list[tuple[list[str], bool]] = []
+        self.online_batch_updates: list[tuple[list[str], bool]] = []
+        self.frozen_batch_updates: list[tuple[list[str], bool]] = []
+        self.open_batch_updates: list[tuple[list[str], bool]] = []
         self.selected_clip_tracks: list[str] = []
         self.transport_state = "stopped"
         self.transport_command_calls: list[tuple[int, dict[str, object]]] = []
@@ -223,6 +232,30 @@ class FakeDawAdapter:
 
     def set_track_inactive_state_batch(self, track_names: list[str], inactive: bool) -> None:
         self.inactive_batch_updates.append((list(track_names), inactive))
+
+    def set_track_mute_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.mute_batch_updates.append((list(track_names), enabled))
+
+    def set_track_solo_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.solo_batch_updates.append((list(track_names), enabled))
+
+    def set_track_record_enable_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.record_enable_batch_updates.append((list(track_names), enabled))
+
+    def set_track_record_safe_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.record_safe_batch_updates.append((list(track_names), enabled))
+
+    def set_track_input_monitor_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.input_monitor_batch_updates.append((list(track_names), enabled))
+
+    def set_track_online_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.online_batch_updates.append((list(track_names), enabled))
+
+    def set_track_frozen_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.frozen_batch_updates.append((list(track_names), enabled))
+
+    def set_track_open_state_batch(self, track_names: list[str], enabled: bool) -> None:
+        self.open_batch_updates.append((list(track_names), enabled))
 
     def select_all_clips_on_track(self, track_name: str) -> None:
         self.selected_clip_tracks.append(track_name)
@@ -1564,8 +1597,10 @@ def test_invoke_track_mute_and_solo_set_return_updated_shape() -> None:
         "trackNames": ["Bass"],
         "enabled": False,
     }
-    assert app.state.services.daw.mute_updates == [("Kick", True), ("Snare", True)]
-    assert app.state.services.daw.solo_updates == [("Bass", False)]
+    assert app.state.services.daw.mute_updates == []
+    assert app.state.services.daw.solo_updates == []
+    assert app.state.services.daw.mute_batch_updates == [(["Kick", "Snare"], True)]
+    assert app.state.services.daw.solo_batch_updates == [(["Bass"], False)]
 
 
 def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
@@ -1605,6 +1640,87 @@ def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
     assert app.state.services.daw.inactive_updates == []
     assert app.state.services.daw.hidden_batch_updates == [(["Kick", "Snare"], True)]
     assert app.state.services.daw.inactive_batch_updates == [(["Bass"], False)]
+
+
+def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    responses = [
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-1",
+                capability="track.recordEnable.set",
+                payload={"trackNames": ["Kick"], "enabled": True},
+            ),
+        ),
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-2",
+                capability="track.recordSafe.set",
+                payload={"trackNames": ["Snare"], "enabled": False},
+            ),
+        ),
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-3",
+                capability="track.inputMonitor.set",
+                payload={"trackNames": ["Bass"], "enabled": True},
+            ),
+        ),
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-4",
+                capability="track.online.set",
+                payload={"trackNames": ["Lead Vox"], "enabled": False},
+            ),
+        ),
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-5",
+                capability="track.frozen.set",
+                payload={"trackNames": ["Pad"], "enabled": True},
+            ),
+        ),
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-track-6",
+                capability="track.open.set",
+                payload={"trackNames": ["FX"], "enabled": False},
+            ),
+        ),
+    ]
+
+    for response in responses:
+        assert response.success is True
+        assert response.data["updated"] is True
+
+    assert app.state.services.daw.record_enable_batch_updates == [(["Kick"], True)]
+    assert app.state.services.daw.record_safe_batch_updates == [(["Snare"], False)]
+    assert app.state.services.daw.input_monitor_batch_updates == [(["Bass"], True)]
+    assert app.state.services.daw.online_batch_updates == [(["Lead Vox"], False)]
+    assert app.state.services.daw.frozen_batch_updates == [(["Pad"], True)]
+    assert app.state.services.daw.open_batch_updates == [(["FX"], False)]
+
+
+def test_capabilities_routes_expose_canonical_metadata() -> None:
+    app = create_app()
+    request = DummyRequest(app=app)
+
+    list_response = list_capabilities(request)
+    detail_response = get_capability("track.mute.set", request)
+
+    capability_ids = {capability.id for capability in list_response.capabilities}
+    assert "track.mute.set" in capability_ids
+    assert detail_response.capability.canonical_source == "pro_tools"
+    assert "pro_tools" in detail_response.capability.field_support
+    assert detail_response.capability.field_support["pro_tools"].request_fields == ["trackNames", "enabled"]
 
 
 def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:

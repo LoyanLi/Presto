@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- 引入内部全量 PTSL catalog 与 runner，明确把 Pro Tools 原生命令接入收口到统一底层执行层。
+- 公共 capability 元数据新增 `supportedDaws`、`canonicalSource` 与 `fieldSupport`，并在后端 invoke 链路里对声明字段做显式校验。
+- 收口 track toggle canonical baseline：`mute`、`solo` 改为 batch 语义，并新增 `recordEnable`、`recordSafe`、`inputMonitor`、`online`、`frozen`、`open` 六个公共 track toggle capability。
+- Developer Console 改为读取后端 capability metadata，并显示 canonical source / supported DAWs / field support。
+- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.2`。
+
 ## 0.3.1
 
 - 宿主设置中心把 `Workflow Extensions` 与 `Automation Extensions` 收口到同一套 extension management 链路，统一支持刷新、安装目录、安装 zip、启用、禁用与已安装扩展卸载。

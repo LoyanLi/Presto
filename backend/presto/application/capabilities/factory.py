@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ...domain.capabilities import (
     CapabilityDependency,
+    CapabilityFieldSupport,
     CapabilityDefinition,
     CapabilityDomain,
     CapabilityKind,
@@ -27,9 +28,12 @@ def definition(
     response_schema: str,
     depends_on: tuple[CapabilityDependency, ...] = (),
     supported_daws: tuple[DawTarget, ...] = (DEFAULT_DAW_TARGET,),
+    canonical_source: DawTarget | None = None,
+    field_support: dict[DawTarget, CapabilityFieldSupport] | None = None,
     handler: str,
     emits_events: tuple[str, ...] = (),
 ) -> CapabilityDefinition:
+    resolved_canonical_source = canonical_source or supported_daws[0]
     return CapabilityDefinition(
         id=capability_id,
         version=1,
@@ -41,6 +45,8 @@ def definition(
         response_schema=_schema(response_schema),
         depends_on=depends_on,
         supported_daws=supported_daws,
+        canonical_source=resolved_canonical_source,
+        field_support=field_support or {},
         handler=handler,
         emits_events=emits_events,
     )

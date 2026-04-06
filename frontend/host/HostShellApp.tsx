@@ -422,9 +422,11 @@ export function HostShellApp({
   const surfaceContent =
     surface === 'developer'
       ? canAccessDeveloper
-        ? (
+          ? (
             <HostDeveloperSurface
               developerPresto={developerPresto}
+              developerRuntime={developerRuntime}
+              activeDawTarget={liveDawAdapterSnapshot?.targetDaw ?? null}
               smokeTarget={smokeTarget}
               smokeImportFolder={smokeImportFolder}
               onOpenSettings={() => openSettings()}

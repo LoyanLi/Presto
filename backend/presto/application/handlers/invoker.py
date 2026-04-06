@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from . import track as track_handlers
 from .automation import (
     execute_strip_silence_payload,
     open_strip_silence_payload,
@@ -36,7 +37,8 @@ from .transport import (
     transport_status_payload,
 )
 from ..service_container import ServiceContainer
-from ...domain.capabilities import DEFAULT_DAW_TARGET
+from ...domain.capabilities import DEFAULT_DAW_TARGET, CapabilityDefinition
+from ...domain.errors import PrestoValidationError
 
 
 CapabilityHandler = Callable[[ServiceContainer, dict[str, Any]], Any]
@@ -314,17 +316,23 @@ _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
     "import.run.start": start_import_run,
     "session.applySnapshot": apply_snapshot_payload,
     "session.getSnapshotInfo": _session_get_snapshot_info_payload,
-    "track.list": _track_list_payload,
-    "track.listNames": _track_list_names_payload,
-    "track.select": _track_select_payload,
-    "track.selection.get": _track_selection_get_payload,
-    "track.color.apply": _track_color_apply_payload,
-    "track.pan.set": _track_pan_set_payload,
-    "track.rename": _track_rename_payload,
-    "track.mute.set": _track_mute_set_payload,
-    "track.solo.set": _track_solo_set_payload,
-    "track.hidden.set": _track_hidden_set_payload,
-    "track.inactive.set": _track_inactive_set_payload,
+    "track.list": track_handlers.track_list_payload,
+    "track.listNames": track_handlers.track_list_names_payload,
+    "track.select": track_handlers.track_select_payload,
+    "track.selection.get": track_handlers.track_selection_get_payload,
+    "track.color.apply": track_handlers.track_color_apply_payload,
+    "track.pan.set": track_handlers.track_pan_set_payload,
+    "track.rename": track_handlers.track_rename_payload,
+    "track.mute.set": track_handlers.track_mute_set_payload,
+    "track.solo.set": track_handlers.track_solo_set_payload,
+    "track.hidden.set": track_handlers.track_hidden_set_payload,
+    "track.inactive.set": track_handlers.track_inactive_set_payload,
+    "track.recordEnable.set": track_handlers.track_record_enable_set_payload,
+    "track.recordSafe.set": track_handlers.track_record_safe_set_payload,
+    "track.inputMonitor.set": track_handlers.track_input_monitor_set_payload,
+    "track.online.set": track_handlers.track_online_set_payload,
+    "track.frozen.set": track_handlers.track_frozen_set_payload,
+    "track.open.set": track_handlers.track_open_set_payload,
     "clip.selectAllOnTrack": _clip_select_all_on_track_payload,
     "export.range.set": export_range_set_payload,
     "export.start": _start_export_payload("export.start"),
@@ -350,8 +358,45 @@ _CAPABILITY_HANDLERS: dict[str, CapabilityHandler] = {
 }
 
 
+def _collect_payload_field_paths(payload: Any, prefix: str = "") -> set[str]:
+    if isinstance(payload, dict):
+        fields: set[str] = set()
+        for key, value in payload.items():
+            field_name = f"{prefix}.{key}" if prefix else str(key)
+            fields.add(field_name)
+            fields.update(_collect_payload_field_paths(value, field_name))
+        return fields
+    if isinstance(payload, list):
+        fields: set[str] = set()
+        list_prefix = f"{prefix}[]" if prefix else "[]"
+        for value in payload:
+            fields.update(_collect_payload_field_paths(value, list_prefix))
+        return fields
+    return set()
+
+
+def _validate_payload_fields(definition: CapabilityDefinition, payload: dict[str, Any], target_daw: str) -> None:
+    support = definition.field_support.get(target_daw)
+    if support is None or len(support.request_fields) == 0:
+        return
+
+    present_fields = _collect_payload_field_paths(payload)
+    unsupported_fields = sorted(field for field in present_fields if field not in support.request_fields)
+    if unsupported_fields:
+        raise PrestoValidationError(
+            f"Unsupported fields for {definition.id} on {target_daw}: {', '.join(unsupported_fields)}",
+            details={
+                "capabilityId": definition.id,
+                "targetDaw": target_daw,
+                "unsupportedFields": unsupported_fields,
+            },
+            capability=definition.id,
+        )
+
+
 def execute_capability(services: ServiceContainer, capability_id: str, payload: dict[str, Any]) -> Any:
-    services.capability_registry.require(capability_id)
+    definition = services.capability_registry.require(capability_id)
+    _validate_payload_fields(definition, payload, services.target_daw or DEFAULT_DAW_TARGET)
 
     handler = _CAPABILITY_HANDLERS.get(capability_id)
     if handler is None:
