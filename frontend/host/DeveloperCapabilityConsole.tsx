@@ -13,6 +13,7 @@ import {
   Textarea,
   type BadgeTone,
 } from '../ui'
+import { validateCapabilityPayloadForDaw } from './capabilityFieldSupport'
 import {
   CORE_CONSOLE_CAPABILITY_IDS,
   DEVELOPER_CAPABILITIES,
@@ -308,6 +309,17 @@ function isJobNotRunningError(error: unknown): boolean {
     rawCode === 'JOB_NOT_RUNNING' ||
     message.includes('JOB_NOT_RUNNING') ||
     rawMessage.includes('JOB_NOT_RUNNING')
+  )
+}
+
+function isCapabilityFieldsUnsupportedError(error: unknown): boolean {
+  const unsupportedFieldsMarker = { code: 'CAPABILITY_FIELDS_UNSUPPORTED' as const }
+
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'code' in error
+    && error.code === unsupportedFieldsMarker.code,
   )
 }
 
@@ -754,6 +766,7 @@ export function DeveloperCapabilityConsole({
     try {
       resolvedPayload = payloadOverride ?? parsePayload(states[capability.id]?.payloadText ?? '{}')
       setActiveCapabilityId(capability.id)
+      validateCapabilityPayloadForDaw(capability, resolvedPayload, activeDawTarget ?? capability.canonicalSource)
       updateState(capability.id, (prev) => ({
         ...prev,
         phase: 'running',
@@ -784,6 +797,16 @@ export function DeveloperCapabilityConsole({
           errorText: '',
         }))
         return toleratedResult
+      }
+
+      if (isCapabilityFieldsUnsupportedError(error)) {
+        updateState(capability.id, (prev) => ({
+          ...prev,
+          phase: 'error',
+          payloadText: pretty(resolvedPayload),
+          errorText: pretty(error),
+        }))
+        throw error
       }
 
       updateState(capability.id, (prev) => ({

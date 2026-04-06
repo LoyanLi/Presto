@@ -99,6 +99,36 @@ test('generate-contracts writes Python capability catalog into the runtime backe
   )
 })
 
+test('public capability manifest entries declare canonical source and field support explicitly', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
+  )
+
+  const missingMetadata = manifest
+    .filter((capability) => capability.visibility === 'public')
+    .filter((capability) => !capability.canonicalSource || !capability.fieldSupport)
+    .map((capability) => capability.id)
+
+  assert.deepEqual(missingMetadata, [])
+})
+
+test('track inactive capability keeps its own handler in the manifest', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
+  )
+
+  const definition = manifest.find((capability) => capability.id === 'track.inactive.set')
+
+  assert.equal(definition?.handler, 'track.inactive.set')
+})
+
+test('generate-contracts requires manifest canonical metadata instead of backfilling defaults', async () => {
+  const source = await readFile(path.join(repoRoot, 'scripts/generate-contracts.mjs'), 'utf8')
+
+  assert.doesNotMatch(source, /if \(Array\.isArray\(capability\.supportedDaws\) && capability\.supportedDaws\.length > 0\) \{\s*return capability\.supportedDaws\[0\]/)
+  assert.doesNotMatch(source, /return \{\s*\[resolvedCanonicalSource\]:\s*\{\s*requestFields: \[\],\s*responseFields: \[\],\s*\},\s*\}/)
+})
+
 test('plugin runtime contract artifacts are removed', async () => {
   await assertFileMissing(path.join(repoRoot, 'packages/contracts/src/plugins/runtime.ts'))
   await assertFileMissing(path.join(repoRoot, 'packages/contracts-manifest/runtime-services.json'))

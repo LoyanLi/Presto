@@ -20,6 +20,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "system.health"
   },
   {
@@ -45,6 +52,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "config.get"
   },
   {
@@ -71,6 +85,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "config.update"
   },
   {
@@ -96,6 +117,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "daw.connection.connect",
     "emitsEvents": [
       "daw.connection.changed"
@@ -124,6 +152,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "daw.connection.disconnect",
     "emitsEvents": [
       "daw.connection.changed"
@@ -152,6 +187,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "daw.connection.getStatus"
   },
   {
@@ -177,6 +219,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "daw.adapter.getSnapshot"
   },
   {
@@ -204,6 +253,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "automation.splitStereoToMono.execute"
   },
   {
@@ -229,6 +285,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "session.getInfo"
   },
   {
@@ -254,6 +317,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "session.getLength"
   },
   {
@@ -279,6 +349,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "session.save"
   },
   {
@@ -304,6 +381,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "session.applySnapshot"
   },
   {
@@ -329,6 +413,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "session.getSnapshotInfo"
   },
   {
@@ -354,6 +445,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.list"
   },
   {
@@ -379,6 +477,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.listNames"
   },
   {
@@ -404,6 +509,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.selection.get"
   },
   {
@@ -429,6 +541,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.rename"
   },
   {
@@ -454,6 +573,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.select"
   },
   {
@@ -479,6 +605,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.color.apply"
   },
   {
@@ -504,6 +637,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "track.pan.set"
   },
   {
@@ -660,7 +800,7 @@
         ]
       }
     },
-    "handler": "track.open.set"
+    "handler": "track.inactive.set"
   },
   {
     "id": "track.recordEnable.set",
@@ -919,6 +1059,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "clip.selectAllOnTrack"
   },
   {
@@ -944,6 +1091,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "transport.play"
   },
   {
@@ -969,6 +1123,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "transport.stop"
   },
   {
@@ -994,6 +1155,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "transport.record"
   },
   {
@@ -1019,6 +1187,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "transport.getStatus"
   },
   {
@@ -1038,12 +1213,19 @@
       "package": "@presto/contracts",
       "version": 1
     },
-    "supportedDaws": [
-      "pro_tools"
-    ],
     "dependsOn": [
       "jobs"
     ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "workflow.run.start"
   },
   {
@@ -1063,10 +1245,17 @@
       "package": "@presto/contracts",
       "version": 1
     },
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
-    "dependsOn": [],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "import.analyze"
   },
   {
@@ -1086,10 +1275,17 @@
       "package": "@presto/contracts",
       "version": 1
     },
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
-    "dependsOn": [],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "import.cache.save"
   },
   {
@@ -1109,10 +1305,17 @@
       "package": "@presto/contracts",
       "version": 1
     },
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
-    "dependsOn": [],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "import.planRunItems"
   },
   {
@@ -1132,13 +1335,20 @@
       "package": "@presto/contracts",
       "version": 1
     },
-    "supportedDaws": [
-      "pro_tools"
-    ],
     "dependsOn": [
       "daw",
       "jobs"
     ],
+    "supportedDaws": [
+      "pro_tools"
+    ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "import.run.start"
   },
   {
@@ -1164,6 +1374,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "stripSilence.open"
   },
   {
@@ -1190,6 +1407,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "stripSilence.execute"
   },
   {
@@ -1215,6 +1439,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "export.range.set"
   },
   {
@@ -1241,6 +1472,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "export.start"
   },
   {
@@ -1267,6 +1505,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "export.direct.start"
   },
   {
@@ -1293,6 +1538,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "export.run.start"
   },
   {
@@ -1318,6 +1570,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.create"
   },
   {
@@ -1343,6 +1602,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.update"
   },
   {
@@ -1368,6 +1634,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.get"
   },
   {
@@ -1393,6 +1666,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.list"
   },
   {
@@ -1418,6 +1698,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.cancel"
   },
   {
@@ -1443,6 +1730,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "jobs.delete"
   },
   {
@@ -1468,6 +1762,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "export.mixWithSource"
   },
   {
@@ -1493,6 +1794,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "stripSilence.openViaUi"
   },
   {
@@ -1519,6 +1827,13 @@
     "supportedDaws": [
       "pro_tools"
     ],
+    "canonicalSource": "pro_tools",
+    "fieldSupport": {
+      "pro_tools": {
+        "requestFields": [],
+        "responseFields": []
+      }
+    },
     "handler": "stripSilence.executeViaUi"
   }
 ]

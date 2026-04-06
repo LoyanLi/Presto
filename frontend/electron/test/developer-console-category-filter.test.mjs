@@ -113,3 +113,11 @@ test('developer console loads capability facts from runtime backend metadata ins
   assert.match(hostSurfaceSource, /developerRuntime/)
   assert.match(hostSurfaceSource, /developerRuntime=\{developerRuntime\}/)
 })
+
+test('developer console prevalidates payload fields against field support before backend invoke', async () => {
+  const consoleSource = await readFile(path.join(repoRoot, 'frontend/host/DeveloperCapabilityConsole.tsx'), 'utf8')
+
+  assert.match(consoleSource, /validateCapabilityPayloadForDaw/)
+  assert.match(consoleSource, /code:\s*'CAPABILITY_FIELDS_UNSUPPORTED'/)
+  assert.match(consoleSource, /validateCapabilityPayloadForDaw\(\s*capability,\s*resolvedPayload,/)
+})

@@ -368,7 +368,7 @@ export const CAPABILITY_REGISTRY = [
     supportedDaws: ["pro_tools"] as const,
     canonicalSource: "pro_tools",
     fieldSupport: {"pro_tools":{"requestFields":["trackNames","enabled"],"responseFields":["updated","trackNames","enabled"]}} as const,
-    handler: 'track.open.set',
+    handler: 'track.inactive.set',
   },
   {
     id: 'track.recordEnable.set',

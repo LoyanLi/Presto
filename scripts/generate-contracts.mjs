@@ -46,23 +46,30 @@ function canonicalSource(capability) {
   if (typeof capability.canonicalSource === 'string' && capability.canonicalSource.trim()) {
     return capability.canonicalSource.trim()
   }
-  if (Array.isArray(capability.supportedDaws) && capability.supportedDaws.length > 0) {
-    return capability.supportedDaws[0]
-  }
-  throw new Error(`capability ${capability.id} must declare supportedDaws or canonicalSource`)
+  throw new Error(`capability ${capability.id} must declare canonicalSource`)
 }
 
 function fieldSupport(capability) {
-  if (capability.fieldSupport && typeof capability.fieldSupport === 'object' && !Array.isArray(capability.fieldSupport)) {
-    return capability.fieldSupport
+  if (!capability.fieldSupport || typeof capability.fieldSupport !== 'object' || Array.isArray(capability.fieldSupport)) {
+    throw new Error(`capability ${capability.id} must declare fieldSupport`)
   }
+
+  const resolvedFieldSupport = capability.fieldSupport
   const resolvedCanonicalSource = canonicalSource(capability)
-  return {
-    [resolvedCanonicalSource]: {
-      requestFields: [],
-      responseFields: [],
-    },
+  if (!resolvedFieldSupport[resolvedCanonicalSource]) {
+    throw new Error(`capability ${capability.id} fieldSupport must include canonicalSource ${resolvedCanonicalSource}`)
   }
+
+  for (const [targetDaw, support] of Object.entries(resolvedFieldSupport)) {
+    if (!support || typeof support !== 'object' || Array.isArray(support)) {
+      throw new Error(`capability ${capability.id} fieldSupport.${targetDaw} must be an object`)
+    }
+    if (!Array.isArray(support.requestFields) || !Array.isArray(support.responseFields)) {
+      throw new Error(`capability ${capability.id} fieldSupport.${targetDaw} must declare requestFields and responseFields`)
+    }
+  }
+
+  return resolvedFieldSupport
 }
 
 function generateTsCapabilityRegistry() {

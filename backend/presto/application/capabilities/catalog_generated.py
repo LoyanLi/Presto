@@ -389,7 +389,7 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         field_support={
             "pro_tools": CapabilityFieldSupport(request_fields=("trackNames", "enabled"), response_fields=("updated", "trackNames", "enabled")),
         },
-        handler="track.open.set",
+        handler="track.inactive.set",
     ),
     definition(
         "track.recordEnable.set",
