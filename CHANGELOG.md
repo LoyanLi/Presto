@@ -1,11 +1,13 @@
 # Changelog
 
-## 0.3.2-1
+## 0.3.3 alpha-1
 
+- 新增应用启动自动检查 GitHub release 更新，支持用户选择是否纳入预览版。
+- 宿主现在会在发现新版本时弹出更新提示，并可直接打开发布页。
 - 修复 Tauri 安装包中的 bundled Python runtime 仍然外链本机 `/Library/Frameworks/Python.framework`，避免用户机器未安装同版本 Python 时后端启动即崩。
 - bundled Python 现在一并携带所需 `Python.framework` 运行时资源，并重写解释器动态库引用后做 ad-hoc 签名。
 - 收口 `fastapi` / `uvicorn` helper script 与 `pyvenv.cfg` 中的构建机绝对路径，避免安装包继续泄露本地 `python.staging` 路径。
-- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.2-1`。
+- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.3-alpha.1`。
 
 ## 0.3.2
 

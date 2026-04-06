@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.3"
+version = "0.3.3-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
@@ -2742,7 +2742,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "presto-tauri"
-version = "0.3.2-1"
+version = "0.3.3"
 dependencies = [
  "rfd",
  "serde",

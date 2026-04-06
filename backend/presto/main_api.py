@@ -15,7 +15,7 @@ from presto.transport.http.schemas.errors import ErrorResponseSchema
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Presto Backend API", version="0.3.2-1")
+    app = FastAPI(title="Presto Backend API", version="0.3.3-alpha.1")
     app.state.services = build_service_container()
     app.include_router(http_router, prefix="/api/v1")
 

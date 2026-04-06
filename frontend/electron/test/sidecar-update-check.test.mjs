@@ -78,14 +78,14 @@ test('sidecar update check ignores drafts and keeps the latest stable release by
   assert.equal(latestRelease?.tagName, 'v0.3.2')
   assert.deepEqual(
     createUpdateCheckResult({
-      currentVersion: '0.3.2-1',
+      currentVersion: '0.3.3-alpha.1',
       repo: 'LoyanLi/Presto',
       releases,
       includePrerelease: false,
     }),
     {
-      currentVersion: '0.3.2-1',
-      hasUpdate: true,
+      currentVersion: '0.3.3-alpha.1',
+      hasUpdate: false,
       latestRelease: {
         repo: 'LoyanLi/Presto',
         tagName: 'v0.3.2',
@@ -104,7 +104,7 @@ test('sidecar update check includes prereleases when requested and compares semv
 
   assert.deepEqual(
     createUpdateCheckResult({
-      currentVersion: '0.3.2-1',
+      currentVersion: '0.3.3-alpha.1',
       repo: 'LoyanLi/Presto',
       releases: [
         {
@@ -127,7 +127,7 @@ test('sidecar update check includes prereleases when requested and compares semv
       includePrerelease: true,
     }),
     {
-      currentVersion: '0.3.2-1',
+      currentVersion: '0.3.3-alpha.1',
       hasUpdate: true,
       latestRelease: {
         repo: 'LoyanLi/Presto',
