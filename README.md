@@ -142,7 +142,7 @@ npm run tauri:build
 
 - 构建链会执行 `tauri:prepare:all`，其中包含前端构建、sidecar 构建、bundled Python runtime 准备和资源筛选复制。
 - `tauri:build` 默认为当前主机架构生成 `.app` 和 `.dmg`，并同步复制到 `release/tauri/<arch>/`。
-- DMG 打包当前通过 `scripts/package-tauri-build.mjs` 调用 `hdiutil makehybrid` 生成；在当前 macOS `26.0.1` 环境里，`hdiutil create` 会阻塞，不能作为发布链路事实继续使用。
+- DMG 打包当前通过 `scripts/package-tauri-build.mjs` 先调用 `hdiutil makehybrid` 生成原始镜像，再调用 `hdiutil convert -format UDZO` 压缩成最终发布 DMG；在当前 macOS `26.0.1` 环境里，`hdiutil create` 会阻塞，不能作为发布链路事实继续使用。
 
 按架构分别打包：
 

@@ -93,6 +93,7 @@ test('tauri packaging script builds DMGs without hdiutil create', async () => {
   const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
 
   assert.match(packageBuildSource, /await run\('hdiutil', \['makehybrid'/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['convert', rawDmgPath, '-format', 'UDZO', '-o', dmgPath\]\)/)
   assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
 })
 
