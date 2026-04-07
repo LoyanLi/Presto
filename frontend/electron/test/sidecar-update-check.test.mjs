@@ -78,13 +78,13 @@ test('sidecar update check ignores drafts and keeps the latest stable release by
   assert.equal(latestRelease?.tagName, 'v0.3.2')
   assert.deepEqual(
     createUpdateCheckResult({
-      currentVersion: '0.3.3-alpha.1',
+      currentVersion: '0.3.3',
       repo: 'LoyanLi/Presto',
       releases,
       includePrerelease: false,
     }),
     {
-      currentVersion: '0.3.3-alpha.1',
+      currentVersion: '0.3.3',
       hasUpdate: false,
       latestRelease: {
         repo: 'LoyanLi/Presto',

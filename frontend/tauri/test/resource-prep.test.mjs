@@ -59,6 +59,13 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const backendPythonPipPackage = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/pip'
   const backendPythonPipDistInfo = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/pip-26.0.1.dist-info'
   const backendPythonCache = 'src-tauri/resources/backend/python/lib/python3.13/site-packages/__pycache__'
+  const backendFrameworkStdlibTest = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/test'
+  const backendFrameworkStdlibConfig = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/config-3.13-darwin'
+  const backendFrameworkStdlibIdlelib = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/idlelib'
+  const backendFrameworkStdlibTkinter = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/tkinter'
+  const backendFrameworkStdlibTurtledemo = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/turtledemo'
+  const backendFrameworkStdlibHello = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/__phello__'
+  const backendFrameworkStdlibEnsurepip = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ensurepip'
   const backendPythonCaches = await listDirectoriesNamed(
     'src-tauri/resources/backend/python/lib/python3.13/site-packages',
     '__pycache__',
@@ -93,6 +100,13 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   assert.equal(await exists(backendPythonPipPackage), false)
   assert.equal(await exists(backendPythonPipDistInfo), false)
   assert.equal(await exists(backendPythonCache), false)
+  assert.equal(await exists(backendFrameworkStdlibTest), false)
+  assert.equal(await exists(backendFrameworkStdlibConfig), false)
+  assert.equal(await exists(backendFrameworkStdlibIdlelib), false)
+  assert.equal(await exists(backendFrameworkStdlibTkinter), false)
+  assert.equal(await exists(backendFrameworkStdlibTurtledemo), false)
+  assert.equal(await exists(backendFrameworkStdlibHello), false)
+  assert.equal(await exists(backendFrameworkStdlibEnsurepip), false)
   assert.deepEqual(backendPythonCaches, [])
   assert.equal(await exists(backendPytestBinary), false)
   assert.equal(await exists(backendFlake8Binary), false)

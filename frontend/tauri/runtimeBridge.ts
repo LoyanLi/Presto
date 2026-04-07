@@ -94,6 +94,6 @@ export function createTauriPrestoClient(): PrestoClient {
   return createPrestoClient({
     transport,
     clientName: 'tauri-renderer',
-    clientVersion: '0.3.3-alpha.1',
+    clientVersion: '0.3.3',
   })
 }

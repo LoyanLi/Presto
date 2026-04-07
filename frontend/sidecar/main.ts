@@ -97,8 +97,8 @@ async function loadJobForMobileProgress(taskId: string) {
     },
     meta: {
       clientName: 'mobile-progress',
-      clientVersion: '0.3.3-alpha.1',
-      sdkVersion: '0.3.3-alpha.1',
+      clientVersion: '0.3.3',
+      sdkVersion: '0.3.3',
     },
   })
 
@@ -116,8 +116,8 @@ async function loadDawAdapterSnapshot() {
     payload: {},
     meta: {
       clientName: 'tauri-sidecar',
-      clientVersion: '0.3.3-alpha.1',
-      sdkVersion: '0.3.3-alpha.1',
+      clientVersion: '0.3.3',
+      sdkVersion: '0.3.3',
     },
   })
 
@@ -137,8 +137,8 @@ async function setBackendDeveloperMode(enabled: unknown) {
   const resolvedEnabled = Boolean(enabled)
   const runtimeMeta = {
     clientName: 'tauri-sidecar',
-    clientVersion: '0.3.3-alpha.1',
-    sdkVersion: '0.3.3-alpha.1',
+    clientVersion: '0.3.3',
+    sdkVersion: '0.3.3',
   }
   const requestIdSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const getConfigResponse = await invokeCapability({

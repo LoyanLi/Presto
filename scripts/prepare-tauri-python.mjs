@@ -13,6 +13,7 @@ const runtimeRequirementsPath = path.join(repoRoot, 'backend', 'requirements-run
 const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resources')
 const DEV_ONLY_PACKAGES = ['pytest', 'flake8', 'pyflakes', 'pycodestyle', 'mccabe', 'pluggy', 'iniconfig', 'pygments', 'packaging']
 const UNUSED_VENV_BINARIES = ['pip', 'pip3', 'pip3.13', 'activate', 'activate.csh', 'activate.fish', 'Activate.ps1']
+const UNUSED_FRAMEWORK_STDLIB_ENTRIES = ['ensurepip', 'idlelib', 'test', 'tkinter', 'turtledemo', '__phello__', 'config-3.13-darwin']
 const PYTHON_BINARIES = ['python', 'python3', 'python3.13']
 const PYTHON_HELPER_WRAPPERS = {
   fastapi: ['-m', 'fastapi.cli'],
@@ -86,6 +87,15 @@ async function pruneBundledPython(root) {
         ),
     )
   }
+
+  const frameworkStdlibRoot = resolveBundledFrameworkStdlib(root)
+  await rm(path.join(frameworkStdlibRoot, '__pycache__'), { recursive: true, force: true })
+  await removeDirectoriesNamed(frameworkStdlibRoot, '__pycache__')
+  await Promise.all(
+    UNUSED_FRAMEWORK_STDLIB_ENTRIES.map((name) =>
+      rm(path.join(frameworkStdlibRoot, name), { recursive: true, force: true }),
+    ),
+  )
 }
 
 function resolveBuildPythonBin() {
