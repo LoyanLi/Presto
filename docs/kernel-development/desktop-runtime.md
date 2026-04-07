@@ -36,6 +36,11 @@ sidecar 的职责是业务宿主装配，而不是 UI 渲染。
 - 每次应用启动生成一个新的 `presto-<timestamp>.log`
 - 主日志行优先记录真实错误原因，只有额外上下文才追加紧凑 JSON
 
+打包态 sidecar 还依赖两条关键环境事实：
+
+- Rust 宿主会注入 `PRESTO_RESOURCES_DIR`，sidecar 由此解析 bundled backend、官方插件和自动化定义目录。
+- `frontend/runtime/backendSupervisor.ts` 在选择 bundled Python runtime 时，会同时把 `PYTHONHOME` 指向包内 `Python.framework/Versions/3.13`，避免回退到用户机器本地 Python framework。
+
 ## 3. Renderer 怎样访问宿主
 
 Renderer 侧的关键入口是：
@@ -87,6 +92,12 @@ Renderer 侧的关键入口是：
 - capability list / invoke 失败
 - backend stderr
 - backend 进程退出
+
+从 `0.3.3` 起，bundled Python runtime 的打包事实还包括：
+
+- `scripts/prepare-tauri-python.mjs` 会把运行时需要的 `Python.framework`、标准库和动态库依赖一起带入安装包。
+- `_ssl`、`_hashlib` 等扩展对 `libssl` / `libcrypto` 的引用已经改写到 bundle 内相对路径。
+- 标准库中的 `test`、`config-3.13-darwin`、`idlelib`、`tkinter`、`turtledemo`、`__phello__`、`ensurepip` 与缓存目录会在打包阶段被剔除，以缩小 `.app` 和 `.dmg` 体积。
 
 ## 5. 插件宿主服务在桌面侧的位置
 

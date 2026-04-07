@@ -91,6 +91,7 @@ frontend/sidecar/main.ts
 
 - 当前桌面主干已经是 `Tauri`，不是 Electron 主进程 + preload 模式。
 - Rust 宿主通过 `runtime_invoke` 把调用转给 Node sidecar，而不是直接在 Rust 里实现全部业务。
+- 打包态 sidecar 通过 `PRESTO_RESOURCES_DIR` 定位随包资源，并通过 bundled Python runtime + `PYTHONHOME` 管理本地 FastAPI 后端。
 - capability 是跨宿主、后端、插件的正式业务协议中心。
 - 插件不是宿主内任意脚本执行环境，而是 manifest 驱动的受限扩展模型。
 - 当前真实支持的 DAW 只有 `pro_tools`。
