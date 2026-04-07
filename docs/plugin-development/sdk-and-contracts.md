@@ -66,6 +66,12 @@
 
 这层服务于宿主和 Renderer Host，不是插件 `activate(context)` 可以直接依赖的正式 SDK。
 
+当前与 `macAccessibility` 相关的宿主事实还包括：
+
+- 宿主会在应用启动时先做一次辅助功能权限预检。
+- sidecar 会在真正执行 Accessibility 调用前再次检查，并在缺权限时弹出系统引导。
+- 这属于宿主运行时行为，不等于插件正式拿到了可自由支配的系统自动化权限。
+
 ## 6. `PluginContext` 的真实边界
 
 当前定义是：

@@ -110,6 +110,8 @@ const updateDialogPrimaryButtonStyle: CSSProperties = {
 }
 
 const defaultReleasePageUrl = 'https://github.com/LoyanLi/Presto/releases'
+const macAccessibilitySettingsUrl = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+const macAccessibilityPermissionRequiredCode = 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED'
 
 function hostDialogSurfaceColor(): string {
   return 'var(--md-sys-color-surface-container-high)'
@@ -187,7 +189,9 @@ export function HostShellApp({
   const [updateError, setUpdateError] = useState('')
   const [hasUpdate, setHasUpdate] = useState(false)
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+  const [showMacAccessibilityDialog, setShowMacAccessibilityDialog] = useState(false)
   const startupUpdateCheckCompleteRef = useRef(false)
+  const startupMacAccessibilityCheckCompleteRef = useRef(false)
   const updatePromptShownRef = useRef(false)
   const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
 
@@ -409,6 +413,19 @@ export function HostShellApp({
     }
   }
 
+  const openMacAccessibilitySettings = async (): Promise<boolean> => {
+    if (!developerRuntime?.shell?.openExternal) {
+      return false
+    }
+
+    try {
+      await developerRuntime.shell.openExternal(macAccessibilitySettingsUrl)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const checkForUpdates = async ({ silent = false }: { silent?: boolean } = {}): Promise<void> => {
     if (!developerRuntime?.app?.checkForUpdates || !developerRuntime?.app?.getVersion) {
       return
@@ -452,6 +469,33 @@ export function HostShellApp({
     startupUpdateCheckCompleteRef.current = true
     void checkForUpdates({ silent: true })
   }, [developerRuntime, preferencesHydrated, preferences.includePrereleaseUpdates])
+
+  useEffect(() => {
+    if (startupMacAccessibilityCheckCompleteRef.current) {
+      return
+    }
+    if (!developerRuntime?.macAccessibility?.preflight) {
+      startupMacAccessibilityCheckCompleteRef.current = true
+      return
+    }
+
+    startupMacAccessibilityCheckCompleteRef.current = true
+    let cancelled = false
+    void developerRuntime.macAccessibility.preflight()
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        if ((!result.ok || !result.trusted) && result.error === macAccessibilityPermissionRequiredCode) {
+          setShowMacAccessibilityDialog(true)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [developerRuntime])
 
   const persistHostShellPreferences = async (nextPreferences: Partial<typeof preferences>): Promise<void> => {
     if (!developerPresto?.config?.get || !developerPresto?.config?.update) {
@@ -724,6 +768,50 @@ export function HostShellApp({
                   }}
                 >
                   {translateHost(resolvedLocale, 'settings.update.dialog.openRelease')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {showMacAccessibilityDialog ? (
+          <div style={updateDialogOverlayStyle}>
+            <div role="dialog" aria-modal="true" style={updateDialogCardStyle}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <h2 style={updateDialogTitleStyle}>
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.title')}
+                </h2>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.body')}
+                </p>
+              </div>
+              <div style={updateDialogMetaStyle}>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.steps')}
+                </p>
+                <p style={updateDialogBodyStyle}>
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.help')}
+                </p>
+              </div>
+              <div style={updateDialogActionsStyle}>
+                <button
+                  type="button"
+                  style={updateDialogButtonStyle}
+                  onClick={() => setShowMacAccessibilityDialog(false)}
+                >
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.later')}
+                </button>
+                <button
+                  type="button"
+                  style={updateDialogPrimaryButtonStyle}
+                  onClick={() => {
+                    void openMacAccessibilitySettings().then((opened) => {
+                      if (opened) {
+                        setShowMacAccessibilityDialog(false)
+                      }
+                    })
+                  }}
+                >
+                  {translateHost(resolvedLocale, 'settings.accessibility.dialog.openSettings')}
                 </button>
               </div>
             </div>

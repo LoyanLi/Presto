@@ -2,6 +2,7 @@
 
 ## 0.3.3
 
+- macOS 辅助功能权限现在会在应用每次启动时主动预检；任何依赖 Accessibility 的运行时执行在权限缺失时都会先弹出明确引导，而不是只返回底层 `osascript` 报错。
 - 新增应用启动自动检查 GitHub release 更新，支持用户选择是否纳入预览版。
 - 宿主现在会在发现新版本时弹出更新提示，并可直接打开发布页。
 - 修复 Tauri 安装包中的 bundled Python runtime 仍然外链本机 `/Library/Frameworks/Python.framework`，避免用户机器未安装同版本 Python 时后端启动即崩。

@@ -105,6 +105,30 @@ test('macAccessibility runtime returns structured errors for osascript failures'
   assert.deepEqual(result.error?.details?.args, ['-e', 'return "x"', 'arg1'])
 })
 
+test('macAccessibility runtime classifies assistive access denial as permission required', async () => {
+  const runtime = createMacAccessibilityRuntime({
+    platform: 'darwin',
+    execFile(_command, _args, _options, callback) {
+      const error = new Error('osascript is not allowed assistive access')
+      error.code = 1
+      error.signal = null
+      callback(error, '', 'osascript is not allowed assistive access. (1002)\n')
+    },
+  })
+
+  const preflight = await runtime.preflight()
+  assert.deepEqual(preflight, {
+    ok: false,
+    trusted: false,
+    error: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+  })
+
+  const result = await runtime.runScript('return "x"', ['arg1'])
+  assert.equal(result.ok, false)
+  assert.equal(result.error?.code, 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED')
+  assert.match(result.error?.message ?? '', /Accessibility/i)
+})
+
 test('macAccessibility runtime returns unsupported on non-macOS and does not execute commands', async () => {
   let callCount = 0
   const runtime = createMacAccessibilityRuntime({
@@ -155,4 +179,14 @@ test('shared runtime modules keep automation and macAccessibility behavior decou
   assert.match(sidecarSource, /mac-accessibility\.preflight/)
   assert.match(sidecarSource, /mac-accessibility\.script\.run/)
   assert.match(sidecarSource, /mac-accessibility\.file\.run/)
+})
+
+test('sidecar routes accessibility-backed requests through a shared permission guidance helper', async () => {
+  const sidecarSource = await readFile(path.join(repoRoot, 'frontend/sidecar/main.ts'), 'utf8')
+
+  assert.match(sidecarSource, /async function withMacAccessibilityGuidance/)
+  assert.match(sidecarSource, /MAC_ACCESSIBILITY_PERMISSION_REQUIRED/)
+  assert.match(sidecarSource, /case 'automation\.definition\.run':[\s\S]*withMacAccessibilityGuidance/)
+  assert.match(sidecarSource, /case 'mac-accessibility\.script\.run':[\s\S]*withMacAccessibilityGuidance/)
+  assert.match(sidecarSource, /case 'mac-accessibility\.file\.run':[\s\S]*withMacAccessibilityGuidance/)
 })

@@ -1,3 +1,4 @@
+import { execFile as nodeExecFile } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
 import { createAutomationRuntime } from '../runtime/automationRuntime.mjs'
@@ -39,6 +40,10 @@ type RpcResponse = {
 
 let backendSupervisor: BackendSupervisor | null = null
 let currentDawTarget = 'pro_tools'
+let macAccessibilityGuidancePromise: Promise<void> | null = null
+
+const MAC_ACCESSIBILITY_PERMISSION_REQUIRED = 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED'
+const MAC_ACCESSIBILITY_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
 
 const appLogStore = createAppLogStore({
   logDir: resolveLogsDir(),
@@ -63,6 +68,78 @@ const mobileProgressRuntimeController = createMobileProgressRuntimeController({
 
 function appendAppLogEntry(entry: { level: 'info' | 'warn' | 'error'; source: string; message: string; details: unknown }) {
   appLogStore.append(entry)
+}
+
+function execFileAsync(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    nodeExecFile(command, args, { encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve({
+        stdout,
+        stderr,
+      })
+    })
+  })
+}
+
+function shouldPromptForMacAccessibility(result: unknown): boolean {
+  if (!result || typeof result !== 'object') {
+    return false
+  }
+
+  const resultRecord = result as {
+    error?: string | { code?: unknown }
+  }
+
+  if (resultRecord.error === MAC_ACCESSIBILITY_PERMISSION_REQUIRED) {
+    return true
+  }
+
+  return Boolean(
+    resultRecord.error &&
+      typeof resultRecord.error === 'object' &&
+      resultRecord.error.code === MAC_ACCESSIBILITY_PERMISSION_REQUIRED,
+  )
+}
+
+async function showMacAccessibilityGuidanceDialog(): Promise<void> {
+  if (macAccessibilityGuidancePromise) {
+    return macAccessibilityGuidancePromise
+  }
+
+  macAccessibilityGuidancePromise = (async () => {
+    try {
+      const { stdout } = await execFileAsync('osascript', [
+        '-e',
+        'display dialog "Presto requires macOS Accessibility access before it can control other apps. Open System Settings > Privacy & Security > Accessibility, enable Presto, then reopen the app if needed. If Presto is already enabled, remove and re-add it. Prefer running /Applications/Presto.app." buttons {"Later", "Open Settings"} default button "Open Settings" with title "Accessibility Access Required"',
+      ])
+      if (stdout.includes('Open Settings')) {
+        await execFileAsync('open', [MAC_ACCESSIBILITY_SETTINGS_URL])
+      }
+    } catch (error) {
+      appendAppLogEntry({
+        level: 'warn',
+        source: 'sidecar.accessibility',
+        message: 'Failed to show Accessibility guidance dialog.',
+        details: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      macAccessibilityGuidancePromise = null
+    }
+  })()
+
+  return macAccessibilityGuidancePromise
+}
+
+async function withMacAccessibilityGuidance<T>(operation: () => Promise<T>): Promise<T> {
+  const result = await operation()
+  if (shouldPromptForMacAccessibility(result)) {
+    await showMacAccessibilityGuidanceDialog()
+  }
+  return result
 }
 
 async function ensureBackendSupervisor(): Promise<BackendSupervisor> {
@@ -263,7 +340,9 @@ async function handleRequest(request: RpcRequest): Promise<unknown> {
     case 'automation.definition.list':
       return automationRuntime.listDefinitions()
     case 'automation.definition.run':
-      return automationRuntime.runDefinition(request.args?.[0] as Record<string, unknown>)
+      return withMacAccessibilityGuidance(() =>
+        automationRuntime.runDefinition(request.args?.[0] as Record<string, unknown>),
+      )
     case 'mobile-progress.session.create': {
       const { runtime } = await mobileProgressRuntimeController.ensureRuntime()
       return mobileProgressRuntimeController.decorateResult(runtime.createSession(String(request.args?.[0] ?? '')))
@@ -283,9 +362,13 @@ async function handleRequest(request: RpcRequest): Promise<unknown> {
     case 'mac-accessibility.preflight':
       return macAccessibilityRuntime.preflight()
     case 'mac-accessibility.script.run':
-      return macAccessibilityRuntime.runScript(String(request.args?.[0] ?? ''), request.args?.[1] as string[] | undefined)
+      return withMacAccessibilityGuidance(() =>
+        macAccessibilityRuntime.runScript(String(request.args?.[0] ?? ''), request.args?.[1] as string[] | undefined),
+      )
     case 'mac-accessibility.file.run':
-      return macAccessibilityRuntime.runFile(String(request.args?.[0] ?? ''), request.args?.[1] as string[] | undefined)
+      return withMacAccessibilityGuidance(() =>
+        macAccessibilityRuntime.runFile(String(request.args?.[0] ?? ''), request.args?.[1] as string[] | undefined),
+      )
     default:
       throw new Error(`unsupported_operation:${request.operation}`)
   }

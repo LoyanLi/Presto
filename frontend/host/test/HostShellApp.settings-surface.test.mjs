@@ -605,3 +605,19 @@ test('host shell centralizes startup update checks and update prompt state at th
   assert.match(source, /latestRelease/)
   assert.match(source, /showUpdateDialog/)
 })
+
+test('host shell centralizes startup accessibility checks and renders a dedicated guidance dialog', async () => {
+  const [source, i18nSource] = await Promise.all([
+    readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/i18n.ts'), 'utf8'),
+  ])
+
+  assert.match(source, /developerRuntime\?\.macAccessibility\?\.preflight/)
+  assert.match(source, /showMacAccessibilityDialog/)
+  assert.match(source, /settings\.accessibility\.dialog\.title/)
+  assert.match(source, /settings\.accessibility\.dialog\.body/)
+  assert.match(source, /settings\.accessibility\.dialog\.openSettings/)
+  assert.match(i18nSource, /settings\.accessibility\.dialog\.title/)
+  assert.match(i18nSource, /settings\.accessibility\.dialog\.body/)
+  assert.match(i18nSource, /settings\.accessibility\.dialog\.openSettings/)
+})

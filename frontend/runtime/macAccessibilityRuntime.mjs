@@ -3,6 +3,7 @@ import path from 'node:path'
 
 const OSASCRIPT_COMMAND = 'osascript'
 const DEFAULT_EXECUTION_TIMEOUT_MS = 10_000
+const MAC_ACCESSIBILITY_PERMISSION_REQUIRED = 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED'
 
 function normalizeOutput(value) {
   if (typeof value !== 'string') {
@@ -56,6 +57,15 @@ function createInvalidFileTypeResult(filePath) {
   }
 }
 
+function isAccessibilityPermissionDenied(message) {
+  const normalized = normalizeOutput(message).toLowerCase()
+  if (!normalized) {
+    return false
+  }
+
+  return normalized.includes('not allowed assistive access') || normalized.includes('assistive access')
+}
+
 function runOsascript(execFile, args, timeoutMs) {
   return new Promise((resolve) => {
     execFile(OSASCRIPT_COMMAND, args, { encoding: 'utf8', timeout: timeoutMs }, (error, stdout, stderr) => {
@@ -71,8 +81,17 @@ function runOsascript(execFile, args, timeoutMs) {
         return
       }
 
-      const errorCode = error.code === 'ETIMEDOUT' ? 'MAC_ACCESSIBILITY_TIMEOUT' : 'MAC_ACCESSIBILITY_EXECUTION_FAILED'
-      const message = normalizedStderr || normalizedStdout || error.message || 'AppleScript execution failed.'
+      const rawMessage = normalizedStderr || normalizedStdout || error.message || 'AppleScript execution failed.'
+      const errorCode =
+        error.code === 'ETIMEDOUT'
+          ? 'MAC_ACCESSIBILITY_TIMEOUT'
+          : isAccessibilityPermissionDenied(rawMessage)
+            ? MAC_ACCESSIBILITY_PERMISSION_REQUIRED
+            : 'MAC_ACCESSIBILITY_EXECUTION_FAILED'
+      const message =
+        errorCode === MAC_ACCESSIBILITY_PERMISSION_REQUIRED
+          ? 'Presto needs macOS Accessibility permission. Open System Settings > Privacy & Security > Accessibility and enable Presto.'
+          : rawMessage
       resolve({
         ok: false,
         stdout: normalizedStdout,

@@ -35,6 +35,8 @@ sidecar 的职责是业务宿主装配，而不是 UI 渲染。
 - 日志目录位于应用数据目录下的 `logs/`
 - 每次应用启动生成一个新的 `presto-<timestamp>.log`
 - 主日志行优先记录真实错误原因，只有额外上下文才追加紧凑 JSON
+- `macAccessibility` 相关运行时失败如果命中辅助功能权限缺失，会被统一归类成 `MAC_ACCESSIBILITY_PERMISSION_REQUIRED`
+- sidecar 会把 `automation.definition.run`、`mac-accessibility.script.run`、`mac-accessibility.file.run` 这三类入口统一包进权限引导逻辑，而不是把原始 `osascript` 权限错误直接抛回上层
 
 打包态 sidecar 还依赖两条关键环境事实：
 
@@ -68,6 +70,11 @@ Renderer 侧的关键入口是：
 - `window`
 - `mobileProgress`
 - `macAccessibility`
+
+其中 `macAccessibility` 当前还有两个明确事实：
+
+- React Host 在应用启动时会主动调用 `developerRuntime.macAccessibility.preflight()` 做一次预检。
+- 如果缺少 macOS Accessibility 权限，宿主弹窗和 sidecar 运行时弹窗都会给出同一条引导：去 `System Settings > Privacy & Security > Accessibility` 为 Presto 授权。
 
 ## 4. Backend Supervisor 在桌面侧的位置
 
