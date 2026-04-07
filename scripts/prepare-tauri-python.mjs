@@ -26,6 +26,33 @@ const PYTHON_FRAMEWORK_INSTALL_ID_TEMPLATE = '@rpath/Python.framework/Versions/%
 const PYTHON_APP_EXTERNAL_TEMPLATE = '/Library/Frameworks/Python.framework/Versions/%VERSION%/Python'
 const PYTHON_APP_BUNDLED_TEMPLATE = '@executable_path/../../../../Python'
 
+function resolveTargetArch() {
+  const targetTriple = process.env.PRESTO_TAURI_TARGET?.trim()
+  if (targetTriple === 'aarch64-apple-darwin') {
+    return 'arm64'
+  }
+  if (targetTriple === 'x86_64-apple-darwin') {
+    return 'x86_64'
+  }
+  if (process.arch === 'arm64') {
+    return 'arm64'
+  }
+  if (process.arch === 'x64') {
+    return 'x86_64'
+  }
+  throw new Error(`unsupported_python_runtime_arch:${targetTriple || process.arch}`)
+}
+
+function resolveHostArch() {
+  if (process.arch === 'arm64') {
+    return 'arm64'
+  }
+  if (process.arch === 'x64') {
+    return 'x86_64'
+  }
+  throw new Error(`unsupported_host_arch:${process.arch}`)
+}
+
 async function exists(targetPath) {
   try {
     await access(targetPath)
@@ -120,6 +147,14 @@ function run(command, args, options = {}) {
   })
 }
 
+function runTargetArch(targetArch, command, args, options = {}) {
+  if (process.platform === 'darwin' && resolveHostArch() !== targetArch) {
+    return run('arch', [`-${targetArch}`, command, ...args], options)
+  }
+
+  return run(command, args, options)
+}
+
 function runCapture(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const stdout = []
@@ -144,6 +179,14 @@ function runCapture(command, args, options = {}) {
       reject(new Error(`${command} exited with code ${code ?? 'unknown'}\n${result.stderr}`.trim()))
     })
   })
+}
+
+function runTargetArchCapture(targetArch, command, args, options = {}) {
+  if (process.platform === 'darwin' && resolveHostArch() !== targetArch) {
+    return runCapture('arch', [`-${targetArch}`, command, ...args], options)
+  }
+
+  return runCapture(command, args, options)
 }
 
 async function readPythonLinkage(root) {
@@ -191,6 +234,53 @@ async function listLibDynloadExtensions(root, version = PYTHON_VERSION) {
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.so'))
     .map((entry) => path.join(libDynloadRoot, entry.name))
+}
+
+async function listSitePackageExtensions(root, version = PYTHON_VERSION) {
+  const sitePackagesRoot = path.join(root, 'lib', `python${version}`, 'site-packages')
+  if (!(await exists(sitePackagesRoot))) {
+    return []
+  }
+
+  const matches = []
+  const pending = [sitePackagesRoot]
+
+  while (pending.length > 0) {
+    const currentPath = pending.pop()
+    if (!currentPath) {
+      continue
+    }
+
+    const entries = await readdir(currentPath, { withFileTypes: true })
+    for (const entry of entries) {
+      const entryPath = path.join(currentPath, entry.name)
+      if (entry.isDirectory()) {
+        pending.push(entryPath)
+        continue
+      }
+      if (entry.isFile() && entry.name.endsWith('.so')) {
+        matches.push(entryPath)
+      }
+    }
+  }
+
+  return matches.sort()
+}
+
+async function assertMachOBinariesContainTargetArch(targetPaths, targetArch) {
+  for (const targetPath of targetPaths) {
+    if (!(await exists(targetPath))) {
+      continue
+    }
+    const { stdout } = await runCapture('lipo', ['-archs', targetPath])
+    const architectures = stdout
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+    if (!architectures.includes(targetArch)) {
+      throw new Error(`Bundled Python Mach-O is missing target arch ${targetArch}: ${targetPath} -> ${stdout.trim()}`)
+    }
+  }
 }
 
 function extractExternalFrameworkLibraryDeps(linkage, externalFrameworkVersionRoot) {
@@ -471,7 +561,7 @@ async function writeRuntimeMetadata() {
   )
 }
 
-async function validateBundledPython(root) {
+async function validateBundledPython(root, targetArch) {
   const bundledPython = path.join(root, 'bin', 'python3')
   const bundledFrameworkRoot = resolveBundledFrameworkRoot(root)
   const bundledStdlib = resolveBundledFrameworkStdlib(root)
@@ -480,7 +570,8 @@ async function validateBundledPython(root) {
     throw new Error(`Bundled Python stdlib is missing encodings at ${bundledStdlib}`)
   }
 
-  const { stdout } = await runCapture(
+  const { stdout } = await runTargetArchCapture(
+    targetArch,
     bundledPython,
     [
       '-c',
@@ -516,6 +607,14 @@ async function validateBundledPython(root) {
     }
   }
 
+  await assertMachOBinariesContainTargetArch(
+    [
+      bundledPython,
+      ...(await listLibDynloadExtensions(root)),
+      ...(await listSitePackageExtensions(root)),
+    ],
+    targetArch,
+  )
   await assertNoExternalFrameworkLibraryLinkage(root)
 }
 
@@ -524,9 +623,9 @@ async function normalizeBundledPython(root) {
   await normalizePyvenvConfig(root)
 }
 
-async function hasUsableBundledPython() {
+async function hasUsableBundledPython(targetArch) {
   try {
-    await validateBundledPython(pythonRoot)
+    await validateBundledPython(pythonRoot, targetArch)
     return await isBundledPythonSelfContained(pythonRoot)
   } catch {
     return false
@@ -535,10 +634,11 @@ async function hasUsableBundledPython() {
 
 async function main() {
   const pythonBin = resolveBuildPythonBin()
+  const targetArch = resolveTargetArch()
 
   await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
 
-  if (await hasUsableBundledPython()) {
+  if (await hasUsableBundledPython(targetArch)) {
     await normalizeBundledPython(pythonRoot)
     await pruneBundledPython(pythonRoot)
     await writeRuntimeMetadata()
@@ -547,7 +647,7 @@ async function main() {
 
   try {
     await vendorPythonFramework(pythonRoot)
-    await validateBundledPython(pythonRoot)
+    await validateBundledPython(pythonRoot, targetArch)
     await normalizeBundledPython(pythonRoot)
     await pruneBundledPython(pythonRoot)
     await writeRuntimeMetadata()
@@ -558,15 +658,15 @@ async function main() {
 
   await mkdir(outputRoot, { recursive: true })
   await rm(stagingPythonRoot, { recursive: true, force: true })
-  await run(pythonBin, ['-m', 'venv', '--copies', stagingPythonRoot])
+  await runTargetArch(targetArch, pythonBin, ['-m', 'venv', '--copies', stagingPythonRoot])
 
   const bundledPip = path.join(stagingPythonRoot, 'bin', 'pip3')
 
-  await run(bundledPip, ['install', '--upgrade', 'pip'])
-  await run(bundledPip, ['install', '--no-cache-dir', '-r', runtimeRequirementsPath])
-  await run(bundledPip, ['uninstall', '--yes', ...DEV_ONLY_PACKAGES])
+  await runTargetArch(targetArch, bundledPip, ['install', '--upgrade', 'pip'])
+  await runTargetArch(targetArch, bundledPip, ['install', '--no-cache-dir', '-r', runtimeRequirementsPath])
+  await runTargetArch(targetArch, bundledPip, ['uninstall', '--yes', ...DEV_ONLY_PACKAGES])
   await vendorPythonFramework(stagingPythonRoot)
-  await validateBundledPython(stagingPythonRoot)
+  await validateBundledPython(stagingPythonRoot, targetArch)
   await normalizeBundledPython(stagingPythonRoot)
   await pruneBundledPython(stagingPythonRoot)
   await rm(pythonRoot, { recursive: true, force: true })

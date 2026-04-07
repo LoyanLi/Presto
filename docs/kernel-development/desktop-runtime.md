@@ -103,6 +103,7 @@ Renderer 侧的关键入口是：
 从 `0.3.3` 起，bundled Python runtime 的打包事实还包括：
 
 - `scripts/prepare-tauri-python.mjs` 会把运行时需要的 `Python.framework`、标准库和动态库依赖一起带入安装包。
+- `scripts/prepare-tauri-python.mjs` 会按 `PRESTO_TAURI_TARGET` 验证 bundled runtime 的目标架构；如果共享运行时目录里的 `.so` 扩展不包含当前目标架构，就不会复用旧目录，而是重新按目标架构创建 `venv`、安装 wheels，再用 `python.staging` 原子替换。
 - `_ssl`、`_hashlib` 等扩展对 `libssl` / `libcrypto` 的引用已经改写到 bundle 内相对路径。
 - 标准库中的 `test`、`config-3.13-darwin`、`idlelib`、`tkinter`、`turtledemo`、`__phello__`、`ensurepip` 与缓存目录会在打包阶段被剔除，以缩小 `.app` 和 `.dmg` 体积。
 

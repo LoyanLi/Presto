@@ -20,7 +20,7 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri/tauri.conf.json'), 'utf8'))
 
-  assert.match(packageJson.version, /^0\.3\.2(?:-[0-9A-Za-z.-]+)?$/)
+  assert.match(packageJson.version, /^0\.3\.3(?:-[0-9A-Za-z.-]+)?$/)
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.scripts?.['tauri:prepare:python'], 'node scripts/prepare-tauri-python.mjs')
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
@@ -84,12 +84,26 @@ test('tauri python prep stages a fresh bundled runtime before replacing the exis
   assert.match(prepareSource, /const stagingPythonRoot = path\.join\(outputRoot, 'python\.staging'\)/)
   assert.match(prepareSource, /await rm\(stagingPythonRoot,\s*\{\s*recursive: true,\s*force: true\s*\}\s*\)/)
   assert.match(prepareSource, /await rename\(stagingPythonRoot, pythonRoot\)/)
-  assert.match(prepareSource, /async function hasUsableBundledPython\(\)/)
+  assert.match(prepareSource, /async function hasUsableBundledPython\(targetArch\)/)
   assert.match(
     prepareSource,
-    /if \(await hasUsableBundledPython\(\)\) \{\s*await normalizeBundledPython\(pythonRoot\)\s*await pruneBundledPython\(pythonRoot\)\s*await writeRuntimeMetadata\(\)\s*return\s*\}/,
+    /if \(await hasUsableBundledPython\(targetArch\)\) \{\s*await normalizeBundledPython\(pythonRoot\)\s*await pruneBundledPython\(pythonRoot\)\s*await writeRuntimeMetadata\(\)\s*return\s*\}/,
   )
   assert.doesNotMatch(prepareSource, /await rm\(pythonRoot, \{ recursive: true, force: true \} \)\s*await mkdir\(outputRoot, \{ recursive: true \} \)\s*await run\(pythonBin, \['-m', 'venv', '--copies', pythonRoot\]\)/)
+})
+
+test('tauri python prep rebuilds runtime per target architecture instead of reusing host-arch site-packages blindly', async () => {
+  const prepareSource = await readFile(path.join(repoRoot, 'scripts/prepare-tauri-python.mjs'), 'utf8')
+
+  assert.match(prepareSource, /function resolveTargetArch\(\)/)
+  assert.match(prepareSource, /PRESTO_TAURI_TARGET/)
+  assert.match(prepareSource, /async function validateBundledPython\(root,\s*targetArch\)/)
+  assert.match(prepareSource, /site-packages/)
+  assert.match(prepareSource, /lipo', \['-archs'/)
+  assert.match(prepareSource, /await validateBundledPython\(pythonRoot,\s*targetArch\)/)
+  assert.match(prepareSource, /await runTargetArch\(targetArch,\s*pythonBin,\s*\['-m', 'venv', '--copies', stagingPythonRoot\]\)/)
+  assert.match(prepareSource, /await runTargetArch\(targetArch,\s*bundledPip,\s*\['install', '--upgrade', 'pip'\]\)/)
+  assert.match(prepareSource, /await runTargetArch\(targetArch,\s*bundledPip,\s*\['install', '--no-cache-dir', '-r', runtimeRequirementsPath\]\)/)
 })
 
 test('tauri packaging script builds DMGs without hdiutil create', async () => {
