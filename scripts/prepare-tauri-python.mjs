@@ -8,6 +8,7 @@ const repoRoot = path.resolve(currentDir, '..')
 const outputRoot = path.join(repoRoot, 'src-tauri', 'resources', 'backend')
 const pythonRoot = path.join(outputRoot, 'python')
 const stagingPythonRoot = path.join(outputRoot, 'python.staging')
+const PYTHON_VERSION = '3.13'
 const runtimeRequirementsPath = path.join(repoRoot, 'backend', 'requirements-runtime.txt')
 const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resources')
 const DEV_ONLY_PACKAGES = ['pytest', 'flake8', 'pyflakes', 'pycodestyle', 'mccabe', 'pluggy', 'iniconfig', 'pygments', 'packaging']
@@ -141,6 +142,136 @@ async function readPythonLinkage(root) {
   return stdout
 }
 
+function resolveBundledFrameworkRoot(root, version = PYTHON_VERSION) {
+  return path.join(root, 'Frameworks', 'Python.framework', 'Versions', version)
+}
+
+function resolveBundledFrameworkStdlib(root, version = PYTHON_VERSION) {
+  return path.join(resolveBundledFrameworkRoot(root, version), 'lib', `python${version}`)
+}
+
+function parseMachOLinkedPaths(linkage) {
+  return linkage
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split(' (')[0])
+}
+
+function toLoaderRelativeReference(targetPath, dependencyPath) {
+  const relativePath = path.relative(path.dirname(targetPath), dependencyPath).split(path.sep).join('/')
+  return relativePath ? `@loader_path/${relativePath}` : '@loader_path'
+}
+
+async function readMachOLinkage(targetPath) {
+  const { stdout } = await runCapture('otool', ['-L', targetPath])
+  return stdout
+}
+
+async function readMachOInstallId(targetPath) {
+  const { stdout } = await runCapture('otool', ['-D', targetPath])
+  const [, installId = ''] = stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+  return installId
+}
+
+async function listLibDynloadExtensions(root, version = PYTHON_VERSION) {
+  const libDynloadRoot = path.join(resolveBundledFrameworkStdlib(root, version), 'lib-dynload')
+  const entries = await readdir(libDynloadRoot, { withFileTypes: true })
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.so'))
+    .map((entry) => path.join(libDynloadRoot, entry.name))
+}
+
+function extractExternalFrameworkLibraryDeps(linkage, externalFrameworkVersionRoot) {
+  return parseMachOLinkedPaths(linkage).filter(
+    (dependency) =>
+      dependency.startsWith(`${externalFrameworkVersionRoot}/lib/`) &&
+      dependency.endsWith('.dylib'),
+  )
+}
+
+async function vendorFrameworkLibraryDependencies(root, externalFrameworkVersionRoot, bundledFrameworkVersionRoot, version) {
+  const pendingTargets = await listLibDynloadExtensions(root, version)
+  const processedTargets = new Set()
+
+  while (pendingTargets.length > 0) {
+    const targetPath = pendingTargets.pop()
+    if (!targetPath || processedTargets.has(targetPath)) {
+      continue
+    }
+
+    processedTargets.add(targetPath)
+    const linkage = await readMachOLinkage(targetPath)
+    const dependencies = extractExternalFrameworkLibraryDeps(linkage, externalFrameworkVersionRoot)
+
+    for (const dependency of dependencies) {
+      const bundledDependency = dependency.replace(externalFrameworkVersionRoot, bundledFrameworkVersionRoot)
+      if (!(await exists(bundledDependency))) {
+        await mkdir(path.dirname(bundledDependency), { recursive: true })
+        await cp(dependency, bundledDependency, { force: true })
+      }
+      if (!processedTargets.has(bundledDependency)) {
+        pendingTargets.push(bundledDependency)
+      }
+    }
+  }
+
+  for (const targetPath of processedTargets) {
+    let changed = false
+    const linkage = await readMachOLinkage(targetPath)
+    const dependencies = extractExternalFrameworkLibraryDeps(linkage, externalFrameworkVersionRoot)
+
+    for (const dependency of dependencies) {
+      const bundledDependency = dependency.replace(externalFrameworkVersionRoot, bundledFrameworkVersionRoot)
+      await run('install_name_tool', [
+        '-change',
+        dependency,
+        toLoaderRelativeReference(targetPath, bundledDependency),
+        targetPath,
+      ])
+      changed = true
+    }
+
+    if (targetPath.endsWith('.dylib')) {
+      const installId = await readMachOInstallId(targetPath)
+      if (installId.startsWith(`${externalFrameworkVersionRoot}/lib/`)) {
+        await run('install_name_tool', ['-id', toLoaderRelativeReference(targetPath, targetPath), targetPath])
+        changed = true
+      }
+    }
+
+    if (changed) {
+      await adHocSign(targetPath)
+    }
+  }
+}
+
+async function assertNoExternalFrameworkLibraryLinkage(root, version = PYTHON_VERSION) {
+  const bundledFrameworkRoot = resolveBundledFrameworkRoot(root, version)
+  const targets = [
+    ...(await listLibDynloadExtensions(root, version)).filter((targetPath) => {
+      const basename = path.basename(targetPath)
+      return basename.startsWith('_ssl.') || basename.startsWith('_hashlib.')
+    }),
+    path.join(bundledFrameworkRoot, 'lib', 'libssl.3.dylib'),
+    path.join(bundledFrameworkRoot, 'lib', 'libcrypto.3.dylib'),
+  ]
+
+  for (const targetPath of targets) {
+    if (!(await exists(targetPath))) {
+      throw new Error(`Bundled Python runtime library is missing: ${targetPath}`)
+    }
+    const linkage = await readMachOLinkage(targetPath)
+    const externalDeps = parseMachOLinkedPaths(linkage).filter((dependency) =>
+      dependency.startsWith('/Library/Frameworks/Python.framework/Versions/'),
+    )
+    if (externalDeps.length > 0) {
+      throw new Error(`Bundled runtime linkage escaped to external framework: ${targetPath} -> ${externalDeps.join(', ')}`)
+    }
+  }
+}
+
 async function readPythonAppLinkage(root, version) {
   const bundledPythonApp = path.join(
     root,
@@ -216,6 +347,8 @@ async function vendorPythonFramework(root) {
   const externalFrameworkVersionRoot = path.dirname(externalFrameworkBinary)
   const externalPythonApp = path.join(externalFrameworkVersionRoot, 'Resources', 'Python.app')
   const bundledFrameworkVersionRoot = path.join(root, 'Frameworks', 'Python.framework', 'Versions', version)
+  const externalStdlibRoot = path.join(externalFrameworkVersionRoot, 'lib', `python${version}`)
+  const bundledStdlibRoot = path.join(bundledFrameworkVersionRoot, 'lib', `python${version}`)
   const bundledFrameworkBinary = path.join(bundledFrameworkVersionRoot, 'Python')
   const bundledPythonApp = path.join(bundledFrameworkVersionRoot, 'Resources', 'Python.app')
   const bundledPythonAppExecutable = path.join(bundledPythonApp, 'Contents', 'MacOS', 'Python')
@@ -229,6 +362,12 @@ async function vendorPythonFramework(root) {
     await cp(externalFrameworkBinary, bundledFrameworkBinary, { force: true })
     await cp(externalPythonApp, bundledPythonApp, { recursive: true, force: true })
   }
+
+  await rm(bundledStdlibRoot, { recursive: true, force: true })
+  await mkdir(path.dirname(bundledStdlibRoot), { recursive: true })
+  await cp(externalStdlibRoot, bundledStdlibRoot, { recursive: true, force: true })
+  await rm(path.join(bundledStdlibRoot, 'site-packages'), { recursive: true, force: true })
+  await vendorFrameworkLibraryDependencies(root, externalFrameworkVersionRoot, bundledFrameworkVersionRoot, version)
 
   for (const name of PYTHON_BINARIES) {
     const binaryPath = path.join(root, 'bin', name)
@@ -324,7 +463,50 @@ async function writeRuntimeMetadata() {
 
 async function validateBundledPython(root) {
   const bundledPython = path.join(root, 'bin', 'python3')
-  await run(bundledPython, ['-c', 'import fastapi, uvicorn, pydantic, anyio, ptsl'])
+  const bundledFrameworkRoot = resolveBundledFrameworkRoot(root)
+  const bundledStdlib = resolveBundledFrameworkStdlib(root)
+
+  if (!(await exists(path.join(bundledStdlib, 'encodings')))) {
+    throw new Error(`Bundled Python stdlib is missing encodings at ${bundledStdlib}`)
+  }
+
+  const { stdout } = await runCapture(
+    bundledPython,
+    [
+      '-c',
+      [
+        'import encodings, fastapi, uvicorn, pydantic, anyio, ptsl, json, sys, sysconfig',
+        'print(json.dumps({',
+        '  "base_prefix": sys.base_prefix,',
+        '  "base_exec_prefix": sys.base_exec_prefix,',
+        '  "stdlib": sysconfig.get_path("stdlib"),',
+        '  "platstdlib": sysconfig.get_path("platstdlib"),',
+        '  "encodings": encodings.__file__,',
+        '  "path": sys.path,',
+        '}, ensure_ascii=False))',
+      ].join('\n'),
+    ],
+    {
+      env: {
+        ...process.env,
+        PYTHONHOME: bundledFrameworkRoot,
+      },
+    },
+  )
+
+  const runtime = JSON.parse(stdout)
+  for (const key of ['base_prefix', 'base_exec_prefix', 'stdlib', 'encodings']) {
+    if (!String(runtime[key] ?? '').startsWith(bundledFrameworkRoot)) {
+      throw new Error(`Bundled Python ${key} escaped bundled framework: ${runtime[key]}`)
+    }
+  }
+  for (const entry of runtime.path ?? []) {
+    if (String(entry).includes('/Library/Frameworks/Python.framework/Versions/')) {
+      throw new Error(`Bundled Python path escaped to build-machine framework: ${entry}`)
+    }
+  }
+
+  await assertNoExternalFrameworkLibraryLinkage(root)
 }
 
 async function normalizeBundledPython(root) {
@@ -354,7 +536,6 @@ async function main() {
   }
 
   try {
-    await validateBundledPython(pythonRoot)
     await vendorPythonFramework(pythonRoot)
     await validateBundledPython(pythonRoot)
     await normalizeBundledPython(pythonRoot)

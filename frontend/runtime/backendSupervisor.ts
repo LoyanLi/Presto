@@ -36,6 +36,7 @@ type SupervisorPhase = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const DEFAULT_PORT = Number(process.env.PRESTO_MAIN_BACKEND_PORT ?? '18500')
+const BUNDLED_PYTHON_VERSION = '3.13'
 const PYTHON_CANDIDATES = ['/usr/local/bin/python3', '/opt/homebrew/bin/python3', '/usr/bin/python3'] as const
 const REQUIRED_PTSL_SYMBOLS = [
   'CId_SetTrackControlBreakpoints',
@@ -77,6 +78,23 @@ export function resolveBundledPythonBin(resourcesDir = process.env.PRESTO_RESOUR
 
   const bundledPython = path.resolve(resourcesDir, 'backend', 'python', 'bin', 'python3')
   return existsSync(bundledPython) ? bundledPython : null
+}
+
+export function resolveBundledPythonHome(resourcesDir = process.env.PRESTO_RESOURCES_DIR): string | null {
+  if (!resourcesDir) {
+    return null
+  }
+
+  const bundledPythonHome = path.resolve(
+    resourcesDir,
+    'backend',
+    'python',
+    'Frameworks',
+    'Python.framework',
+    'Versions',
+    BUNDLED_PYTHON_VERSION,
+  )
+  return existsSync(bundledPythonHome) ? bundledPythonHome : null
 }
 
 function pythonSupportsModernPtsl(pythonBin: string): boolean {
@@ -296,8 +314,6 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
   const requestImpl = options.requestJsonImpl ?? requestJson
   const spawnImpl = options.spawnImpl ?? spawn
   const resolvePort = options.resolvePortImpl ?? resolveAvailablePort
-  const resolvePythonBin = () =>
-    resolveBundledPythonBin() ?? (options.resolvePythonBinImpl ? options.resolvePythonBinImpl() : resolveBackendPythonBin())
   const resolveBackendWorkingDir = () => path.resolve(resolveBackendRoot(), '..')
   const log = (level: 'info' | 'warn' | 'error', message: string, details?: Record<string, unknown>) => {
     options.onLog?.({
@@ -389,10 +405,15 @@ export function createBackendSupervisor(options: CreateBackendSupervisorOptions 
       lastError = null
       transition('starting')
       currentPort = await resolvePort(DEFAULT_PORT)
-      processHandle = spawnImpl(resolvePythonBin(), ['-m', 'presto.main_api', '--host', '127.0.0.1', '--port', String(currentPort)], {
+      const bundledPythonBin = resolveBundledPythonBin()
+      const pythonBin =
+        bundledPythonBin ?? (options.resolvePythonBinImpl ? options.resolvePythonBinImpl() : resolveBackendPythonBin())
+      const bundledPythonHome = bundledPythonBin ? resolveBundledPythonHome() : null
+      processHandle = spawnImpl(pythonBin, ['-m', 'presto.main_api', '--host', '127.0.0.1', '--port', String(currentPort)], {
         cwd: resolveBackendWorkingDir(),
         env: {
           ...process.env,
+          ...(bundledPythonHome ? { PYTHONHOME: bundledPythonHome } : {}),
           PYTHONUNBUFFERED: '1',
           PRESTO_TARGET_DAW: targetDaw,
         },

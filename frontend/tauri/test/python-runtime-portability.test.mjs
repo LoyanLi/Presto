@@ -46,6 +46,45 @@ function listMachOBinaries(rootPath) {
     .filter(Boolean)
 }
 
+function inspectBundledPythonRuntime(pythonBin, env = {}) {
+  const result = spawnSync(
+    pythonBin,
+    [
+      '-c',
+      [
+        'import encodings, json, sys, sysconfig',
+        'print(json.dumps({',
+        '  "base_prefix": sys.base_prefix,',
+        '  "base_exec_prefix": sys.base_exec_prefix,',
+        '  "path": sys.path,',
+        '  "stdlib": sysconfig.get_path("stdlib"),',
+        '  "platstdlib": sysconfig.get_path("platstdlib"),',
+        '  "encodings": encodings.__file__,',
+        '}, ensure_ascii=False))',
+      ].join('\n'),
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ...env,
+      },
+    },
+  )
+
+  assert.equal(result.status, 0, result.stderr)
+  return JSON.parse(result.stdout)
+}
+
+function readMachOLinkage(binaryPath) {
+  const result = spawnSync('otool', ['-L', binaryPath], {
+    encoding: 'utf8',
+  })
+
+  assert.equal(result.status, 0, result.stderr)
+  return result.stdout
+}
+
 test('prepared bundled python is self-contained on macOS', async () => {
   if (process.platform !== 'darwin') {
     return
@@ -81,6 +120,9 @@ test('prepared bundled python mach-o files do not keep external Python framework
   assert.ok(machOBinaries.length > 0)
 
   for (const binaryPath of machOBinaries) {
+    if (binaryPath.endsWith('.a') || binaryPath.includes('/config-')) {
+      continue
+    }
     const linkage = spawnSync('otool', ['-L', binaryPath], {
       encoding: 'utf8',
     })
@@ -89,6 +131,26 @@ test('prepared bundled python mach-o files do not keep external Python framework
       linkage.stdout,
       /\/Library\/Frameworks\/Python\.framework\/Versions\/3\.13\/Python/,
       `External Python framework linkage found in ${binaryPath}`,
+    )
+  }
+})
+
+test('prepared bundled python runtime extensions do not depend on external framework dylibs', async () => {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  const dylibs = [
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_ssl.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_hashlib.cpython-313-darwin.so',
+  ]
+
+  for (const dylib of dylibs) {
+    const linkage = readMachOLinkage(path.join(repoRoot, dylib))
+    assert.doesNotMatch(
+      linkage,
+      /\/Library\/Frameworks\/Python\.framework\/Versions\/3\.13\/lib\/lib(?:ssl|crypto)\.3\.dylib/,
+      `External OpenSSL linkage found in ${dylib}`,
     )
   }
 })
@@ -108,4 +170,30 @@ test('prepared bundled python helper scripts do not keep build-machine paths', a
   assert.doesNotMatch(fastapiSource, /^#!\/Users\//m)
   assert.doesNotMatch(uvicornSource, /^#!\/Users\//m)
   assert.doesNotMatch(pyvenvConfig, /python\.staging/)
+})
+
+test('prepared bundled python includes framework stdlib and resolves it when PYTHONHOME targets the bundled framework', async () => {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  const bundledPython = path.join(repoRoot, 'src-tauri/resources/backend/python/bin/python3')
+  const bundledRoot = path.join(repoRoot, 'src-tauri/resources/backend/python')
+  const bundledFrameworkRoot = path.join(bundledRoot, 'Frameworks', 'Python.framework', 'Versions', '3.13')
+  const bundledStdlib = path.join(bundledFrameworkRoot, 'lib', 'python3.13')
+  const runtime = inspectBundledPythonRuntime(bundledPython, {
+    PYTHONHOME: bundledFrameworkRoot,
+  })
+
+  assert.equal(await exists(path.relative(repoRoot, bundledStdlib)), true)
+  assert.equal(await exists(path.relative(repoRoot, path.join(bundledStdlib, 'encodings'))), true)
+  assert.match(runtime.base_prefix, new RegExp(`^${bundledFrameworkRoot.replaceAll('.', '\\.')}`))
+  assert.match(runtime.base_exec_prefix, new RegExp(`^${bundledFrameworkRoot.replaceAll('.', '\\.')}`))
+  assert.match(runtime.stdlib, new RegExp(`^${bundledFrameworkRoot.replaceAll('.', '\\.')}\\/lib\\/python3\\.13`))
+  assert.match(runtime.encodings, new RegExp(`^${bundledFrameworkRoot.replaceAll('.', '\\.')}\\/lib\\/python3\\.13\\/encodings`))
+  assert.doesNotMatch(runtime.platstdlib, /\/Library\/Frameworks\/Python\.framework\/Versions\/3\.13\//)
+
+  for (const entry of runtime.path) {
+    assert.doesNotMatch(entry, /\/Library\/Frameworks\/Python\.framework\/Versions\/3\.13\//)
+  }
 })

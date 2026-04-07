@@ -328,6 +328,7 @@ test('backend supervisor prefers the packaged python runtime when resources are 
   const previousResourcesDir = process.env.PRESTO_RESOURCES_DIR
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'presto-packaged-python-'))
   const bundledPython = path.join(tempRoot, 'backend', 'python', 'bin', 'python3')
+  const bundledFrameworkRoot = path.join(tempRoot, 'backend', 'python', 'Frameworks', 'Python.framework', 'Versions', '3.13')
   const spawnCalls = []
 
   try {
@@ -352,7 +353,10 @@ test('backend supervisor prefers the packaged python runtime when resources are 
     })
 
     await import('node:fs/promises').then(({ mkdir, writeFile }) =>
-      mkdir(path.dirname(bundledPython), { recursive: true }).then(() => writeFile(bundledPython, '')))
+      Promise.all([
+        mkdir(path.dirname(bundledPython), { recursive: true }).then(() => writeFile(bundledPython, '')),
+        mkdir(bundledFrameworkRoot, { recursive: true }),
+      ]))
 
     const response = await supervisor.invokeCapability({
       requestId: 'req-packaged-python-bin',
@@ -363,6 +367,7 @@ test('backend supervisor prefers the packaged python runtime when resources are 
     assert.equal(response.success, true)
     assert.equal(spawnCalls.length, 1)
     assert.equal(spawnCalls[0]?.command, bundledPython)
+    assert.equal(spawnCalls[0]?.options?.env?.PYTHONHOME, bundledFrameworkRoot)
 
     await supervisor.stop()
   } finally {
