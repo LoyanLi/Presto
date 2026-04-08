@@ -162,13 +162,22 @@ test('prepared bundled python lib-dynload keeps only backend-required runtime ex
   }
 
   const disallowedExtensions = [
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_ctypes_test.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_tkinter.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_curses.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_curses_panel.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testcapi.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testinternalcapi.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testclinic.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testclinic_limited.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testexternalinspection.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testimportmultiple.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testlimitedcapi.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testmultiphase.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testsinglephase.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_xxtestfuzz.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/xxlimited.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/xxlimited_35.cpython-313-darwin.so',
     'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/xxsubtype.cpython-313-darwin.so',
   ]
 

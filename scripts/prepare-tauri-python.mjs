@@ -72,6 +72,26 @@ const EXTRA_REQUIRED_LIB_DYNLOAD_BASENAMES = [
   'unicodedata.cpython-313-darwin.so',
   'zlib.cpython-313-darwin.so',
 ]
+const DISALLOWED_LIB_DYNLOAD_BASENAMES = new Set([
+  '_ctypes_test.cpython-313-darwin.so',
+  '_tkinter.cpython-313-darwin.so',
+  '_curses.cpython-313-darwin.so',
+  '_curses_panel.cpython-313-darwin.so',
+  '_testbuffer.cpython-313-darwin.so',
+  '_testcapi.cpython-313-darwin.so',
+  '_testclinic.cpython-313-darwin.so',
+  '_testclinic_limited.cpython-313-darwin.so',
+  '_testexternalinspection.cpython-313-darwin.so',
+  '_testimportmultiple.cpython-313-darwin.so',
+  '_testinternalcapi.cpython-313-darwin.so',
+  '_testlimitedcapi.cpython-313-darwin.so',
+  '_testmultiphase.cpython-313-darwin.so',
+  '_testsinglephase.cpython-313-darwin.so',
+  '_xxtestfuzz.cpython-313-darwin.so',
+  'xxlimited.cpython-313-darwin.so',
+  'xxlimited_35.cpython-313-darwin.so',
+  'xxsubtype.cpython-313-darwin.so',
+])
 const PYTHON_BINARIES = ['python', 'python3', 'python3.13']
 const PYTHON_HELPER_WRAPPERS = {
   fastapi: ['-m', 'fastapi.cli'],
@@ -417,7 +437,8 @@ async function pruneLibDynload(root, targetArch, version = PYTHON_VERSION) {
 
   await Promise.all(
     libDynloadExtensions.map(async (targetPath) => {
-      if (requiredBasenames.has(path.basename(targetPath))) {
+      const basename = path.basename(targetPath)
+      if (!DISALLOWED_LIB_DYNLOAD_BASENAMES.has(basename) && requiredBasenames.has(basename)) {
         return
       }
       await rm(targetPath, { force: true })

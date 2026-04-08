@@ -74,6 +74,7 @@ async function prepareAutomationResources() {
 
 await mkdir(outputRoot, { recursive: true })
 await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
+await rm(path.join(outputRoot, 'build', 'sidecar'), { recursive: true, force: true })
 
 await Promise.all([
   prepareBackendResources(),
