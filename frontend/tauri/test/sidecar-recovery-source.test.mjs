@@ -7,11 +7,11 @@ import { readFile } from 'node:fs/promises'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
 
-test('rust tauri host respawns sidecar once after recoverable pipe failures', async () => {
+test('rust tauri host no longer spawns or respawns a Node sidecar', async () => {
   const rustSource = await readFile(path.join(repoRoot, 'src-tauri/src/main.rs'), 'utf8')
 
-  assert.match(rustSource, /recoverable_sidecar_error/)
-  assert.match(rustSource, /spawn_sidecar\(&self\.app\)/)
-  assert.match(rustSource, /execute_sidecar_call/)
-  assert.match(rustSource, /retry_after_sidecar_respawn/)
+  assert.doesNotMatch(rustSource, /recoverable_sidecar_error/)
+  assert.doesNotMatch(rustSource, /spawn_sidecar/)
+  assert.doesNotMatch(rustSource, /execute_sidecar_call/)
+  assert.doesNotMatch(rustSource, /retry_after_sidecar_respawn/)
 })

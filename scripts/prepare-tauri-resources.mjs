@@ -45,13 +45,6 @@ async function prepareBackendResources() {
   await copyFiltered(path.join(repoRoot, 'backend', 'presto'), path.join(backendOutput, 'presto'))
 }
 
-async function prepareSidecarResources() {
-  const sidecarOutput = path.join(outputRoot, 'build')
-  await mkdir(sidecarOutput, { recursive: true })
-  await rm(path.join(sidecarOutput, 'sidecar'), { recursive: true, force: true })
-  await copyFiltered(path.join(repoRoot, 'build', 'sidecar'), path.join(sidecarOutput, 'sidecar'))
-}
-
 async function prepareOfficialPluginResources() {
   const pluginsRoot = path.join(repoRoot, 'plugins', 'official')
   const pluginsOutput = path.join(outputRoot, 'plugins', 'official')
@@ -83,7 +76,6 @@ await mkdir(outputRoot, { recursive: true })
 await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
 
 await Promise.all([
-  prepareSidecarResources(),
   prepareBackendResources(),
   prepareOfficialPluginResources(),
   prepareAutomationResources(),
