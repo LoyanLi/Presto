@@ -20,7 +20,7 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri/tauri.conf.json'), 'utf8'))
 
-  assert.match(packageJson.version, /^0\.3\.3(?:-[0-9A-Za-z.-]+)?$/)
+  assert.match(packageJson.version, /^0\.3\.4(?:-[0-9A-Za-z.-]+)?$/)
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.scripts?.['tauri:prepare:python'], 'node scripts/prepare-tauri-python.mjs')
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
@@ -113,6 +113,17 @@ test('tauri packaging script builds DMGs without hdiutil create', async () => {
   assert.match(packageBuildSource, /await run\('hdiutil', \['convert', rawDmgPath, '-format', 'UDBZ', '-o', dmgPath\]\)/)
   assert.match(packageBuildSource, /size-report\.json/)
   assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
+})
+
+test('tauri packaging script syncs staged runtime resources into the app bundle before signing', async () => {
+  const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
+
+  assert.match(packageBuildSource, /async function syncBundledResources\(appBundlePath\)/)
+  assert.match(packageBuildSource, /for \(const resourceName of \['backend', 'frontend', 'plugins'\]\)/)
+  assert.match(packageBuildSource, /const stagedResourcePath = path\.join\(targetReleaseRoot,\s*resourceName\)/)
+  assert.match(packageBuildSource, /const bundledResourcePath = path\.join\(resourcesRoot,\s*resourceName\)/)
+  assert.match(packageBuildSource, /await cp\(stagedResourcePath,\s*bundledResourcePath,\s*\{\s*recursive: true\s*\}\)/)
+  assert.match(packageBuildSource, /await syncBundledResources\(appPath\)\s*await run\('node', \['scripts\/inject-macos-app-icon\.mjs', '--app', appPath\]\)/)
 })
 
 test('package.json no longer exposes Electron build and packaging scripts', async () => {

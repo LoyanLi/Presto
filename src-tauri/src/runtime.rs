@@ -975,7 +975,7 @@ fn runtime_meta(client_name: &str) -> Value {
 }
 
 fn state_version() -> &'static str {
-    "0.3.3"
+    "0.3.4"
 }
 
 fn load_daw_adapter_snapshot(state: &Arc<RuntimeState>) -> Result<Value, String> {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4
+
+- 修复 Tauri 正式打包链在生成 `.app` 后没有把 `backend`、`frontend`、`plugins` 资源同步进最终 bundle 的问题，避免出现能打包成功但安装包实际缺少运行时资源的空壳 App。
+- `arm64` 正式安装包体积回到真实值区间，当前验证结果约为 `90M .app / 27M .dmg`。
+- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.4`。
+
 ## 0.3.3
 
 - macOS 辅助功能权限现在会在应用每次启动时主动预检；任何依赖 Accessibility 的运行时执行在权限缺失时都会先弹出明确引导，而不是只返回底层 `osascript` 报错。

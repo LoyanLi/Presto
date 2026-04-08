@@ -18,7 +18,7 @@
 
 当前入口会：
 
-- 创建 `FastAPI(title="Presto Backend API", version="0.3.3")`
+- 创建 `FastAPI(title="Presto Backend API", version="0.3.4")`
 - 调用 `build_service_container()`
 - 挂载 `/api/v1`
 - 注册 `PrestoError` 和通用异常处理器
