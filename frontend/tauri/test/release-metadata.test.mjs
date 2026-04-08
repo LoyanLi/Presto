@@ -26,10 +26,10 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
   assert.equal(
     packageJson.scripts?.['tauri:prepare:all'],
-    'npm run tauri:build:frontend && npm run tauri:build:sidecar && npm run tauri:prepare:python && npm run tauri:prepare:resources',
+    'npm run tauri:build:frontend && npm run tauri:prepare:python && npm run tauri:prepare:resources',
   )
   assert.equal(packageJson.scripts?.['tauri:build:frontend'], 'node scripts/build-tauri-frontend.mjs')
-  assert.equal(packageJson.scripts?.['tauri:build:sidecar'], 'node scripts/build-tauri-sidecar.mjs')
+  assert.equal(packageJson.scripts?.['tauri:build:sidecar'], undefined)
   assert.equal(packageJson.scripts?.['tauri:build'], 'node scripts/package-tauri-build.mjs')
   assert.equal(packageJson.scripts?.['tauri:dev'], 'tauri dev')
   assert.equal(packageJson.scripts?.['tauri:build:arm64'], 'PRESTO_TAURI_TARGET=aarch64-apple-darwin node scripts/package-tauri-build.mjs')
@@ -87,7 +87,7 @@ test('tauri python prep stages a fresh bundled runtime before replacing the exis
   assert.match(prepareSource, /async function hasUsableBundledPython\(targetArch\)/)
   assert.match(
     prepareSource,
-    /if \(await hasUsableBundledPython\(targetArch\)\) \{\s*await normalizeBundledPython\(pythonRoot\)\s*await pruneBundledPython\(pythonRoot\)\s*await writeRuntimeMetadata\(\)\s*return\s*\}/,
+    /if \(await hasUsableBundledPython\(targetArch\)\) \{\s*await normalizeBundledPython\(pythonRoot\)\s*await pruneBundledPython\(pythonRoot,\s*targetArch\)\s*[\s\S]*await writeRuntimeMetadata\(\)\s*return\s*\}/,
   )
   assert.doesNotMatch(prepareSource, /await rm\(pythonRoot, \{ recursive: true, force: true \} \)\s*await mkdir\(outputRoot, \{ recursive: true \} \)\s*await run\(pythonBin, \['-m', 'venv', '--copies', pythonRoot\]\)/)
 })
@@ -110,7 +110,8 @@ test('tauri packaging script builds DMGs without hdiutil create', async () => {
   const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
 
   assert.match(packageBuildSource, /await run\('hdiutil', \['makehybrid'/)
-  assert.match(packageBuildSource, /await run\('hdiutil', \['convert', rawDmgPath, '-format', 'UDZO', '-o', dmgPath\]\)/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['convert', rawDmgPath, '-format', 'UDBZ', '-o', dmgPath\]\)/)
+  assert.match(packageBuildSource, /size-report\.json/)
   assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
 })
 
@@ -125,6 +126,7 @@ test('package.json no longer exposes Electron build and packaging scripts', asyn
   assert.equal(packageJson.scripts?.['package:mac:dmg:x64'], undefined)
   assert.equal(packageJson.devDependencies?.electron, undefined)
   assert.equal(packageJson.devDependencies?.['electron-builder'], undefined)
+  assert.equal(packageJson.main, undefined)
 })
 
 test('formal desktop runtime entrypoints no longer depend on Electron-only host files', async () => {

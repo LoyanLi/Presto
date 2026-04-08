@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -69,6 +69,67 @@ const rawDmgPath = path.join(dmgDir, `${productName}_${version}_${artifactArch}.
 const releaseRoot = path.join(repoRoot, 'release', 'tauri', artifactArch)
 const releaseAppPath = path.join(releaseRoot, `${productName}.app`)
 const releaseDmgPath = path.join(releaseRoot, `${productName}_${version}_${artifactArch}.dmg`)
+const releaseSizeReportPath = path.join(releaseRoot, 'size-report.json')
+
+async function measurePathSize(targetPath) {
+  const targetStat = await stat(targetPath)
+  if (!targetStat.isDirectory()) {
+    return targetStat.size
+  }
+
+  const entries = await readdir(targetPath, { withFileTypes: true })
+  let total = 0
+
+  for (const entry of entries) {
+    total += await measurePathSize(path.join(targetPath, entry.name))
+  }
+
+  return total
+}
+
+async function measureChildSizes(targetPath) {
+  const entries = await readdir(targetPath, { withFileTypes: true })
+  const sizes = []
+
+  for (const entry of entries) {
+    const childPath = path.join(targetPath, entry.name)
+    sizes.push({
+      name: entry.name,
+      bytes: await measurePathSize(childPath),
+    })
+  }
+
+  return sizes.sort((left, right) => right.bytes - left.bytes)
+}
+
+async function writeSizeReport(appBundlePath) {
+  const resourcesRoot = path.join(appBundlePath, 'Contents', 'Resources')
+  const pythonRoot = path.join(resourcesRoot, 'backend', 'python')
+  const sitePackagesRoot = path.join(pythonRoot, 'lib', 'python3.13', 'site-packages')
+  const frameworkStdlibRoot = path.join(
+    pythonRoot,
+    'Frameworks',
+    'Python.framework',
+    'Versions',
+    '3.13',
+    'lib',
+    'python3.13',
+  )
+
+  const report = {
+    productName,
+    version,
+    artifactArch,
+    generatedAt: new Date().toISOString(),
+    appBytes: await measurePathSize(appBundlePath),
+    dmgBytes: await measurePathSize(dmgPath),
+    resources: await measureChildSizes(resourcesRoot),
+    sitePackages: (await measureChildSizes(sitePackagesRoot)).slice(0, 20),
+    frameworkStdlib: (await measureChildSizes(frameworkStdlibRoot)).slice(0, 20),
+  }
+
+  await writeFile(releaseSizeReportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+}
 
 await run('npx', ['tauri', 'build', '--target', targetTriple, '--bundles', 'app', '--no-sign'])
 await run('node', ['scripts/inject-macos-app-icon.mjs', '--app', appPath])
@@ -85,12 +146,14 @@ await mkdir(dmgDir, { recursive: true })
 await rm(rawDmgPath, { force: true })
 await rm(dmgPath, { force: true })
 await run('hdiutil', ['makehybrid', '-hfs', '-hfs-volume-name', productName, '-ov', '-o', rawDmgPath, stagingDir])
-await run('hdiutil', ['convert', rawDmgPath, '-format', 'UDZO', '-o', dmgPath])
+await run('hdiutil', ['convert', rawDmgPath, '-format', 'UDBZ', '-o', dmgPath])
 await rm(rawDmgPath, { force: true })
 await rm(stagingDir, { recursive: true, force: true })
 
 await mkdir(releaseRoot, { recursive: true })
 await rm(releaseAppPath, { recursive: true, force: true })
 await rm(releaseDmgPath, { force: true })
+await rm(releaseSizeReportPath, { force: true })
 await cp(appPath, releaseAppPath, { recursive: true })
 await cp(dmgPath, releaseDmgPath, { force: true })
+await writeSizeReport(releaseAppPath)

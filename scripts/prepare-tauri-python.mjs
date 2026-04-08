@@ -13,7 +13,65 @@ const runtimeRequirementsPath = path.join(repoRoot, 'backend', 'requirements-run
 const legacyRuntimeResourcesRoot = path.join(repoRoot, 'build', 'runtime-resources')
 const DEV_ONLY_PACKAGES = ['pytest', 'flake8', 'pyflakes', 'pycodestyle', 'mccabe', 'pluggy', 'iniconfig', 'pygments', 'packaging']
 const UNUSED_VENV_BINARIES = ['pip', 'pip3', 'pip3.13', 'activate', 'activate.csh', 'activate.fish', 'Activate.ps1']
-const UNUSED_FRAMEWORK_STDLIB_ENTRIES = ['ensurepip', 'idlelib', 'test', 'tkinter', 'turtledemo', '__phello__', 'config-3.13-darwin']
+const UNUSED_FRAMEWORK_STDLIB_ENTRIES = [
+  'ensurepip',
+  'idlelib',
+  'test',
+  'tkinter',
+  'turtledemo',
+  '__phello__',
+  'config-3.13-darwin',
+  'venv',
+  'unittest',
+  'pydoc_data',
+  'lib2to3',
+]
+const UNUSED_SITE_PACKAGES_DIRECTORIES = ['tests', 'test', 'testing', 'examples', 'example', 'benchmarks', 'docs']
+const UNUSED_RUNTIME_FILE_SUFFIXES = ['.pyc', '.pyo', '.pyi']
+const REQUIRED_RUNTIME_IMPORTS = [
+  'encodings',
+  'ssl',
+  'hashlib',
+  'json',
+  'asyncio',
+  'fastapi',
+  'uvicorn',
+  'pydantic',
+  'pydantic_core',
+  'anyio',
+  'grpc',
+  'google.protobuf',
+  'ptsl',
+]
+const EXTRA_REQUIRED_LIB_DYNLOAD_BASENAMES = [
+  '_asyncio.cpython-313-darwin.so',
+  '_blake2.cpython-313-darwin.so',
+  '_contextvars.cpython-313-darwin.so',
+  '_ctypes.cpython-313-darwin.so',
+  '_datetime.cpython-313-darwin.so',
+  '_hashlib.cpython-313-darwin.so',
+  '_heapq.cpython-313-darwin.so',
+  '_json.cpython-313-darwin.so',
+  '_opcode.cpython-313-darwin.so',
+  '_pickle.cpython-313-darwin.so',
+  '_posixsubprocess.cpython-313-darwin.so',
+  '_queue.cpython-313-darwin.so',
+  '_random.cpython-313-darwin.so',
+  '_socket.cpython-313-darwin.so',
+  '_ssl.cpython-313-darwin.so',
+  '_struct.cpython-313-darwin.so',
+  '_uuid.cpython-313-darwin.so',
+  '_zoneinfo.cpython-313-darwin.so',
+  'array.cpython-313-darwin.so',
+  'binascii.cpython-313-darwin.so',
+  'fcntl.cpython-313-darwin.so',
+  'math.cpython-313-darwin.so',
+  'pyexpat.cpython-313-darwin.so',
+  'select.cpython-313-darwin.so',
+  'termios.cpython-313-darwin.so',
+  'unicodedata.cpython-313-darwin.so',
+  'zlib.cpython-313-darwin.so',
+]
 const PYTHON_BINARIES = ['python', 'python3', 'python3.13']
 const PYTHON_HELPER_WRAPPERS = {
   fastapi: ['-m', 'fastapi.cli'],
@@ -83,7 +141,30 @@ async function removeDirectoriesNamed(root, directoryName) {
   )
 }
 
-async function pruneBundledPython(root) {
+async function removeDirectoriesByName(root, directoryNames) {
+  for (const directoryName of directoryNames) {
+    await removeDirectoriesNamed(root, directoryName)
+  }
+}
+
+async function removeFilesBySuffix(root, suffixes) {
+  const entries = await readdir(root, { withFileTypes: true })
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(root, entry.name)
+      if (entry.isDirectory()) {
+        await removeFilesBySuffix(entryPath, suffixes)
+        return
+      }
+      if (entry.isFile() && suffixes.some((suffix) => entry.name.endsWith(suffix))) {
+        await rm(entryPath, { force: true })
+      }
+    }),
+  )
+}
+
+async function pruneBundledPython(root, targetArch) {
   await Promise.all(
     UNUSED_VENV_BINARIES.map((name) => rm(path.join(root, 'bin', name), { force: true })),
   )
@@ -104,6 +185,8 @@ async function pruneBundledPython(root) {
     await rm(path.join(sitePackagesRoot, '__pycache__'), { recursive: true, force: true })
     await rm(path.join(sitePackagesRoot, 'pip'), { recursive: true, force: true })
     await removeDirectoriesNamed(sitePackagesRoot, '__pycache__')
+    await removeDirectoriesByName(sitePackagesRoot, UNUSED_SITE_PACKAGES_DIRECTORIES)
+    await removeFilesBySuffix(sitePackagesRoot, UNUSED_RUNTIME_FILE_SUFFIXES)
 
     const sitePackageEntries = await readdir(sitePackagesRoot, { withFileTypes: true })
     await Promise.all(
@@ -118,11 +201,13 @@ async function pruneBundledPython(root) {
   const frameworkStdlibRoot = resolveBundledFrameworkStdlib(root)
   await rm(path.join(frameworkStdlibRoot, '__pycache__'), { recursive: true, force: true })
   await removeDirectoriesNamed(frameworkStdlibRoot, '__pycache__')
+  await removeFilesBySuffix(frameworkStdlibRoot, UNUSED_RUNTIME_FILE_SUFFIXES)
   await Promise.all(
     UNUSED_FRAMEWORK_STDLIB_ENTRIES.map((name) =>
       rm(path.join(frameworkStdlibRoot, name), { recursive: true, force: true }),
     ),
   )
+  await pruneLibDynload(root, targetArch)
 }
 
 function resolveBuildPythonBin() {
@@ -265,6 +350,100 @@ async function listSitePackageExtensions(root, version = PYTHON_VERSION) {
   }
 
   return matches.sort()
+}
+
+async function collectFrameworkLibraries(root, version = PYTHON_VERSION) {
+  const frameworkLibRoot = path.join(resolveBundledFrameworkRoot(root, version), 'lib')
+  if (!(await exists(frameworkLibRoot))) {
+    return []
+  }
+
+  const entries = await readdir(frameworkLibRoot, { withFileTypes: true })
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.dylib'))
+    .map((entry) => path.join(frameworkLibRoot, entry.name))
+    .sort()
+}
+
+async function collectRequiredLibDynloadBasenames(root, targetArch) {
+  const bundledPython = path.join(root, 'bin', 'python3')
+  const bundledFrameworkRoot = resolveBundledFrameworkRoot(root)
+  const { stdout } = await runTargetArchCapture(
+    targetArch,
+    bundledPython,
+    [
+      '-c',
+      [
+        'import importlib, json, pathlib, sys',
+        `imports = ${JSON.stringify(REQUIRED_RUNTIME_IMPORTS)}`,
+        'for name in imports:',
+        '    importlib.import_module(name)',
+        'lib_dynload = pathlib.Path(sys.prefix) / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "lib-dynload"',
+        'required = set()',
+        'for module in list(sys.modules.values()):',
+        '    module_file = getattr(module, "__file__", None)',
+        '    if not module_file:',
+        '        continue',
+        '    try:',
+        '        module_path = pathlib.Path(module_file).resolve()',
+        '    except OSError:',
+        '        continue',
+        '    try:',
+        '        module_path.relative_to(lib_dynload.resolve())',
+        '    except ValueError:',
+        '        continue',
+        '    required.add(module_path.name)',
+        'print(json.dumps(sorted(required), ensure_ascii=False))',
+      ].join('\n'),
+    ],
+    {
+      env: {
+        ...process.env,
+        PYTHONHOME: bundledFrameworkRoot,
+        PYTHONDONTWRITEBYTECODE: '1',
+      },
+    },
+  )
+
+  return new Set([
+    ...EXTRA_REQUIRED_LIB_DYNLOAD_BASENAMES,
+    ...JSON.parse(stdout),
+  ])
+}
+
+async function pruneLibDynload(root, targetArch, version = PYTHON_VERSION) {
+  const requiredBasenames = await collectRequiredLibDynloadBasenames(root, targetArch)
+  const libDynloadExtensions = await listLibDynloadExtensions(root, version)
+
+  await Promise.all(
+    libDynloadExtensions.map(async (targetPath) => {
+      if (requiredBasenames.has(path.basename(targetPath))) {
+        return
+      }
+      await rm(targetPath, { force: true })
+    }),
+  )
+}
+
+async function stripBundledPythonBinaries(root) {
+  const frameworkVersionRoot = resolveBundledFrameworkRoot(root)
+  const bundledPythonApp = path.join(frameworkVersionRoot, 'Resources', 'Python.app', 'Contents', 'MacOS', 'Python')
+  const targets = [
+    ...PYTHON_BINARIES.map((name) => path.join(root, 'bin', name)),
+    path.join(frameworkVersionRoot, 'Python'),
+    bundledPythonApp,
+    ...(await collectFrameworkLibraries(root)),
+    ...(await listLibDynloadExtensions(root)),
+    ...(await listSitePackageExtensions(root)),
+  ]
+
+  for (const targetPath of targets) {
+    if (!(await exists(targetPath))) {
+      continue
+    }
+    await run('strip', ['-x', targetPath])
+    await adHocSign(targetPath)
+  }
 }
 
 async function assertMachOBinariesContainTargetArch(targetPaths, targetArch) {
@@ -576,7 +755,7 @@ async function validateBundledPython(root, targetArch) {
     [
       '-c',
       [
-        'import encodings, fastapi, uvicorn, pydantic, anyio, ptsl, json, sys, sysconfig',
+        'import encodings, ssl, hashlib, json, asyncio, fastapi, uvicorn, pydantic, pydantic_core, anyio, grpc, google.protobuf, ptsl, sys, sysconfig',
         'print(json.dumps({',
         '  "base_prefix": sys.base_prefix,',
         '  "base_exec_prefix": sys.base_exec_prefix,',
@@ -591,6 +770,7 @@ async function validateBundledPython(root, targetArch) {
       env: {
         ...process.env,
         PYTHONHOME: bundledFrameworkRoot,
+        PYTHONDONTWRITEBYTECODE: '1',
       },
     },
   )
@@ -640,16 +820,19 @@ async function main() {
 
   if (await hasUsableBundledPython(targetArch)) {
     await normalizeBundledPython(pythonRoot)
-    await pruneBundledPython(pythonRoot)
+    await pruneBundledPython(pythonRoot, targetArch)
+    await stripBundledPythonBinaries(pythonRoot)
+    await validateBundledPython(pythonRoot, targetArch)
     await writeRuntimeMetadata()
     return
   }
 
   try {
     await vendorPythonFramework(pythonRoot)
-    await validateBundledPython(pythonRoot, targetArch)
     await normalizeBundledPython(pythonRoot)
-    await pruneBundledPython(pythonRoot)
+    await pruneBundledPython(pythonRoot, targetArch)
+    await stripBundledPythonBinaries(pythonRoot)
+    await validateBundledPython(pythonRoot, targetArch)
     await writeRuntimeMetadata()
     return
   } catch {
@@ -666,9 +849,10 @@ async function main() {
   await runTargetArch(targetArch, bundledPip, ['install', '--no-cache-dir', '-r', runtimeRequirementsPath])
   await runTargetArch(targetArch, bundledPip, ['uninstall', '--yes', ...DEV_ONLY_PACKAGES])
   await vendorPythonFramework(stagingPythonRoot)
-  await validateBundledPython(stagingPythonRoot, targetArch)
   await normalizeBundledPython(stagingPythonRoot)
-  await pruneBundledPython(stagingPythonRoot)
+  await pruneBundledPython(stagingPythonRoot, targetArch)
+  await stripBundledPythonBinaries(stagingPythonRoot)
+  await validateBundledPython(stagingPythonRoot, targetArch)
   await rm(pythonRoot, { recursive: true, force: true })
   await rename(stagingPythonRoot, pythonRoot)
   await writeRuntimeMetadata()

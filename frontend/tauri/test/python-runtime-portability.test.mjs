@@ -67,6 +67,7 @@ function inspectBundledPythonRuntime(pythonBin, env = {}) {
       encoding: 'utf8',
       env: {
         ...process.env,
+        PYTHONDONTWRITEBYTECODE: '1',
         ...env,
       },
     },
@@ -152,6 +153,27 @@ test('prepared bundled python runtime extensions do not depend on external frame
       /\/Library\/Frameworks\/Python\.framework\/Versions\/3\.13\/lib\/lib(?:ssl|crypto)\.3\.dylib/,
       `External OpenSSL linkage found in ${dylib}`,
     )
+  }
+})
+
+test('prepared bundled python lib-dynload keeps only backend-required runtime extensions', async () => {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  const disallowedExtensions = [
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_tkinter.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_curses.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_curses_panel.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testcapi.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testinternalcapi.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/_testclinic.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/xxlimited.cpython-313-darwin.so',
+    'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload/xxsubtype.cpython-313-darwin.so',
+  ]
+
+  for (const extensionPath of disallowedExtensions) {
+    assert.equal(await exists(extensionPath), false, `${extensionPath} should not be packaged`)
   }
 })
 

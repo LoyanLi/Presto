@@ -104,8 +104,11 @@ Renderer 侧的关键入口是：
 
 - `scripts/prepare-tauri-python.mjs` 会把运行时需要的 `Python.framework`、标准库和动态库依赖一起带入安装包。
 - `scripts/prepare-tauri-python.mjs` 会按 `PRESTO_TAURI_TARGET` 验证 bundled runtime 的目标架构；如果共享运行时目录里的 `.so` 扩展不包含当前目标架构，就不会复用旧目录，而是重新按目标架构创建 `venv`、安装 wheels，再用 `python.staging` 原子替换。
+- `scripts/prepare-tauri-python.mjs` 当前把包内 Python 视为 Presto backend 专用 runtime，而不是通用解释器：会递归删除 `__pycache__`、`.pyc`、`.pyi`、`venv`、`unittest`、`pydoc_data`、`lib2to3` 等冗余内容，并只保留后端导入闭包需要的 `lib-dynload` 扩展。
 - `_ssl`、`_hashlib` 等扩展对 `libssl` / `libcrypto` 的引用已经改写到 bundle 内相对路径。
+- 打包阶段会对保留的 Python / OpenSSL / site-packages 原生二进制统一执行 `strip -x`，再重新 ad-hoc 签名，进一步压缩运行时体积。
 - 标准库中的 `test`、`config-3.13-darwin`、`idlelib`、`tkinter`、`turtledemo`、`__phello__`、`ensurepip` 与缓存目录会在打包阶段被剔除，以缩小 `.app` 和 `.dmg` 体积。
+- `scripts/package-tauri-build.mjs` 会在每次正式打包后生成 `release/tauri/<arch>/size-report.json`，用于记录 `.app`、`.dmg`、`Resources`、`site-packages` 与 Python stdlib 的体积分布，并把最终 DMG 压缩格式固定为 `UDBZ`。
 
 ## 5. 插件宿主服务在桌面侧的位置
 

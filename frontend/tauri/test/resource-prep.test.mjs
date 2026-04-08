@@ -43,6 +43,31 @@ async function listDirectoriesNamed(relativeRoot, directoryName) {
   return matches.sort()
 }
 
+async function listFilesMatching(relativeRoot, matcher) {
+  const matches = []
+  const pending = [path.join(repoRoot, relativeRoot)]
+
+  while (pending.length > 0) {
+    const currentPath = pending.pop()
+    const entries = await readdir(currentPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentPath, entry.name)
+
+      if (entry.isDirectory()) {
+        pending.push(entryPath)
+        continue
+      }
+
+      if (matcher(entry.name)) {
+        matches.push(path.relative(repoRoot, entryPath))
+      }
+    }
+  }
+
+  return matches.sort()
+}
+
 test('prepared tauri runtime resources keep only packaged backend, plugin, and automation files', async () => {
   const sidecarEntry = 'src-tauri/resources/build/sidecar/main.mjs'
   const sidecarNode = 'src-tauri/resources/build/sidecar/node'
@@ -66,9 +91,22 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const backendFrameworkStdlibTurtledemo = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/turtledemo'
   const backendFrameworkStdlibHello = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/__phello__'
   const backendFrameworkStdlibEnsurepip = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ensurepip'
+  const backendFrameworkStdlibVenv = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/venv'
+  const backendFrameworkStdlibUnittest = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/unittest'
+  const backendFrameworkStdlibPydocData = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/pydoc_data'
+  const backendFrameworkStdlibLib2to3 = 'src-tauri/resources/backend/python/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib2to3'
   const backendPythonCaches = await listDirectoriesNamed(
     'src-tauri/resources/backend/python/lib/python3.13/site-packages',
     '__pycache__',
+  )
+  const backendAllPythonCaches = await listDirectoriesNamed('src-tauri/resources/backend/python', '__pycache__')
+  const backendPythonCompiledFiles = await listFilesMatching(
+    'src-tauri/resources/backend/python',
+    (name) => name.endsWith('.pyc') || name.endsWith('.pyo'),
+  )
+  const backendPythonTypingStubs = await listFilesMatching(
+    'src-tauri/resources/backend/python',
+    (name) => name.endsWith('.pyi'),
   )
   const backendPytestBinary = 'src-tauri/resources/backend/python/bin/pytest'
   const backendFlake8Binary = 'src-tauri/resources/backend/python/bin/flake8'
@@ -80,8 +118,8 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const automationDefinition = 'src-tauri/resources/frontend/runtime/automation/definitions/splitStereoToMono.json'
   const legacyRuntimeResourcesRoot = 'build/runtime-resources'
 
-  assert.equal(await exists(sidecarEntry), true)
-  assert.equal(await exists(sidecarNode), true)
+  assert.equal(await exists(sidecarEntry), false)
+  assert.equal(await exists(sidecarNode), false)
   assert.equal(await exists(backendMain), true)
   assert.equal(await exists(backendPython), true)
   assert.equal(await exists(backendPythonConfig), true)
@@ -107,7 +145,14 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   assert.equal(await exists(backendFrameworkStdlibTurtledemo), false)
   assert.equal(await exists(backendFrameworkStdlibHello), false)
   assert.equal(await exists(backendFrameworkStdlibEnsurepip), false)
+  assert.equal(await exists(backendFrameworkStdlibVenv), false)
+  assert.equal(await exists(backendFrameworkStdlibUnittest), false)
+  assert.equal(await exists(backendFrameworkStdlibPydocData), false)
+  assert.equal(await exists(backendFrameworkStdlibLib2to3), false)
   assert.deepEqual(backendPythonCaches, [])
+  assert.deepEqual(backendAllPythonCaches, [])
+  assert.deepEqual(backendPythonCompiledFiles, [])
+  assert.deepEqual(backendPythonTypingStubs, [])
   assert.equal(await exists(backendPytestBinary), false)
   assert.equal(await exists(backendFlake8Binary), false)
   assert.equal(await exists(pluginTests), false)
