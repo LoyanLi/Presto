@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     io::{BufRead, BufReader, Read, Write},
-    net::{Shutdown, TcpListener, TcpStream},
+    net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
@@ -253,7 +253,7 @@ pub fn invoke(state: &Arc<RuntimeState>, operation: &str, args: Vec<Value>) -> R
         "backend.status.get" => backend_status(state),
         "backend.capabilities.list" => backend_capabilities(state),
         "backend.lifecycle.restart" => {
-            stop_backend(state)?;
+            stop_backend(state, "backend_lifecycle_restart")?;
             start_backend(state)?;
             wait_for_backend_ready(state)?;
             Ok(json!({ "ok": true }))
@@ -679,7 +679,7 @@ fn start_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
             Ok(())
         }
         Err(error) => {
-            let _ = stop_backend(state);
+            let _ = stop_backend(state, "backend_start_failure_cleanup");
             let mut backend = state
                 .backend_state
                 .lock()
@@ -698,7 +698,7 @@ fn start_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
     }
 }
 
-fn stop_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
+fn stop_backend(state: &Arc<RuntimeState>, reason: &str) -> Result<(), String> {
     let port = {
         let backend = state
             .backend_state
@@ -736,6 +736,7 @@ fn stop_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
             "code": 0,
             "phase": "stopped",
             "port": port,
+            "reason": reason,
         })),
     )?;
     Ok(())
@@ -785,7 +786,7 @@ fn ensure_backend_available(state: &Arc<RuntimeState>) -> Result<(), String> {
         return Ok(());
     }
 
-    stop_backend(state)?;
+    stop_backend(state, "backend_healthcheck_restart")?;
     start_backend(state)
 }
 
@@ -819,8 +820,6 @@ fn http_json_request(
     stream
         .write_all(request.as_bytes())
         .map_err(|error| format!("backend_http_write_failed:{error}"))?;
-    let _ = stream.shutdown(Shutdown::Write);
-
     let mut response_bytes = Vec::new();
     stream
         .read_to_end(&mut response_bytes)
@@ -1072,7 +1071,7 @@ fn set_backend_daw_target(state: &Arc<RuntimeState>, next_target: &str) -> Resul
         ));
     }
 
-    stop_backend(state)?;
+    stop_backend(state, "backend_daw_target_set")?;
     {
         let mut backend = state
             .backend_state
