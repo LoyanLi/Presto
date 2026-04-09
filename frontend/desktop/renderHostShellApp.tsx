@@ -1,25 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { createRoot } from 'react-dom/client'
 
 import '../ui/styles.css'
 import { createPluginSharedUiApi, ensureMaterialWebRegistered } from '../ui'
-import type {
-  HostAutomationEntry,
-  HostPluginHomeEntry,
-  HostPluginManagerModel,
-  HostRenderedPluginPage,
-} from '../host'
 import { HostShellApp, createHostShellState } from '../host'
-import { getHostShellPreferences, subscribeHostShellPreferences } from '../host/shellPreferences'
-import { getSystemLocaleCandidates, resolveHostLocale } from '../host/i18n'
-import { loadHostPlugins } from '../host/pluginHostRuntime'
+import { useHostPluginCatalogState } from './useHostPluginCatalogState'
 import type { PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
-import type {
-  PluginRuntimeInstallResult,
-  PluginRuntimeSetEnabledResult,
-  PluginRuntimeUninstallResult,
-} from '@presto/sdk-runtime/clients/plugins'
 
 function getInitialShellViewId(searchParams: URLSearchParams): 'home' | 'settings' | 'developer' {
   const smokeTarget = searchParams.get('smokeTarget')
@@ -75,185 +62,23 @@ export function renderHostShellApp({
     ui: pluginSharedUi,
   }
 
-  const pluginLocaleState = {
-    requested: getHostShellPreferences().language,
-    resolved: resolveHostLocale(getHostShellPreferences().language, getSystemLocaleCandidates()),
-  }
-
   function App() {
     const state = createHostShellState(getInitialShellViewId(searchParams))
-    const [automationEntries, setAutomationEntries] = useState<HostAutomationEntry[]>([])
-    const [pluginHomeEntries, setPluginHomeEntries] = useState<HostPluginHomeEntry[]>([])
-    const [pluginPages, setPluginPages] = useState<HostRenderedPluginPage[]>([])
-    const [pluginManagerModel, setPluginManagerModel] = useState<HostPluginManagerModel>({
-      managedRoot: null,
-      plugins: [],
-      issues: [],
-      isBusy: true,
-      statusMessage: 'Loading extensions…',
+    const {
+      automationEntries,
+      pluginHomeEntries,
+      pluginPages,
+      pluginManagerModel,
+      refreshPlugins,
+      installPluginDirectory,
+      installPluginZip,
+      setPluginEnabled,
+      uninstallPlugin,
+    } = useHostPluginCatalogState({
+      client,
+      runtime,
+      onReady,
     })
-
-    const refreshPlugins = async (statusMessage = 'Loading extensions…'): Promise<void> => {
-      setPluginManagerModel((prev) => ({
-        ...prev,
-        isBusy: true,
-        statusMessage,
-      }))
-
-      try {
-        const catalog = await runtime.plugins.list()
-        const loaded = await loadHostPlugins({
-          catalog,
-          locale: {
-            locale: pluginLocaleState.resolved,
-            messages: {},
-          },
-          presto: client,
-          runtime,
-        })
-        setAutomationEntries(loaded.automationEntries)
-        setPluginHomeEntries(loaded.homeEntries)
-        setPluginPages(loaded.pages)
-        setPluginManagerModel({
-          ...loaded.managerModel,
-          plugins: loaded.managerModel.plugins,
-          issues: loaded.managerModel.issues,
-          isBusy: false,
-          statusMessage: null,
-        })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'plugin_list_refresh_failed'
-        setPluginHomeEntries([])
-        setPluginPages([])
-        setPluginManagerModel((prev) => ({
-          ...prev,
-          isBusy: false,
-          statusMessage: null,
-          issues: [
-            {
-              scope: 'discovery',
-              message,
-              reason: message,
-            },
-          ],
-        }))
-      }
-    }
-
-    useEffect(() => {
-      onReady?.()
-    }, [])
-
-    useEffect(() => {
-      return subscribeHostShellPreferences((preferences) => {
-        pluginLocaleState.requested = preferences.language
-        pluginLocaleState.resolved = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
-      })
-    }, [])
-
-    useEffect(() => {
-      void refreshPlugins()
-    }, [])
-
-    const runInstall = async (
-      statusMessage: string,
-      install: () => Promise<PluginRuntimeInstallResult>,
-    ): Promise<void> => {
-      setPluginManagerModel((prev) => ({
-        ...prev,
-        isBusy: true,
-        statusMessage,
-      }))
-
-      try {
-        const result = await install()
-        if (result.cancelled) {
-          setPluginManagerModel((prev) => ({
-            ...prev,
-            isBusy: false,
-            statusMessage: 'Installation cancelled.',
-          }))
-          return
-        }
-
-        await refreshPlugins(result.ok ? 'Extension installed.' : 'Extension installation failed.')
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'extension_install_failed'
-        setPluginManagerModel((prev) => ({
-          ...prev,
-          isBusy: false,
-          statusMessage: null,
-          issues: [
-            {
-              scope: 'install',
-              message,
-              reason: message,
-            },
-          ],
-        }))
-      }
-    }
-
-    const runUninstall = async (
-      pluginId: string,
-      uninstall: () => Promise<PluginRuntimeUninstallResult>,
-    ): Promise<void> => {
-      setPluginManagerModel((prev) => ({
-        ...prev,
-        isBusy: true,
-        statusMessage: `Uninstalling ${pluginId}…`,
-      }))
-
-      try {
-        const result = await uninstall()
-        await refreshPlugins(result.ok ? `Extension removed: ${pluginId}.` : `Extension removal failed: ${pluginId}.`)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'extension_uninstall_failed'
-        setPluginManagerModel((prev) => ({
-          ...prev,
-          isBusy: false,
-          statusMessage: null,
-          issues: [
-            {
-              scope: 'install',
-              message,
-              reason: message,
-            },
-          ],
-        }))
-      }
-    }
-
-    const runSetEnabled = async (
-      pluginId: string,
-      enabled: boolean,
-      setEnabled: () => Promise<PluginRuntimeSetEnabledResult>,
-    ): Promise<void> => {
-      setPluginManagerModel((prev) => ({
-        ...prev,
-        isBusy: true,
-        statusMessage: `${enabled ? 'Enabling' : 'Disabling'} ${pluginId}…`,
-      }))
-
-      try {
-        const result = await setEnabled()
-        await refreshPlugins(result.ok ? `Extension updated: ${pluginId}.` : `Extension update failed: ${pluginId}.`)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'extension_set_enabled_failed'
-        setPluginManagerModel((prev) => ({
-          ...prev,
-          isBusy: false,
-          statusMessage: null,
-          issues: [
-            {
-              scope: 'install',
-              message,
-              reason: message,
-            },
-          ],
-        }))
-      }
-    }
 
     return (
       <HostShellApp
@@ -266,19 +91,11 @@ export function renderHostShellApp({
         automationEntries={automationEntries}
         pluginPages={pluginPages}
         pluginManagerModel={pluginManagerModel}
-        onRefreshPlugins={() => void refreshPlugins('Refreshing extensions…')}
-        onInstallPluginDirectory={() => {
-          void runInstall('Installing extension from local directory…', () => runtime.plugins.installFromDirectory())
-        }}
-        onInstallPluginZip={() => {
-          void runInstall('Installing extension from local zip…', () => runtime.plugins.installFromZip())
-        }}
-        onSetPluginEnabled={(pluginId, enabled) => {
-          void runSetEnabled(pluginId, enabled, () => runtime.plugins.setEnabled(pluginId, enabled))
-        }}
-        onUninstallPlugin={(pluginId) => {
-          void runUninstall(pluginId, () => runtime.plugins.uninstall(pluginId))
-        }}
+        onRefreshPlugins={() => void refreshPlugins()}
+        onInstallPluginDirectory={() => void installPluginDirectory()}
+        onInstallPluginZip={() => void installPluginZip()}
+        onSetPluginEnabled={(pluginId, enabled) => void setPluginEnabled(pluginId, enabled)}
+        onUninstallPlugin={(pluginId) => void uninstallPlugin(pluginId)}
       />
     )
   }

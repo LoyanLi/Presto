@@ -6,9 +6,9 @@
 
 仓库中可以直接确认的版本事实：
 
-- App Version：`0.3.4`
+- App Version：当前仓库值是 `0.3.5`
 - App Name：`Presto`
-- Backend FastAPI Version：`0.3.4`
+- Backend FastAPI Version：由 `backend/presto/version.py::VERSION` 导出，当前值也是 `0.3.5`
 - Capability Schema Version：`1`
 
 这三类版本不是一回事，不能混用。
@@ -23,6 +23,13 @@
 
 - 产品版本
 - 桌面应用发布版本
+- 前端 `packages/contracts/src/version.ts::PRESTO_VERSION` 的派生源
+- 后端 `backend/presto/version.py::VERSION` 的派生源
+
+当前规则必须明确：
+
+- 仓库根 `package.json` 是唯一手工维护的版本源
+- `scripts/sync-version.mjs` 负责把这个版本同步到前端和后端常量文件
 
 ### 2.2 Host API Version
 
@@ -50,7 +57,7 @@
 
 ## 3. 当前 Host API 兼容事实
 
-当前 sidecar 中的兼容判断允许这些值：
+当前 Rust runtime 插件校验模块 `src-tauri/src/runtime/plugins.rs` 中的兼容判断允许这些值：
 
 - `0.1.0`
 - `1`

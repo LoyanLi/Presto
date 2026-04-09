@@ -1,4 +1,4 @@
-import type { AppConfig } from '@presto/contracts'
+import { SUPPORTED_DAW_TARGETS, isSupportedDawTarget, type AppConfig } from '@presto/contracts'
 import type { HostShellPreferences } from './shellPreferences'
 
 export function getHostShellPreferencesFromConfig(config: Pick<AppConfig, 'uiPreferences' | 'hostPreferences'>): HostShellPreferences {
@@ -8,7 +8,9 @@ export function getHostShellPreferencesFromConfig(config: Pick<AppConfig, 'uiPre
         ? config.hostPreferences.language
         : 'system',
     developerMode: config.uiPreferences?.developerModeEnabled === true,
-    dawTarget: config.hostPreferences?.dawTarget === 'pro_tools' ? config.hostPreferences.dawTarget : 'pro_tools',
+    dawTarget: isSupportedDawTarget(config.hostPreferences?.dawTarget)
+      ? config.hostPreferences.dawTarget
+      : SUPPORTED_DAW_TARGETS[0],
     includePrereleaseUpdates: config.hostPreferences?.includePrereleaseUpdates === true,
   }
 }

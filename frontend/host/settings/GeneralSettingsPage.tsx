@@ -1,9 +1,10 @@
 import { useState, type CSSProperties } from 'react'
-import type { DawTarget } from '@presto/contracts'
+import { SUPPORTED_DAW_TARGETS, type DawTarget } from '@presto/contracts'
 import type { AppLatestReleaseInfo, AppViewLogResult } from '@presto/sdk-runtime/clients/app'
 
 import { Select, Switch, type PrestoThemePreference } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
+import { dawLabel } from '../hostShellHelpers'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
 import type { HostShellPreferences } from '../shellPreferences'
@@ -158,9 +159,7 @@ export function GeneralSettingsPage({
             aria-label="DAW"
             value={preferences.dawTarget}
             onChange={(event) => onDawTargetChange(event.target.value as DawTarget)}
-            options={[
-              { value: 'pro_tools', label: 'Pro Tools' },
-            ]}
+            options={SUPPORTED_DAW_TARGETS.map((target) => ({ value: target, label: dawLabel(target) }))}
           />
         </label>
         <div style={{ display: 'grid', gap: 10 }}>

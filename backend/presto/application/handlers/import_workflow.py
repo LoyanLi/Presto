@@ -7,13 +7,16 @@ import json
 import shutil
 import threading
 import time
-from typing import Any, Callable
+from typing import Any
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ...domain.errors import PrestoError, PrestoErrorPayload, PrestoValidationError
 from ...domain.jobs import JobProgress, JobRecord
 from ...domain.capabilities import DEFAULT_DAW_TARGET
+from ...domain.ports import CapabilityExecutionContext
+from ..runtime_state import ImportAnalysisStore, ThreadedJobHandle
+from .common import runtime_from_context
 if TYPE_CHECKING:
     from ..service_container import ServiceContainer
 
@@ -22,69 +25,37 @@ SUPPORTED_AUDIO_SUFFIXES = {".wav", ".aif", ".aiff", ".mp3", ".m4a", ".flac", ".
 ANALYZE_CACHE_FILENAME = ".presto_ai_analyze.json"
 
 
-class ImportAnalysisCache:
-    def __init__(self) -> None:
-        self._values: dict[str, dict[str, Any]] = {}
-        self.hits = 0
-        self.misses = 0
-
-    def get_or_set(self, key: str, builder: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        cached = self._values.get(key)
-        if cached is not None:
-            self.hits += 1
-            return cached
-
-        self.misses += 1
-        value = builder()
-        self._values[key] = value
-        return value
-
-
-class JobRunHandle:
-    def __init__(self, cancel_event: threading.Event, worker: threading.Thread, capability: str) -> None:
-        self.cancel_event = cancel_event
-        self.worker = worker
-        self.capability = capability
+ImportAnalysisCache = ImportAnalysisStore
 
 
 def _analysis_cache(services: "ServiceContainer") -> ImportAnalysisCache:
-    cache = getattr(services, "import_analysis_cache", None)
+    cache = services.import_analysis_store
     if cache is None:
-        cache = ImportAnalysisCache()
-        setattr(services, "import_analysis_cache", cache)
+        raise RuntimeError("import_analysis_store_not_configured")
     return cache
 
 
-def _ensure_run_handles_state(services: "ServiceContainer") -> tuple[dict[str, JobRunHandle], threading.Lock]:
-    handles = getattr(services, "job_run_handles", None)
-    if handles is None:
-        handles = {}
-        setattr(services, "job_run_handles", handles)
-
-    lock = getattr(services, "job_run_handles_lock", None)
-    if lock is None:
-        lock = threading.Lock()
-        setattr(services, "job_run_handles_lock", lock)
-
-    return handles, lock
+def _run_handles_get(services: "ServiceContainer", job_id: str) -> ThreadedJobHandle | None:
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    handle = registry.get(job_id)
+    return handle if isinstance(handle, ThreadedJobHandle) else None
 
 
-def _run_handles_get(services: "ServiceContainer", job_id: str) -> JobRunHandle | None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        return handles.get(job_id)
+def _run_handles_set(services: "ServiceContainer", job_id: str, handle: ThreadedJobHandle) -> None:
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    registry.register(job_id, handle)
 
 
-def _run_handles_set(services: "ServiceContainer", job_id: str, handle: JobRunHandle) -> None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        handles[job_id] = handle
-
-
-def _run_handles_pop(services: "ServiceContainer", job_id: str) -> JobRunHandle | None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        return handles.pop(job_id, None)
+def _run_handles_pop(services: "ServiceContainer", job_id: str) -> ThreadedJobHandle | None:
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    handle = registry.pop(job_id)
+    return handle if isinstance(handle, ThreadedJobHandle) else None
 
 
 def _validation_error(message: str, *, field: str) -> PrestoValidationError:
@@ -399,6 +370,10 @@ def analyze_import(services: "ServiceContainer", payload: dict[str, Any]) -> dic
     }
 
 
+def analyze_import_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return analyze_import(runtime_from_context(ctx), payload)
+
+
 def persist_import_analysis_cache(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
     del services
     source_folders = _resolve_source_folders(payload)
@@ -424,6 +399,13 @@ def persist_import_analysis_cache(services: "ServiceContainer", payload: dict[st
         saved += 1
 
     return {"saved": True, "cacheFiles": saved}
+
+
+def persist_import_analysis_cache_payload(
+    ctx: CapabilityExecutionContext,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return persist_import_analysis_cache(runtime_from_context(ctx), payload)
 
 
 def finalize_import(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
@@ -512,6 +494,10 @@ def plan_import_run_items(services: "ServiceContainer", payload: dict[str, Any])
         )
 
     return {"items": items}
+
+
+def plan_import_run_items_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return plan_import_run_items(runtime_from_context(ctx), payload)
 
 
 def _normalize_run_error(services: "ServiceContainer", error: Exception, *, capability_id: str) -> PrestoErrorPayload:
@@ -662,9 +648,10 @@ def _set_job_failed(
 
 
 def _request_cancel(services: "ServiceContainer", job_id: str) -> None:
-    handle = _run_handles_get(services, job_id)
-    if handle is not None:
-        handle.cancel_event.set()
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    registry.cancel(job_id)
 
 
 def _should_cancel(services: "ServiceContainer", job: JobRecord, cancel_event: threading.Event) -> bool:
@@ -1798,7 +1785,7 @@ def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, c
         _run_handles_set(
             services,
             job.job_id,
-            JobRunHandle(cancel_event=cancel_event, worker=worker, capability=capability_id),
+            ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability=capability_id),
         )
         worker.start()
         return {"jobId": job.job_id, "capability": capability_id, "state": "queued"}
@@ -1830,11 +1817,20 @@ def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, c
     _run_handles_set(
         services,
         job.job_id,
-        JobRunHandle(cancel_event=cancel_event, worker=worker, capability=capability_id),
+        ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability=capability_id),
     )
     worker.start()
 
     return {"jobId": job.job_id, "capability": capability_id, "state": "queued"}
+
+
+def start_export_run_payload(
+    ctx: CapabilityExecutionContext,
+    payload: dict[str, Any],
+    *,
+    capability_id: str,
+) -> dict[str, Any]:
+    return start_export_run(runtime_from_context(ctx), payload, capability_id=capability_id)
 
 
 def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
@@ -1863,11 +1859,15 @@ def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> d
     _run_handles_set(
         services,
         job.job_id,
-        JobRunHandle(cancel_event=cancel_event, worker=worker, capability="import.run.start"),
+        ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability="import.run.start"),
     )
     worker.start()
 
     return {"jobId": job.job_id, "capability": "import.run.start", "state": "queued"}
+
+
+def start_import_run_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return start_import_run(runtime_from_context(ctx), payload)
 
 
 def cancel_import_run(services: "ServiceContainer", job_id: str) -> None:

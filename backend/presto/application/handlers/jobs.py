@@ -4,11 +4,9 @@ from dataclasses import asdict
 from typing import Any
 
 from .common import validation_error
-from .import_workflow import cancel_job_run as cancel_import_or_export_job_run
-from .workflow_executor import cancel_workflow_run
-from ..service_container import ServiceContainer
 from ...domain.errors import PrestoErrorPayload
 from ...domain.jobs import JobRecord, JobsCreateRequest, JobsListRequest, JobsUpdateRequest
+from ...domain.ports import CapabilityExecutionContext
 
 
 def job_record_payload(record: JobRecord) -> dict[str, Any]:
@@ -40,30 +38,37 @@ def parse_job_list_filter(payload: dict[str, Any]) -> JobsListRequest:
     )
 
 
-def get_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def get_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId", ""))
-    return {"job": job_record_payload(services.job_manager.get(job_id))}
+    return {"job": job_record_payload(ctx.jobs.get(job_id))}
 
 
-def list_jobs_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    job_list = services.job_manager.list(parse_job_list_filter(payload))
+def list_jobs_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    job_list = ctx.jobs.list(parse_job_list_filter(payload))
     return {
         "jobs": [job_record_payload(job) for job in job_list.jobs],
         "totalCount": job_list.total_count,
     }
 
 
-def cancel_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def cancel_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId", ""))
-    result = services.job_manager.cancel(job_id)
-    cancel_import_or_export_job_run(services, job_id)
-    cancel_workflow_run(services, job_id)
+    result = ctx.jobs.cancel(job_id)
+    ctx.job_handle_registry.cancel(job_id)
+    job = ctx.jobs.get(job_id)
+    if job.capability in {"export.start", "export.direct.start", "export.run.start"}:
+        cancel_export = getattr(ctx.daw, "cancel_export", None) if ctx.daw is not None else None
+        if callable(cancel_export):
+            try:
+                cancel_export()
+            except Exception:
+                pass
     return {"cancelled": result.cancelled, "jobId": result.job_id}
 
 
-def delete_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def delete_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId", ""))
-    result = services.job_manager.delete(job_id)
+    result = ctx.jobs.delete(job_id)
     return {"deleted": result.deleted, "jobId": result.job_id}
 
 
@@ -147,7 +152,7 @@ def parse_job_error(payload: dict[str, Any], *, capability: str) -> PrestoErrorP
     )
 
 
-def create_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def create_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "jobs.create"
     job_capability = str(payload.get("capability", "")).strip()
     if not job_capability:
@@ -165,7 +170,7 @@ def create_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> d
     started_at = payload.get("startedAt")
     finished_at = payload.get("finishedAt")
 
-    response = services.job_manager.create(
+    response = ctx.jobs.create(
         JobsCreateRequest(
             capability=job_capability,
             target_daw=target_daw,
@@ -181,7 +186,7 @@ def create_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> d
     return {"job": job_record_payload(response.job)}
 
 
-def update_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def update_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "jobs.update"
     job_id = str(payload.get("jobId", "")).strip()
     if not job_id:
@@ -196,7 +201,7 @@ def update_job_payload(services: ServiceContainer, payload: dict[str, Any]) -> d
     finished_at = payload.get("finishedAt")
     result = payload.get("result") if "result" in payload else None
 
-    response = services.job_manager.update(
+    response = ctx.jobs.update(
         JobsUpdateRequest(
             job_id=job_id,
             state=state,

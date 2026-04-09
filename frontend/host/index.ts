@@ -20,6 +20,8 @@ export { createHostShellState } from './hostShellState'
 export type { HostShellLanguage, HostShellPreferences } from './shellPreferences'
 export {
   getHostShellPreferences,
+  hydrateHostShellPreferences,
+  resetHostShellPreferencesForTesting,
   setHostShellPreferences,
   subscribeHostShellPreferences,
 } from './shellPreferences'

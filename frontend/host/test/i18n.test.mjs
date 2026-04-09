@@ -61,3 +61,24 @@ test('system locale candidates resolve from global navigator shim without window
   assert.deepEqual(getSystemLocaleCandidates(), ['zh-CN', 'en-US'])
   assert.equal(resolveHostLocale('system'), 'zh-CN')
 })
+
+test('desktop-facing copy avoids page and app wording in key host surfaces', async () => {
+  const { translateHost } = await loadI18nModule()
+
+  assert.equal(
+    translateHost('en', 'home.workflowUnavailable.body'),
+    'The selected workflow view could not be opened.',
+  )
+  assert.equal(
+    translateHost('en', 'settings.update.openRelease'),
+    'View Release Notes',
+  )
+  assert.equal(
+    translateHost('zh-CN', 'general.developer.toggleBody'),
+    '显示专门的开发者界面和插件诊断导航。',
+  )
+  assert.equal(
+    translateHost('zh-CN', 'settings.accessibility.dialog.help'),
+    '如果 Presto 已经开启过权限，请先移除再重新添加，然后重新打开应用。建议直接从 /Applications/Presto.app 运行。',
+  )
+})

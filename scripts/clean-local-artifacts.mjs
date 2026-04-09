@@ -43,8 +43,6 @@ async function walkAndClean(dirPath) {
 await removeIfExists('.worktrees')
 await removeIfExists('release')
 await removeIfExists('build/stage1')
-await removeIfExists('frontend/electron/.stage1')
-await removeIfExists('frontend/electron/index.html')
 await walkAndClean(rootDir)
 
 removedPaths.sort((left, right) => left.localeCompare(right))

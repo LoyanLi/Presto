@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +26,7 @@ async function loadRuntimeBridge() {
 
 test('shared desktop runtime bridge exposes plugin management inside PrestoRuntime', async () => {
   const { createDesktopRuntimeBridge } = await loadRuntimeBridge()
+  const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const calls = []
   const runtime = createDesktopRuntimeBridge(
     {
@@ -40,9 +42,9 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
       backend: {
         getStatus: 'backend.status.get',
         listCapabilities: 'backend.capabilities.list',
-        getDawAdapterSnapshot: 'backend.daw.snapshot.get',
-        restart: 'backend.process.restart',
-        setDawTarget: 'backend.daw.target.set',
+        getDawAdapterSnapshot: 'backend.daw-adapter.snapshot.get',
+        restart: 'backend.lifecycle.restart',
+        setDawTarget: 'backend.daw-target.set',
         setDeveloperMode: 'backend.developer-mode.set',
         invokeCapability: 'backend.capability.invoke',
       },
@@ -61,17 +63,17 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
         exists: 'fs.path.exists',
         stat: 'fs.path.stat',
         readdir: 'fs.dir.read',
-        mkdir: 'fs.dir.make',
+        mkdir: 'fs.dir.create',
         unlink: 'fs.file.unlink',
         rmdir: 'fs.dir.remove',
         deleteFile: 'fs.file.delete',
       },
       plugins: {
         list: 'plugins.catalog.list',
-        installFromDirectory: 'plugins.catalog.install-directory',
-        installFromZip: 'plugins.catalog.install-zip',
-        setEnabled: 'plugins.catalog.set-enabled',
-        uninstall: 'plugins.catalog.uninstall',
+        installFromDirectory: 'plugins.install.directory',
+        installFromZip: 'plugins.install.zip',
+        setEnabled: 'plugins.set-enabled',
+        uninstall: 'plugins.uninstall',
       },
       window: {
         toggleAlwaysOnTop: 'window.always-on-top.toggle',
@@ -81,7 +83,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
       mobileProgress: {
         createSession: 'mobile-progress.session.create',
         closeSession: 'mobile-progress.session.close',
-        getViewUrl: 'mobile-progress.session.view-url.get',
+        getViewUrl: 'mobile-progress.view-url.get',
         updateSession: 'mobile-progress.session.update',
       },
       macAccessibility: {
@@ -99,7 +101,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   await runtime.plugins.list()
   await runtime.backend.listCapabilities()
   await runtime.app.checkForUpdates({
-    currentVersion: '0.3.4',
+    currentVersion: packageJson.version,
     includePrerelease: true,
   })
   await runtime.plugins.installFromDirectory(true)
@@ -110,10 +112,10 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   assert.deepEqual(calls, [
     ['plugins.catalog.list'],
     ['backend.capabilities.list'],
-    ['app.release.check', { currentVersion: '0.3.4', includePrerelease: true }],
-    ['plugins.catalog.install-directory', true],
-    ['plugins.catalog.install-zip', false],
-    ['plugins.catalog.set-enabled', 'official.export-workflow', false],
-    ['plugins.catalog.uninstall', 'official.export-workflow'],
+    ['app.release.check', { currentVersion: packageJson.version, includePrerelease: true }],
+    ['plugins.install.directory', true],
+    ['plugins.install.zip', false],
+    ['plugins.set-enabled', 'official.export-workflow', false],
+    ['plugins.uninstall', 'official.export-workflow'],
   ])
 })

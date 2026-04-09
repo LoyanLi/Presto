@@ -84,6 +84,43 @@ function pickHighestMinVersions<T extends { minVersion: string }>(
   return map
 }
 
+function pickHighestAvailableVersions<T extends { version: string }>(
+  entries: readonly T[],
+  keyOf: (entry: T) => string,
+): Map<string, string> {
+  const map = new Map<string, string>()
+
+  for (const entry of entries) {
+    const key = keyOf(entry)
+    const current = map.get(key)
+    if (!current || compareVersions(entry.version, current) > 0) {
+      map.set(key, entry.version)
+    }
+  }
+
+  return map
+}
+
+function requirementsSatisfied<T extends { minVersion: string }>(
+  entries: readonly T[] | undefined,
+  keyOf: (entry: T) => string,
+  availableVersions: Map<string, string>,
+): boolean {
+  if (!entries || entries.length === 0) {
+    return true
+  }
+
+  const minVersions = pickHighestMinVersions(entries, keyOf)
+  for (const [key, minVersion] of minVersions) {
+    const availableVersion = availableVersions.get(key)
+    if (!availableVersion || compareVersions(availableVersion, minVersion) < 0) {
+      return false
+    }
+  }
+
+  return true
+}
+
 export function isPluginAvailableForSnapshot(
   plugin: HostPluginRecord,
   snapshot: DawAdapterSnapshot | null,
@@ -101,7 +138,19 @@ export function isPluginAvailableForSnapshot(
     return true
   }
 
-  return true
+  const availableModules = pickHighestAvailableVersions(snapshot.modules, (module) => module.moduleId)
+  if (
+    !requirementsSatisfied(plugin.adapterModuleRequirements, (requirement) => requirement.moduleId, availableModules)
+  ) {
+    return false
+  }
+
+  const availableCapabilities = pickHighestAvailableVersions(snapshot.capabilities, (capability) => capability.capabilityId)
+  return requirementsSatisfied(
+    plugin.capabilityRequirements,
+    (requirement) => requirement.capabilityId,
+    availableCapabilities,
+  )
 }
 
 export function createHostMuiTheme(mode: 'light' | 'dark') {

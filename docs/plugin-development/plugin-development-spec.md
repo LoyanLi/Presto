@@ -1,6 +1,6 @@
 # 插件开发规范总览
 
-本文档只描述当前 `0.3.4` 代码已经成立的插件协议，并保留所有插件共享的规则。`workflow`、`automation`、UI、自动化内核的专项要求已经拆到独立页面。
+本文档只描述当前 `0.3.5` 代码已经成立的插件协议，并保留所有插件共享的规则。`workflow`、`automation`、UI、自动化内核的专项要求已经拆到独立页面。
 
 ## 1. 当前插件模型
 
@@ -37,7 +37,7 @@
 
 - 插件不能直接控制外部 app
 - 插件不能直接访问宿主私有 runtime
-- 插件不能直接调用 Electron、Node 文件系统或系统 shell
+- 插件不能直接调用宿主私有 runtime、Node 文件系统或系统 shell
 - 插件不能使用 `context.runtime`
 - 插件不能在 manifest 中声明 `requiredRuntimeServices`
 

@@ -19,6 +19,18 @@
 
 当前桌面运行时实现入口在 `src-tauri/src/runtime.rs`。
 
+但当前结构已经不是一个继续膨胀的单文件 runtime：
+
+- `src-tauri/src/runtime.rs`：根状态、共享 helper、operation dispatch
+- `src-tauri/src/runtime/backend.rs`：backend supervisor、capability HTTP 转发、DAW target 切换
+- `src-tauri/src/runtime/plugins.rs`：插件 catalog、安装/卸载、automation definition
+- `src-tauri/src/runtime/mobile_progress.rs`：mobile progress session 和 HTTP 视图
+
+其中 DAW target 边界也已经拆出来：
+
+- `src-tauri/src/runtime/backend.rs` 不再内联允许的 target 列表
+- `src-tauri/src/runtime/daw_targets_generated.rs` 由 `packages/contracts-manifest/daw-targets.json` 生成，并提供 `DEFAULT_DAW_TARGET` 与 `SUPPORTED_DAW_TARGETS`
+
 它负责装配这些运行时对象：
 
 - backend supervisor
@@ -38,15 +50,18 @@ Rust runtime 的职责是桌面业务宿主装配，而不是 UI 渲染。
 - `macAccessibility` 相关运行时失败如果命中辅助功能权限缺失，会被统一归类成 `MAC_ACCESSIBILITY_PERMISSION_REQUIRED`
 - `automation.definition.run`、`mac-accessibility.script.run`、`mac-accessibility.file.run` 这三类入口都会走同一套权限引导逻辑，而不是把原始 `osascript` 权限错误直接抛回上层
 
-打包态 runtime 还依赖两条关键环境事实：
+打包态 runtime 还依赖三条关键环境事实：
 
 - Rust runtime 会优先从 bundle 内 `backend/`、`frontend/`、`plugins/` 解析运行时资源；开发态则直接回退到仓库根目录。
 - Rust runtime 在选择 bundled Python runtime 时，会同时把 `PYTHONHOME` 指向包内 `Python.framework/Versions/3.13`，避免回退到用户机器本地 Python framework。
+- Rust runtime 会把 `PRESTO_APP_DATA_DIR` 注入 Python 后端；后端默认 config store 因此会把配置持久化到 `<app data>/config.json`。
 
 ## 3. Renderer 怎样访问宿主
 
 Renderer 侧的关键入口是：
 
+- `frontend/desktop/renderHostShellApp.tsx`
+- `frontend/desktop/useHostPluginCatalogState.ts`
 - `frontend/tauri/runtimeBridge.ts`
 - `frontend/desktop/runtimeBridge.ts`
 - `frontend/tauri/renderer.tsx`
@@ -78,7 +93,7 @@ Renderer 侧的关键入口是：
 
 ## 4. Backend Supervisor 在桌面侧的位置
 
-`src-tauri/src/runtime.rs` 负责把 Python FastAPI 后端当作本地受控服务来管理。
+`src-tauri/src/runtime/backend.rs` 负责把 Python FastAPI 后端当作本地受控服务来管理。
 
 它会处理：
 
@@ -100,10 +115,13 @@ Renderer 侧的关键入口是：
 - backend stderr
 - backend 进程退出
 
-`0.3.4` 当前还补上了一条关键事实：
+`0.3.5` 当前还补上了三条关键事实：
 
 - 健康检查使用 Rust 侧本地 HTTP 请求直接轮询 `/api/v1/health`。
 - 请求实现不能在写完后提前 `shutdown(Write)`；否则 uvicorn 不返回响应，宿主会误以为后端未就绪并主动清理进程。
+- `backend.daw-target.set` 不能只改状态；当前实现会原子执行 `stop -> set target -> start -> wait ready`，保证切换目标 DAW 后紧随其后的宿主配置读写仍然面对一个存活后端。
+- `backend.daw-target.set` 对可切换目标的校验来自 `runtime/daw_targets_generated.rs`，而不是 Rust runtime 内部另一份手写常量。
+- `system.health` 和 `daw.connection.getStatus` 的语义现在保持纯查询；Rust runtime 只做状态读取和转发，不允许为了读状态而隐式触发连接。
 
 从 `0.3.3` 起，bundled Python runtime 的打包事实还包括：
 
@@ -117,7 +135,7 @@ Renderer 侧的关键入口是：
 
 ## 5. 插件宿主服务在桌面侧的位置
 
-插件宿主管理逻辑当前直接位于 `src-tauri/src/runtime.rs`。
+插件宿主管理逻辑当前位于 `src-tauri/src/runtime/plugins.rs`，由 `src-tauri/src/runtime.rs` 根调度器分发。
 
 它负责：
 
@@ -138,6 +156,11 @@ Renderer 侧的关键入口是：
 - 首页、设置页、开发者页面
 - 插件列表和插件问题展示
 - 把宿主 catalog 转成可渲染页面、导航、命令和设置项
+
+当前宿主状态边界还新增了两条明确事实：
+
+- `HostShellApp.tsx` 主要负责 UI 组合；偏好和导航分别下沉到 `useHostShellPreferencesState.ts` 与 `useHostShellNavigationState.ts`。
+- 桌面侧插件目录发现、安装、刷新和错误态收口由 `frontend/desktop/useHostPluginCatalogState.ts` 负责；刷新失败时不会继续保留旧插件页面和旧自动化卡片。
 
 当前 React Host 不是协议定义层。它消费的是：
 

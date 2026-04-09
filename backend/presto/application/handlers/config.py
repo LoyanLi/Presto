@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from .common import validation_error
-from ..service_container import ServiceContainer
 from ...domain.errors import PrestoError
+from ...domain.ports import CapabilityExecutionContext
 
 
-def config_payload(services: ServiceContainer) -> dict[str, Any]:
-    config_store = services.config_store
+def config_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    del payload
+    config_store = ctx.config_store
     if config_store is None:
         raise PrestoError(
             "CONFIG_STORE_UNAVAILABLE",
@@ -20,9 +21,9 @@ def config_payload(services: ServiceContainer) -> dict[str, Any]:
     return {"config": config_store.load()}
 
 
-def update_config_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    config_store = services.config_store
-    keychain_store = services.keychain_store
+def update_config_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    config_store = ctx.config_store
+    keychain_store = ctx.keychain_store
     if config_store is None or keychain_store is None:
         raise PrestoError(
             "CONFIG_STORE_UNAVAILABLE",

@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import { createDesktopRuntimeBridge } from '../desktop/runtimeBridge'
 import { createPrestoClient } from '@presto/sdk-core'
+import { PRESTO_VERSION } from '@presto/contracts'
 import type {
   CapabilityRequestEnvelope,
   CapabilityResponseEnvelope,
@@ -94,6 +95,6 @@ export function createTauriPrestoClient(): PrestoClient {
   return createPrestoClient({
     transport,
     clientName: 'tauri-renderer',
-    clientVersion: '0.3.4',
+    clientVersion: PRESTO_VERSION,
   })
 }

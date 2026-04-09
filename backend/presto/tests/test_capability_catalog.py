@@ -54,11 +54,20 @@ def test_capability_catalog_is_loaded_from_generated_source() -> None:
 
 
 def test_capability_catalog_only_declares_handlers_implemented_by_backend() -> None:
-    from presto.application.handlers.invoker import _CAPABILITY_HANDLERS
+    from presto.application.handlers.invoker import HANDLER_BINDINGS
 
     declared_handlers = {definition.handler for definition in DEFAULT_CAPABILITY_DEFINITIONS}
 
-    assert declared_handlers.issubset(set(_CAPABILITY_HANDLERS))
+    assert declared_handlers.issubset(set(HANDLER_BINDINGS))
+
+
+def test_capability_handler_bindings_use_single_context_execution_model() -> None:
+    from presto.application.handlers.invoker import HANDLER_BINDINGS
+
+    assert HANDLER_BINDINGS
+
+    for handler in HANDLER_BINDINGS.values():
+        assert callable(handler)
 
 
 def test_public_capabilities_declare_canonical_metadata() -> None:
@@ -93,3 +102,13 @@ def test_track_toggle_capabilities_expose_canonical_toggle_shape() -> None:
 
         assert support.request_fields == ("trackNames", "enabled")
         assert support.response_fields == ("updated", "trackNames", "enabled")
+
+
+def test_capability_catalog_declares_runtime_dependencies_used_by_handlers() -> None:
+    definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+
+    assert definitions["session.getSnapshotInfo"].depends_on == ()
+    assert definitions["stripSilence.open"].depends_on == ("mac_automation", "daw_ui_profile")
+    assert definitions["stripSilence.execute"].depends_on == ("mac_automation", "daw_ui_profile")
+    assert definitions["stripSilence.openViaUi"].depends_on == ("mac_automation", "daw_ui_profile")
+    assert definitions["stripSilence.executeViaUi"].depends_on == ("mac_automation", "daw_ui_profile")

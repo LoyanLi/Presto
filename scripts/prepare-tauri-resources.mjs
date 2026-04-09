@@ -67,8 +67,8 @@ async function prepareOfficialPluginResources() {
 async function prepareAutomationResources() {
   await rm(path.join(outputRoot, 'frontend'), { recursive: true, force: true })
   await copyFiltered(
-    path.join(repoRoot, 'frontend', 'runtime', 'automation'),
-    path.join(outputRoot, 'frontend', 'runtime', 'automation'),
+    path.join(repoRoot, 'frontend', 'tauri', 'resources', 'automation'),
+    path.join(outputRoot, 'frontend', 'automation'),
   )
 }
 

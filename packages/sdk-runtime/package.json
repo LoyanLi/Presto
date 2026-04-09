@@ -1,20 +1,20 @@
 {
   "name": "@presto/sdk-runtime",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts",
-    "./createPrestoRuntime": "./createPrestoRuntime.ts",
-    "./clients/app": "./clients/app.ts",
-    "./clients/automation": "./clients/automation.ts",
-    "./clients/backend": "./clients/backend.ts",
-    "./clients/dialog": "./clients/dialog.ts",
-    "./clients/fs": "./clients/fs.ts",
-    "./clients/macAccessibility": "./clients/macAccessibility.ts",
-    "./clients/mobileProgress": "./clients/mobileProgress.ts",
-    "./clients/plugins": "./clients/plugins.ts",
-    "./clients/shell": "./clients/shell.ts",
-    "./clients/window": "./clients/window.ts"
+    ".": "./src/index.ts",
+    "./createPrestoRuntime": "./src/createPrestoRuntime.ts",
+    "./clients/app": "./src/clients/app.ts",
+    "./clients/automation": "./src/clients/automation.ts",
+    "./clients/backend": "./src/clients/backend.ts",
+    "./clients/dialog": "./src/clients/dialog.ts",
+    "./clients/fs": "./src/clients/fs.ts",
+    "./clients/macAccessibility": "./src/clients/macAccessibility.ts",
+    "./clients/mobileProgress": "./src/clients/mobileProgress.ts",
+    "./clients/plugins": "./src/clients/plugins.ts",
+    "./clients/shell": "./src/clients/shell.ts",
+    "./clients/window": "./src/clients/window.ts"
   }
 }

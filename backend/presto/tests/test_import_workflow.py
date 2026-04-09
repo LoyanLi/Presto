@@ -194,7 +194,6 @@ def _app_without_daw() -> object:
     app = create_app()
     services = build_service_container(job_manager=InMemoryJobManager())
     services.daw = None
-    services.import_analysis_cache = ImportAnalysisCache()
     app.state.services = services
     return app
 
@@ -207,9 +206,16 @@ def _app_with_fake_daw() -> object:
         error_normalizer=ErrorNormalizer(),
         daw=FakeDawAdapter(),
     )
-    services.import_analysis_cache = ImportAnalysisCache()
     app.state.services = services
     return app
+
+
+def test_service_container_exposes_explicit_runtime_services_instead_of_import_cache_state() -> None:
+    services = build_service_container()
+
+    assert hasattr(services, "import_analysis_store") is True
+    assert hasattr(services, "job_handle_registry") is True
+    assert hasattr(services, "import_analysis_cache") is False
 
 
 def _create_audio_source_folder(tmp_path: Path, *, file_names: list[str]) -> Path:
@@ -497,6 +503,20 @@ def test_import_run_start_executes_resolved_items_and_marks_job_succeeded(tmp_pa
         "successCount": 2,
         "failedCount": 0,
     }
+
+
+def test_import_run_start_does_not_attach_handle_maps_to_service_container(tmp_path: Path) -> None:
+    app = _app_with_fake_daw()
+    source_folder = _create_audio_source_folder(tmp_path, file_names=["kick.wav"])
+
+    response = start_import_run(
+        app.state.services,
+        {"folderPaths": [str(source_folder)]},
+    )
+
+    assert response["jobId"]
+    assert hasattr(app.state.services, "job_run_handles") is False
+    assert hasattr(app.state.services, "job_run_handles_lock") is False
 
 
 def test_import_run_start_connects_daw_before_background_import(tmp_path: Path) -> None:

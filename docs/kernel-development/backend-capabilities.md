@@ -18,7 +18,7 @@
 
 当前入口会：
 
-- 创建 `FastAPI(title="Presto Backend API", version="0.3.4")`
+- 从 `backend/presto/version.py::VERSION` 读取版本，并创建 `FastAPI(title="Presto Backend API", version=VERSION)`
 - 调用 `build_service_container()`
 - 挂载 `/api/v1`
 - 注册 `PrestoError` 和通用异常处理器
@@ -46,24 +46,29 @@
 - `daw`
 - `config_store`
 - `keychain_store`
+- `import_analysis_store`
+- `job_handle_registry`
 - `mac_automation`
 - `daw_ui_profile`
-- `import_analysis_cache`
 - `target_daw`
 - `backend_ready`
 
 默认装配事实：
 
-- `daw` 是 `ProToolsDawAdapter(address="127.0.0.1:31416")`
-- `daw_ui_profile` 是 `ProToolsUiProfile()`
-- `mac_automation` 来自 `create_default_mac_automation_engine()`
-- `config_store` 是 `InMemoryConfigStore()`
+- `target_daw` 先来自 `PRESTO_TARGET_DAW`，如果不在支持列表内则回退到 `DEFAULT_DAW_TARGET`
+- `DEFAULT_DAW_TARGET`、`SUPPORTED_DAW_TARGETS` 和 `DawTarget` 不是手写散落常量；它们来自 `domain/daw_targets_generated.py`
+- `daw`、`daw_ui_profile`、`mac_automation` 不是直接散落硬编码在 container 里，而是统一通过 `application/daw_runtime.py::resolve_daw_runtime(...)` 解析
+- 当前唯一已接通的 runtime factory 仍然是 `pro_tools`
+- `config_store` 通过 `integrations/config_store.py::create_default_config_store()` 解析：
+  - 如果没有 `PRESTO_APP_DATA_DIR`，回退到 `InMemoryConfigStore()`
+  - 如果存在 `PRESTO_APP_DATA_DIR`，则持久化到 `<PRESTO_APP_DATA_DIR>/config.json`
 - `keychain_store` 是 `InMemoryKeychainStore()`
 - `job_manager` 是 `InMemoryJobManager()`
 
 这里必须明确：
 
-- 当前配置和 keychain 仍是进程内内存实现，不是正式持久化存储。
+- keychain 目前仍是进程内内存实现。
+- config 是否持久化取决于宿主是否注入 `PRESTO_APP_DATA_DIR`；桌面 Tauri 正式路径会注入这个环境变量。
 
 ## 4. 当前后端分层
 
@@ -120,6 +125,7 @@
 
 - 路由：`transport/http/routes/invoke.py`
 - 执行：`application/handlers/invoker.py`
+- handler 绑定：`application/handlers/registry.py`
 
 请求核心字段：
 
@@ -139,15 +145,23 @@
 - 插件到后端
 - SDK 到后端
 
+当前实现还有两条边界事实：
+
+- `invoker.py` 会基于 `ServiceContainer` 为每次请求构造一份 `CapabilityExecutionContext`，再直接调用 registry 中绑定的 handler。
+- `workflow.run.start` 仍是特殊入口，但它递归调用的也只是同一条原子 capability 执行链，而不是另一套隐藏协议。
+- `system.health` 和 `daw.connection.getStatus` 现在是纯查询 handler：只读取当前 `safe_connection_status(ctx)`，不会为了返回状态而调用连接建立逻辑。
+
 ## 6. Capability 清单来自哪里
 
 后端能力目录不是手写散落维护的。
 
 当前事实是：
 
-- `packages/contracts-manifest/` 提供 capability 清单事实源
-- `scripts/generate-contracts.mjs` 生成共享产物
+- `packages/contracts-manifest/capabilities.json` 提供 capability 清单事实源
+- `packages/contracts-manifest/daw-targets.json` 提供 DAW target 事实源
+- `scripts/generate-contracts.mjs` 同时生成 capability catalog 和 DAW target 共享产物
 - `backend/presto/application/capabilities/catalog.py` 使用生成结果
+- `backend/presto/domain/capabilities.py` 通过 `domain/daw_targets_generated.py` 读取 `DawTarget`、`DEFAULT_DAW_TARGET`、`RESERVED_DAW_TARGETS` 和 `SUPPORTED_DAW_TARGETS`
 
 所以新增 capability 的顺序必须是：
 
@@ -168,5 +182,7 @@
 ## 8. 当前真实支持边界
 
 - `target_daw` 当前实际只允许 `pro_tools`
+- `logic`、`cubase`、`nuendo` 当前只属于 `RESERVED_DAW_TARGETS`，不是已接通运行时
 - HTTP 只是本地进程间通信载体，不是对外开放平台 API
 - 后端默认状态依赖本地 Python 和 Pro Tools 集成，不应被文档写成通用多 DAW 能力服务
+- 当前所谓“多 DAW 扩展”只成立在 runtime dependency resolver 这个接缝上，不能写成已经完成多 DAW 能力平台化。

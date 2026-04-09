@@ -1,0 +1,13 @@
+{
+  "name": "@presto/host-plugin-runtime",
+  "version": "0.3.5",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@presto/contracts": "file:../packages/contracts"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./browser": "./browser.ts"
+  }
+}

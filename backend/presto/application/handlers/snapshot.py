@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from .common import ensure_daw_connected
-from ..service_container import ServiceContainer
 from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.errors import PrestoError
+from ...domain.ports import CapabilityExecutionContext
 
 
 def normalize_version_map(raw_map: Any) -> dict[str, str]:
@@ -22,8 +22,8 @@ def normalize_version_map(raw_map: Any) -> dict[str, str]:
     return normalized
 
 
-def daw_adapter_snapshot_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "daw.adapter.getSnapshot", payload, raise_on_error=False)
+def daw_adapter_snapshot_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "daw.adapter.getSnapshot", payload, raise_on_error=False)
     get_snapshot = getattr(daw, "get_adapter_capability_snapshot", None)
     if not callable(get_snapshot):
         raise PrestoError(
@@ -32,7 +32,7 @@ def daw_adapter_snapshot_payload(services: ServiceContainer, payload: dict[str, 
             source="runtime",
             retryable=False,
             capability="daw.adapter.getSnapshot",
-            adapter=str(services.target_daw),
+            adapter=str(ctx.target_daw),
         )
 
     snapshot = get_snapshot()
@@ -47,8 +47,8 @@ def daw_adapter_snapshot_payload(services: ServiceContainer, payload: dict[str, 
     }
     capabilities: list[dict[str, str]] = []
 
-    for definition in services.capability_registry.list_public():
-        if services.target_daw not in definition.supported_daws:
+    for definition in ctx.registry.list_public():
+        if ctx.target_daw not in definition.supported_daws:
             continue
         capability_id = str(definition.id)
         module_id = str(definition.domain)
@@ -67,7 +67,7 @@ def daw_adapter_snapshot_payload(services: ServiceContainer, payload: dict[str, 
     modules = [modules_by_id[module_id] for module_id in sorted(modules_by_id.keys())]
 
     return {
-        "targetDaw": services.target_daw or DEFAULT_DAW_TARGET,
+        "targetDaw": ctx.target_daw or DEFAULT_DAW_TARGET,
         "adapterVersion": adapter_version,
         "hostVersion": str(host_version).strip() if host_version is not None else "",
         "modules": modules,
@@ -125,8 +125,8 @@ def get_snapshot_info_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def apply_snapshot_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "session.applySnapshot", payload, raise_on_error=True)
+def apply_snapshot_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "session.applySnapshot", payload, raise_on_error=True)
     snapshot = snapshot_payload(payload)
     track_states = snapshot.get("trackStates")
     normalized_track_states = track_states if isinstance(track_states, list) else []

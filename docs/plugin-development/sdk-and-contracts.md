@@ -24,15 +24,21 @@
 
 如果你在写插件，先看 `packages/contracts/src/plugins/*`。
 
-## 3. `packages/contracts-manifest` 是 capability 清单事实源
+## 3. `packages/contracts-manifest` 是跨语言事实源
 
-这里保存 capability 清单和 schema 相关事实源。
+这里保存 capability、schema 和 DAW target 相关事实源。
 
 它的作用是：
 
 - 作为共享 capability 目录的上游输入
-- 驱动 TypeScript / Python 生成产物
+- 驱动 TypeScript / Python / Rust 生成产物
 - 让宿主、后端、插件围绕同一套 capability ID 工作
+
+当前最直接的文件包括：
+
+- `capabilities.json`
+- `schemas.json`
+- `daw-targets.json`
 
 这不是给插件直接 import 运行时代码的地方。
 
@@ -69,7 +75,7 @@
 当前与 `macAccessibility` 相关的宿主事实还包括：
 
 - 宿主会在应用启动时先做一次辅助功能权限预检。
-- sidecar 会在真正执行 Accessibility 调用前再次检查，并在缺权限时弹出系统引导。
+- Rust runtime 会在真正执行 Accessibility 调用前再次检查，并在缺权限时弹出系统引导。
 - 这属于宿主运行时行为，不等于插件正式拿到了可自由支配的系统自动化权限。
 
 ## 6. `PluginContext` 的真实边界
@@ -126,6 +132,12 @@ export interface PluginContext {
 2. 改 `contracts-manifest`
 3. 生成共享产物
 4. 再改后端 / 宿主 / 插件
+
+如果需求是调整正式 DAW target 列表：
+
+1. 改 `packages/contracts-manifest/daw-targets.json`
+2. 生成共享产物
+3. 再改真正新增 target 的 runtime / adapter 实现
 
 如果需求只是插件页面需要一个受限 UI 宿主辅助能力：
 

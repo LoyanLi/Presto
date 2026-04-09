@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from .common import ensure_daw_connected, validation_error
-from ..service_container import ServiceContainer
 from ...domain.errors import PrestoError
+from ...domain.ports import CapabilityExecutionContext
 from ...integrations.mac import MacAutomationError
 
 
-def get_mac_automation(services: ServiceContainer, capability_id: str) -> Any:
-    mac_automation = services.mac_automation
+def get_mac_automation(ctx: CapabilityExecutionContext, capability_id: str) -> Any:
+    mac_automation = ctx.mac_automation
     if mac_automation is None:
         raise PrestoError(
             "MAC_AUTOMATION_UNAVAILABLE",
@@ -25,8 +25,8 @@ def get_mac_automation(services: ServiceContainer, capability_id: str) -> Any:
     return mac_automation
 
 
-def get_daw_ui_profile(services: ServiceContainer, capability_id: str) -> Any:
-    daw_ui_profile = services.daw_ui_profile
+def get_daw_ui_profile(ctx: CapabilityExecutionContext, capability_id: str) -> Any:
+    daw_ui_profile = ctx.daw_ui_profile
     if daw_ui_profile is None:
         raise PrestoError(
             "DAW_UI_PROFILE_UNAVAILABLE",
@@ -76,10 +76,11 @@ def strip_silence_runtime_error(
     )
 
 
-def open_strip_silence_payload(services: ServiceContainer) -> dict[str, Any]:
+def open_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "stripSilence.open"
-    mac_automation = get_mac_automation(services, capability_id)
-    daw_ui_profile = get_daw_ui_profile(services, capability_id)
+    del payload
+    mac_automation = get_mac_automation(ctx, capability_id)
+    daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
 
     try:
         mac_automation.run_script(daw_ui_profile.build_preflight_accessibility_script())
@@ -94,10 +95,10 @@ def open_strip_silence_payload(services: ServiceContainer) -> dict[str, Any]:
     return {"opened": True}
 
 
-def execute_strip_silence_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def execute_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "stripSilence.execute"
-    mac_automation = get_mac_automation(services, capability_id)
-    daw_ui_profile = get_daw_ui_profile(services, capability_id)
+    mac_automation = get_mac_automation(ctx, capability_id)
+    daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
 
     track_name = str(payload.get("trackName", "")).strip()
     if not track_name:
@@ -226,7 +227,7 @@ def resolve_split_mono_tracks(
     return left_name, right_name
 
 
-def split_stereo_to_mono_execute_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def split_stereo_to_mono_execute_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     keep_channel = str(payload.get("keepChannel", "left")).strip().lower()
     if keep_channel not in {"left", "right"}:
         raise validation_error(
@@ -236,9 +237,9 @@ def split_stereo_to_mono_execute_payload(services: ServiceContainer, payload: di
         )
 
     capability_id = "automation.splitStereoToMono.execute"
-    daw = ensure_daw_connected(services, capability_id, {}, raise_on_error=True)
-    mac_automation = get_mac_automation(services, capability_id)
-    daw_ui_profile = get_daw_ui_profile(services, capability_id)
+    daw = ensure_daw_connected(ctx, capability_id, {}, raise_on_error=True)
+    mac_automation = get_mac_automation(ctx, capability_id)
+    daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
 
     selected_track_names_getter = getattr(daw, "get_selected_track_names", None)
     if not callable(selected_track_names_getter):

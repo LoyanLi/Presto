@@ -115,7 +115,8 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const pluginManifest = 'src-tauri/resources/plugins/official/import-workflow/manifest.json'
   const pluginDist = 'src-tauri/resources/plugins/official/import-workflow/dist/entry.mjs'
   const pluginTests = 'src-tauri/resources/plugins/official/import-workflow/test'
-  const automationDefinition = 'src-tauri/resources/frontend/runtime/automation/definitions/splitStereoToMono.json'
+  const automationDefinition = 'src-tauri/resources/frontend/automation/definitions/splitStereoToMono.json'
+  const legacyAutomationDefinition = 'src-tauri/resources/frontend/runtime/automation/definitions/splitStereoToMono.json'
   const legacyRuntimeResourcesRoot = 'build/runtime-resources'
 
   assert.equal(await exists(sidecarEntry), false)
@@ -126,6 +127,7 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   assert.equal(await exists(pluginManifest), true)
   assert.equal(await exists(pluginDist), true)
   assert.equal(await exists(automationDefinition), true)
+  assert.equal(await exists(legacyAutomationDefinition), false)
   assert.equal(await exists(backendTests), false)
   assert.equal(await exists(backendCache), false)
   assert.equal(await exists(backendPythonPip), false)

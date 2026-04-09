@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from presto.application.handlers.context import build_execution_context
 from presto.application.handlers.config import update_config_payload
-from presto.application.service_container import (
-    build_service_container,
-    create_default_app_config,
-    MacOsKeychainStore,
-)
+from presto.application.service_container import build_service_container
+from presto.integrations.config_store import create_default_app_config
+from presto.integrations.keychain_store import MacOsKeychainStore
 
 
 class FakeSecurityRunner:
@@ -48,7 +47,10 @@ def test_default_runtime_config_persists_across_service_container_rebuilds(tmp_p
     config["hostPreferences"]["dawTarget"] = "pro_tools"
     config["hostPreferences"]["includePrereleaseUpdates"] = True
 
-    update_config_payload(services, {"config": config})
+    update_config_payload(
+        build_execution_context(services, request_id="req-runtime-config"),
+        {"config": config},
+    )
 
     rebuilt_services = build_service_container()
     rebuilt_config = rebuilt_services.config_store.load()

@@ -1,9 +1,10 @@
 {
   "name": "presto",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "type": "module",
   "workspaces": [
+    "host-plugin-runtime",
     "packages/contracts",
     "packages/sdk-core",
     "packages/sdk-runtime"
@@ -13,8 +14,9 @@
   "copyright": "Copyright (c) 2026 Loyan Li",
   "scripts": {
     "clean:local": "node scripts/clean-local-artifacts.mjs",
+    "version:sync": "node scripts/sync-version.mjs",
     "test": "npm run test:node && npm run test:python",
-    "test:node": "node --test frontend/electron/test/*.test.mjs frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs",
+    "test:node": "node --test frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs",
     "test:python": "cd backend && python3 -m pytest presto/tests",
     "tauri:prepare:all": "npm run tauri:build:frontend && npm run tauri:prepare:python && npm run tauri:prepare:resources",
     "tauri:prepare:python": "node scripts/prepare-tauri-python.mjs",

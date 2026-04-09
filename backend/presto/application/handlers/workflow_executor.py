@@ -6,16 +6,13 @@ import time
 from typing import Any, Callable
 from uuid import uuid4
 
+from ...domain.ports import CapabilityExecutionContext
 from ..service_container import ServiceContainer
+from ..runtime_state import ThreadedJobHandle
 from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.errors import PrestoError, PrestoErrorPayload, PrestoValidationError
 from ...domain.jobs import JobProgress, JobRecord
-
-
-class WorkflowRunHandle:
-    def __init__(self, cancel_event: threading.Event, worker: threading.Thread) -> None:
-        self.cancel_event = cancel_event
-        self.worker = worker
+from .common import runtime_from_context
 
 
 def _utc_now() -> str:
@@ -34,38 +31,26 @@ def _validation_error(message: str, *, field: str) -> PrestoValidationError:
     )
 
 
-def _ensure_run_handles_state(services: ServiceContainer) -> tuple[dict[str, WorkflowRunHandle], threading.Lock]:
-    handles = getattr(services, "workflow_run_handles", None)
-    if handles is None:
-        handles = {}
-        setattr(services, "workflow_run_handles", handles)
-
-    lock = getattr(services, "workflow_run_handles_lock", None)
-    if lock is None:
-        lock = threading.Lock()
-        setattr(services, "workflow_run_handles_lock", lock)
-
-    return handles, lock
+def _run_handles_set(services: ServiceContainer, job_id: str, handle: ThreadedJobHandle) -> None:
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    registry.register(job_id, handle)
 
 
-def _run_handles_set(services: ServiceContainer, job_id: str, handle: WorkflowRunHandle) -> None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        handles[job_id] = handle
-
-
-def _run_handles_pop(services: ServiceContainer, job_id: str) -> WorkflowRunHandle | None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        return handles.pop(job_id, None)
+def _run_handles_pop(services: ServiceContainer, job_id: str) -> ThreadedJobHandle | None:
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    handle = registry.pop(job_id)
+    return handle if isinstance(handle, ThreadedJobHandle) else None
 
 
 def cancel_workflow_run(services: ServiceContainer, job_id: str) -> None:
-    handles, lock = _ensure_run_handles_state(services)
-    with lock:
-        handle = handles.get(job_id)
-    if handle is not None:
-        handle.cancel_event.set()
+    registry = services.job_handle_registry
+    if registry is None:
+        raise RuntimeError("job_handle_registry_not_configured")
+    registry.cancel(job_id)
 
 
 def _job_record_payload(record: JobRecord) -> dict[str, Any]:
@@ -436,6 +421,23 @@ def start_workflow_run(
         name=f"presto-workflow-run-{job.job_id}",
         daemon=True,
     )
-    _run_handles_set(services, job.job_id, WorkflowRunHandle(cancel_event=cancel_event, worker=worker))
+    _run_handles_set(
+        services,
+        job.job_id,
+        ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability="workflow.run.start"),
+    )
     worker.start()
     return {"jobId": job.job_id, "capability": "workflow.run.start", "state": "queued"}
+
+
+def start_workflow_run_payload(
+    ctx: CapabilityExecutionContext,
+    payload: dict[str, Any],
+    *,
+    invoke_capability: Callable[[str, dict[str, Any]], Any],
+) -> dict[str, Any]:
+    return start_workflow_run(
+        runtime_from_context(ctx),
+        payload,
+        invoke_capability=invoke_capability,
+    )

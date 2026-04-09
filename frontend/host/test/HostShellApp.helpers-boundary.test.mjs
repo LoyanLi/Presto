@@ -22,3 +22,10 @@ test('HostShellApp passes the current resolved locale into DAW status polling', 
   assert.match(source, /useDawStatusPolling\(\{[\s\S]*resolvedLocale,\s*[\s\S]*initialSnapshot:/)
   assert.doesNotMatch(source, /resolvedLocale:\s*initialResolvedLocale/)
 })
+
+test('HostShellApp delegates shell navigation state to a dedicated navigation hook', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /from '\.\/useHostShellNavigationState'/)
+  assert.doesNotMatch(source, /useState<HostShellViewId>\(\(\) => state\.shellViewId\)/)
+})

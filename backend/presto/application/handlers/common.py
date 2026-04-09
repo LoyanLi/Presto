@@ -1,9 +1,50 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
-from ..service_container import ServiceContainer
 from ...domain.errors import PrestoError, PrestoValidationError
+from ...domain.jobs import JobManagerProtocol
+from ...domain.ports import (
+    CapabilityExecutionContext,
+    ConfigStorePort,
+    DawAdapterPort,
+    DawUiProfilePort,
+    ErrorNormalizerPort,
+    ImportAnalysisStorePort,
+    JobHandleRegistryPort,
+    KeychainStorePort,
+    MacAutomationPort,
+)
+
+
+@dataclass(frozen=True)
+class HandlerRuntime:
+    error_normalizer: ErrorNormalizerPort
+    target_daw: str
+    job_manager: JobManagerProtocol
+    import_analysis_store: ImportAnalysisStorePort
+    job_handle_registry: JobHandleRegistryPort
+    daw: DawAdapterPort | None
+    mac_automation: MacAutomationPort | None
+    daw_ui_profile: DawUiProfilePort | None
+    config_store: ConfigStorePort | None
+    keychain_store: KeychainStorePort | None
+
+
+def runtime_from_context(ctx: CapabilityExecutionContext) -> HandlerRuntime:
+    return HandlerRuntime(
+        error_normalizer=ctx.error_normalizer,
+        target_daw=str(ctx.target_daw),
+        job_manager=ctx.jobs,
+        import_analysis_store=ctx.import_analysis_store,
+        job_handle_registry=ctx.job_handle_registry,
+        daw=ctx.daw,
+        mac_automation=ctx.mac_automation,
+        daw_ui_profile=ctx.daw_ui_profile,
+        config_store=ctx.config_store,
+        keychain_store=ctx.keychain_store,
+    )
 
 
 def validation_error(message: str, *, field: str, capability: str) -> PrestoValidationError:
@@ -18,31 +59,31 @@ def validation_error(message: str, *, field: str, capability: str) -> PrestoVali
     )
 
 
-def get_daw(services: ServiceContainer, capability_id: str) -> Any:
-    if services.daw is None:
+def get_daw(ctx: CapabilityExecutionContext, capability_id: str) -> Any:
+    if ctx.daw is None:
         raise PrestoError(
             "DAW_UNAVAILABLE",
             "DAW adapter is not configured.",
             source="runtime",
             retryable=False,
             capability=capability_id,
-            adapter=str(services.target_daw),
+            adapter=str(ctx.target_daw),
             details={
                 "rawCode": "DAW_UNAVAILABLE",
                 "rawMessage": "DAW adapter is not configured.",
             },
         )
-    return services.daw
+    return ctx.daw
 
 
 def ensure_daw_connected(
-    services: ServiceContainer,
+    ctx: CapabilityExecutionContext,
     capability_id: str,
     payload: dict[str, Any],
     *,
     raise_on_error: bool,
 ) -> Any:
-    daw = get_daw(services, capability_id)
+    daw = get_daw(ctx, capability_id)
     is_connected = getattr(daw, "is_connected", None)
     already_connected = bool(is_connected()) if callable(is_connected) else False
     if already_connected:
@@ -65,8 +106,8 @@ def ensure_daw_connected(
     return daw
 
 
-def safe_connection_status(services: ServiceContainer) -> Any | None:
-    daw = services.daw
+def safe_connection_status(ctx: CapabilityExecutionContext) -> Any | None:
+    daw = ctx.daw
     if daw is None:
         return None
 

@@ -20,7 +20,7 @@ test('package.json exposes Presto release metadata through the Tauri build chain
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
   const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri/tauri.conf.json'), 'utf8'))
 
-  assert.match(packageJson.version, /^0\.3\.4(?:-[0-9A-Za-z.-]+)?$/)
+  assert.match(packageJson.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
   assert.equal(packageJson.author, 'Luminous Layers')
   assert.equal(packageJson.scripts?.['tauri:prepare:python'], 'node scripts/prepare-tauri-python.mjs')
   assert.equal(packageJson.scripts?.['tauri:prepare:resources'], 'node scripts/prepare-tauri-resources.mjs')
@@ -130,6 +130,7 @@ test('tauri packaging script syncs staged runtime resources into the app bundle 
 test('package.json no longer exposes Electron build and packaging scripts', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
 
+  assert.doesNotMatch(packageJson.scripts?.['test:node'] ?? '', /frontend\/electron\/test/)
   assert.equal(packageJson.scripts?.['stage1:build'], undefined)
   assert.equal(packageJson.scripts?.['stage1:start'], undefined)
   assert.equal(packageJson.scripts?.['package:mac:prepare'], undefined)
@@ -142,6 +143,9 @@ test('package.json no longer exposes Electron build and packaging scripts', asyn
 })
 
 test('formal desktop runtime entrypoints no longer depend on Electron-only host files', async () => {
+  assert.equal(await exists('frontend/electron'), false)
+  assert.equal(await exists('frontend/sidecar'), false)
+  assert.equal(await exists('frontend/runtime'), false)
   assert.equal(await exists('frontend/electron/main.mjs'), false)
   assert.equal(await exists('frontend/electron/preload.ts'), false)
   assert.equal(await exists('frontend/electron/build-stage1.mjs'), false)

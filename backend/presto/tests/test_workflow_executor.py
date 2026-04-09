@@ -5,8 +5,11 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from presto.application.capabilities.registry import build_default_capability_registry
 from presto.application.errors.normalizer import ErrorNormalizer
+from presto.application.handlers import invoker as invoker_module
 from presto.application.handlers.invoker import execute_capability
 from presto.application.jobs.manager import InMemoryJobManager
 from presto.application.service_container import ServiceContainer
@@ -310,3 +313,51 @@ def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_f
     record = services.job_manager.get(job_id)
     assert record.state == "succeeded"
     assert services.daw.renames == [("Kick", "Kick In"), ("Snare", "Snare Top")]
+
+
+def test_workflow_run_start_propagates_request_id_to_nested_capability(monkeypatch: pytest.MonkeyPatch) -> None:
+    services = _services()
+    seen_request_ids: list[str] = []
+
+    def _record_handler(ctx, payload):
+        seen_request_ids.append(ctx.request_id)
+        return {"ok": True, "payload": payload}
+
+    monkeypatch.setitem(invoker_module.HANDLER_BINDINGS, "system.health", _record_handler)
+
+    accepted = execute_capability(
+        services,
+        "workflow.run.start",
+        {
+            "pluginId": "official.import-workflow",
+            "workflowId": "test.workflow.request-id",
+            "definition": {
+                "workflowId": "test.workflow.request-id",
+                "version": "1.0.0",
+                "inputSchemaId": "test.workflow.input.v1",
+                "steps": [
+                    {
+                        "stepId": "probe",
+                        "usesCapability": "system.health",
+                        "input": {},
+                        "saveAs": "probe",
+                    }
+                ],
+            },
+            "allowedCapabilities": ["system.health"],
+            "input": {},
+        },
+        request_id="req-workflow-parent",
+    )
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        if services.job_manager.get(accepted["jobId"]).state in {"succeeded", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow job did not finish in time")
+
+    assert seen_request_ids == ["req-workflow-parent"]
+    assert hasattr(services, "workflow_run_handles") is False
+    assert hasattr(services, "workflow_run_handles_lock") is False

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .common import ensure_daw_connected, get_daw, validation_error
-from ..service_container import ServiceContainer
+from ...domain.ports import CapabilityExecutionContext
 
 
 def split_address(address: str) -> tuple[str, int]:
@@ -13,8 +13,8 @@ def split_address(address: str) -> tuple[str, int]:
     return address, 31416
 
 
-def connect_daw_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = get_daw(services, "daw.connection.connect")
+def connect_daw_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = get_daw(ctx, "daw.connection.connect")
     host = payload.get("host")
     port = payload.get("port")
     timeout_seconds = payload.get("timeoutSeconds")
@@ -28,14 +28,15 @@ def connect_daw_payload(services: ServiceContainer, payload: dict[str, Any]) -> 
     return {"connected": bool(connected), "host": resolved_host, "port": resolved_port}
 
 
-def disconnect_daw_payload(services: ServiceContainer) -> dict[str, Any]:
-    daw = get_daw(services, "daw.connection.disconnect")
+def disconnect_daw_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    del payload
+    daw = get_daw(ctx, "daw.connection.disconnect")
     daw.disconnect()
     return {"disconnected": True}
 
 
-def transport_status_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "transport.getStatus", payload, raise_on_error=True)
+def transport_status_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "transport.getStatus", payload, raise_on_error=True)
     status = daw.get_transport_status()
     return {
         "transport": {
@@ -46,27 +47,27 @@ def transport_status_payload(services: ServiceContainer, payload: dict[str, Any]
     }
 
 
-def play_transport_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "transport.play", payload, raise_on_error=True)
+def play_transport_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "transport.play", payload, raise_on_error=True)
     daw.play()
     return {"started": True}
 
 
-def stop_transport_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "transport.stop", payload, raise_on_error=True)
+def stop_transport_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "transport.stop", payload, raise_on_error=True)
     daw.stop()
     return {"stopped": True}
 
 
-def record_transport_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(services, "transport.record", payload, raise_on_error=True)
+def record_transport_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    daw = ensure_daw_connected(ctx, "transport.record", payload, raise_on_error=True)
     daw.record()
     return {"recording": True}
 
 
-def export_range_set_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def export_range_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "export.range.set"
-    daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
+    daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     in_time = str(payload.get("inTime", "")).strip()
     out_time = str(payload.get("outTime", "")).strip()
     if not in_time:
@@ -77,9 +78,9 @@ def export_range_set_payload(services: ServiceContainer, payload: dict[str, Any]
     return {"selection": {"inTime": selection[0], "outTime": selection[1]}}
 
 
-def export_mix_with_source_payload(services: ServiceContainer, payload: dict[str, Any]) -> dict[str, Any]:
+def export_mix_with_source_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "export.mixWithSource"
-    daw = ensure_daw_connected(services, capability_id, payload, raise_on_error=True)
+    daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     source_type = str(payload.get("sourceType") or payload.get("source_type") or "").strip()
     if not source_type:
         raise validation_error("sourceType is required.", field="sourceType", capability=capability_id)

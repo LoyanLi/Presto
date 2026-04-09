@@ -1,3 +1,5 @@
+import type { DawTarget, SchemaRef } from '@presto/contracts'
+
 export interface BackendLogEntry {
   id: string
   timestamp: string
@@ -41,11 +43,11 @@ export interface BackendCapabilityDefinition {
   domain: string
   visibility: string
   description: string
-  requestSchema: string
-  responseSchema: string
+  requestSchema: SchemaRef
+  responseSchema: SchemaRef
   dependsOn: string[]
-  supportedDaws: string[]
-  canonicalSource: string
+  supportedDaws: DawTarget[]
+  canonicalSource: DawTarget
   fieldSupport: Record<string, BackendCapabilityFieldSupport>
   handler: string
   emitsEvents: string[]

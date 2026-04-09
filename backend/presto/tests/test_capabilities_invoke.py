@@ -5,6 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from presto.main_api import create_app
+from presto.application.handlers import invoker as invoker_module
+from presto.application.handlers.invoker import execute_capability
+from presto.domain.errors import CapabilityNotFoundError, PrestoError, PrestoValidationError
 from presto.transport.http.routes.capabilities import get_capability, list_capabilities
 from presto.transport.http.routes.health import health
 from presto.transport.http.routes.invoke import invoke_capability
@@ -20,6 +23,7 @@ class DummyRequest(SimpleNamespace):
 class FakeDawAdapter:
     def __init__(self) -> None:
         self.connected = False
+        self.connect_calls = 0
         self.connection_host: str | None = None
         self.connection_port: int | None = None
         self.import_calls: list[list[str]] = []
@@ -94,6 +98,7 @@ class FakeDawAdapter:
 
     def connect(self, host: str | None = None, port: int | None = None, timeout_seconds: int | None = None) -> bool:
         _ = timeout_seconds
+        self.connect_calls += 1
         self.connected = True
         self.connection_host = host
         self.connection_port = port
@@ -466,30 +471,117 @@ def test_invoke_system_health_returns_backend_status() -> None:
     assert response.capability == "system.health"
     assert response.data == {
         "backendReady": True,
-        "dawConnected": True,
+        "dawConnected": False,
         "activeDaw": "pro_tools",
     }
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_health_route_returns_live_backend_status() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = health(request)
+
+    assert response.backend_ready is True
+    assert response.daw_connected is False
+    assert response.active_daw == "pro_tools"
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_execute_capability_passes_request_id_into_execution_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app_with_fake_daw()
+    seen: dict[str, object] = {}
+
+    def _handler(ctx, payload):
+        seen["request_id"] = ctx.request_id
+        seen["target_daw"] = ctx.target_daw
+        seen["payload"] = payload
+        return {"requestId": ctx.request_id}
+
+    monkeypatch.setitem(invoker_module.HANDLER_BINDINGS, "system.health", _handler)
+
+    result = execute_capability(
+        app.state.services,
+        "system.health",
+        {},
+        request_id="req-context-1",
+    )
+
+    assert result == {"requestId": "req-context-1"}
+    assert seen == {
+        "request_id": "req-context-1",
+        "target_daw": "pro_tools",
+        "payload": {},
+    }
+
+
+def test_jobs_cancel_is_dispatched_through_execution_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app_with_fake_daw()
+    seen: dict[str, object] = {}
+
+    def _handler(ctx, payload):
+        seen["request_id"] = ctx.request_id
+        seen["payload"] = payload
+        return {"cancelled": True, "jobId": str(payload.get("jobId", ""))}
+
+    monkeypatch.setitem(invoker_module.HANDLER_BINDINGS, "jobs.cancel", _handler)
+
+    response = invoke_capability(
+        DummyRequest(app=app),
+        CapabilityInvokeRequestSchema(
+            requestId="req-jobs-cancel-context",
+            capability="jobs.cancel",
+            payload={"jobId": "job-ctx-1"},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data == {"cancelled": True, "jobId": "job-ctx-1"}
+    assert seen == {
+        "request_id": "req-jobs-cancel-context",
+        "payload": {"jobId": "job-ctx-1"},
+    }
+
+
+def test_handler_bindings_are_direct_context_handlers() -> None:
+    assert callable(invoker_module.HANDLER_BINDINGS["system.health"])
 
 
 def test_invoke_unknown_capability_returns_normalized_error() -> None:
     app = create_app()
     request = DummyRequest(app=app)
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId="req-2",
-            capability="unknown.capability",
-            payload={},
-        ),
-    )
+    with pytest.raises(CapabilityNotFoundError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-2",
+                capability="unknown.capability",
+                payload={},
+            ),
+        )
 
-    assert response.success is False
-    assert response.requestId == "req-2"
-    assert response.capability == "unknown.capability"
-    assert response.error.code == "VALIDATION_ERROR"
-    assert response.error.capability == "unknown.capability"
-    assert response.error.details["capability_id"] == "unknown.capability"
+    payload = app.state.services.error_normalizer.normalize(exc_info.value, capability="unknown.capability")
+
+    assert payload.code == "VALIDATION_ERROR"
+    assert payload.capability == "unknown.capability"
+    assert payload.details["capability_id"] == "unknown.capability"
+
+
+def test_invoke_unknown_capability_bubbles_to_app_exception_handler() -> None:
+    app = create_app()
+    request = DummyRequest(app=app)
+
+    with pytest.raises(CapabilityNotFoundError):
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-http-404",
+                capability="unknown.capability",
+                payload={},
+            ),
+        )
 
 
 def test_invoke_daw_connection_get_status_returns_live_shape() -> None:
@@ -507,9 +599,10 @@ def test_invoke_daw_connection_get_status_returns_live_shape() -> None:
 
     assert response.success is True
     assert response.data == {
-        "connected": True,
+        "connected": False,
         "targetDaw": "pro_tools",
     }
+    assert app.state.services.daw.connect_calls == 0
 
 
 def test_invoke_daw_adapter_get_snapshot_returns_capability_snapshot() -> None:
@@ -934,18 +1027,18 @@ def test_invoke_split_stereo_to_mono_execute_rejects_non_stereo_selection() -> N
     app.state.services.daw.selected_tracks = ["Snare"]
     request = DummyRequest(app=app)
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId="req-automation-split-mono",
-            capability="automation.splitStereoToMono.execute",
-            payload={"keepChannel": "left"},
-        ),
-    )
+    with pytest.raises(PrestoError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-automation-split-mono",
+                capability="automation.splitStereoToMono.execute",
+                payload={"keepChannel": "left"},
+            ),
+        )
 
-    assert response.success is False
-    assert response.error.code == "TRACK_SELECTION_INVALID"
-    assert response.error.capability == "automation.splitStereoToMono.execute"
+    assert exc_info.value.code == "TRACK_SELECTION_INVALID"
+    assert exc_info.value.capability == "automation.splitStereoToMono.execute"
 
 
 def test_invoke_split_stereo_to_mono_execute_runs_batch_flow_for_multiple_selected_stereo_tracks() -> None:
@@ -1091,19 +1184,19 @@ def test_deleted_public_capabilities_are_not_invokable(capability_id: str) -> No
     app = _app_with_fake_daw_and_config()
     request = DummyRequest(app=app)
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId=f"req-{capability_id}",
-            capability=capability_id,
-            payload={},
-        ),
-    )
+    with pytest.raises(CapabilityNotFoundError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId=f"req-{capability_id}",
+                capability=capability_id,
+                payload={},
+            ),
+        )
 
-    assert response.success is False
-    assert response.error.code == "VALIDATION_ERROR"
-    assert response.error.capability == capability_id
-    assert response.error.details["capability_id"] == capability_id
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert exc_info.value.capability == capability_id
+    assert exc_info.value.details["capability_id"] == capability_id
 
 
 def test_invoke_import_run_start_returns_job_for_core_io_import(tmp_path: Path) -> None:
@@ -1272,36 +1365,36 @@ def test_invoke_export_run_start_rejects_mp3_when_multiple_mix_sources_are_selec
     app = _app_with_fake_daw()
     request = DummyRequest(app=app)
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId="req-export-run-start-mp3-multi",
-            capability="export.run.start",
-            payload={
-                "snapshots": [
-                    {
-                        "name": "Verse A",
-                        "trackStates": [
-                            {"trackName": "Kick", "isMuted": True, "isSoloed": False},
-                        ],
-                    }
-                ],
-                "exportSettings": {
-                    "outputPath": "/Users/test/Exports",
-                    "filePrefix": "Mix_",
-                    "fileFormat": "mp3",
-                    "mixSources": [
-                        {"name": "Out 1-2", "type": "physicalOut"},
-                        {"name": "Bus 1-2", "type": "bus"},
+    with pytest.raises(PrestoValidationError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-export-run-start-mp3-multi",
+                capability="export.run.start",
+                payload={
+                    "snapshots": [
+                        {
+                            "name": "Verse A",
+                            "trackStates": [
+                                {"trackName": "Kick", "isMuted": True, "isSoloed": False},
+                            ],
+                        }
                     ],
-                    "onlineExport": False,
+                    "exportSettings": {
+                        "outputPath": "/Users/test/Exports",
+                        "filePrefix": "Mix_",
+                        "fileFormat": "mp3",
+                        "mixSources": [
+                            {"name": "Out 1-2", "type": "physicalOut"},
+                            {"name": "Bus 1-2", "type": "bus"},
+                        ],
+                        "onlineExport": False,
+                    },
                 },
-            },
-        ),
-    )
+            ),
+        )
 
-    assert response.success is False
-    assert response.error.details["field"] == "exportSettings.mixSources"
+    assert exc_info.value.details["field"] == "exportSettings.mixSources"
 
 
 def test_invoke_jobs_create_returns_placeholder_job() -> None:
@@ -1417,27 +1510,27 @@ def test_invoke_jobs_create_rejects_invalid_progress_numbers_with_validation_err
     app = _app_with_fake_daw()
     request = DummyRequest(app=app)
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId="req-jobs-create-invalid-progress",
-            capability="jobs.create",
-            payload={
-                "capability": "jobs.create",
-                "targetDaw": "pro_tools",
-                "progress": {
-                    "phase": "queued",
-                    "current": "bad-int",
-                    "total": 1,
+    with pytest.raises(PrestoValidationError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-jobs-create-invalid-progress",
+                capability="jobs.create",
+                payload={
+                    "capability": "jobs.create",
+                    "targetDaw": "pro_tools",
+                    "progress": {
+                        "phase": "queued",
+                        "current": "bad-int",
+                        "total": 1,
+                    },
                 },
-            },
-        ),
-    )
+            ),
+        )
 
-    assert response.success is False
-    assert response.error.code == "VALIDATION_ERROR"
-    assert response.error.capability == "jobs.create"
-    assert response.error.details["field"] == "progress.current"
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert exc_info.value.capability == "jobs.create"
+    assert exc_info.value.details["field"] == "progress.current"
 
 
 def test_invoke_jobs_update_rejects_invalid_progress_numbers_with_validation_error() -> None:
@@ -1455,27 +1548,27 @@ def test_invoke_jobs_update_rejects_invalid_progress_numbers_with_validation_err
         ),
     )
 
-    response = invoke_capability(
-        request,
-        CapabilityInvokeRequestSchema(
-            requestId="req-jobs-update-invalid-progress",
-            capability="jobs.update",
-            payload={
-                "jobId": created.data["job"]["jobId"],
-                "progress": {
-                    "phase": "running",
-                    "current": 1,
-                    "total": 2,
-                    "percent": "bad-float",
+    with pytest.raises(PrestoValidationError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-jobs-update-invalid-progress",
+                capability="jobs.update",
+                payload={
+                    "jobId": created.data["job"]["jobId"],
+                    "progress": {
+                        "phase": "running",
+                        "current": 1,
+                        "total": 2,
+                        "percent": "bad-float",
+                    },
                 },
-            },
-        ),
-    )
+            ),
+        )
 
-    assert response.success is False
-    assert response.error.code == "VALIDATION_ERROR"
-    assert response.error.capability == "jobs.update"
-    assert response.error.details["field"] == "progress.percent"
+    assert exc_info.value.code == "VALIDATION_ERROR"
+    assert exc_info.value.capability == "jobs.update"
+    assert exc_info.value.details["field"] == "progress.percent"
 
 
 def test_invoke_session_get_snapshot_info_returns_snapshot_statistics() -> None:
@@ -1742,7 +1835,7 @@ def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:
 
 
 def test_health_route_unchanged() -> None:
-    app = create_app()
+    app = _app_with_fake_daw()
     request = DummyRequest(app=app)
 
     response = health(request)
@@ -1752,3 +1845,4 @@ def test_health_route_unchanged() -> None:
         "daw_connected": False,
         "active_daw": "pro_tools",
     }
+    assert app.state.services.daw.connect_calls == 0

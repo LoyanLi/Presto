@@ -111,9 +111,7 @@
       "package": "@presto/contracts",
       "version": 1
     },
-    "dependsOn": [
-      "daw"
-    ],
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
@@ -146,9 +144,7 @@
       "package": "@presto/contracts",
       "version": 1
     },
-    "dependsOn": [
-      "daw"
-    ],
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
@@ -407,9 +403,7 @@
       "package": "@presto/contracts",
       "version": 1
     },
-    "dependsOn": [
-      "daw"
-    ],
+    "dependsOn": [],
     "supportedDaws": [
       "pro_tools"
     ],
@@ -1034,7 +1028,7 @@
         ]
       }
     },
-    "handler": "track.inactive.set"
+    "handler": "track.open.set"
   },
   {
     "id": "clip.selectAllOnTrack",
@@ -1369,6 +1363,7 @@
       "version": 1
     },
     "dependsOn": [
+      "mac_automation",
       "daw_ui_profile"
     ],
     "supportedDaws": [
@@ -1402,7 +1397,7 @@
     },
     "dependsOn": [
       "mac_automation",
-      "daw"
+      "daw_ui_profile"
     ],
     "supportedDaws": [
       "pro_tools"
@@ -1789,6 +1784,7 @@
       "version": 1
     },
     "dependsOn": [
+      "mac_automation",
       "daw_ui_profile"
     ],
     "supportedDaws": [

@@ -126,9 +126,10 @@ test('host runtime preferences write shell preferences back into config without 
   )
 })
 
-test('HostShellApp hydrates and persists shell preferences through backend config instead of local-only storage', async () => {
+test('HostShellApp delegates preference hydration and persistence through a dedicated state hook', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
 
-  assert.match(source, /developerPresto\.config\.get\(\)/)
-  assert.match(source, /developerPresto\.config\.update\(/)
+  assert.match(source, /from '\.\/useHostShellPreferencesState'/)
+  assert.doesNotMatch(source, /developerPresto\.config\.get\(\)/)
+  assert.doesNotMatch(source, /developerPresto\.config\.update\(/)
 })

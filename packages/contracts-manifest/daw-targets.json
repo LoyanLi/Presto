@@ -1,0 +1,4 @@
+{
+  "reserved": ["pro_tools", "logic", "cubase", "nuendo"],
+  "supported": ["pro_tools"]
+}

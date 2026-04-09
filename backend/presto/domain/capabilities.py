@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, Literal
 
+from .daw_targets_generated import DawTarget, DEFAULT_DAW_TARGET, RESERVED_DAW_TARGETS, SUPPORTED_DAW_TARGETS
+
 
 CapabilityKind = Literal["query", "command", "job"]
 CapabilityVisibility = Literal["public", "internal"]
@@ -31,10 +33,8 @@ CapabilityDependency = Literal[
     "mac_automation",
     "daw_ui_profile",
 ]
-DawTarget = Literal["pro_tools", "logic", "cubase", "nuendo"]
 
 CAPABILITY_PACKAGE = "@presto/contracts"
-DEFAULT_DAW_TARGET: DawTarget = "pro_tools"
 
 
 @dataclass(frozen=True)

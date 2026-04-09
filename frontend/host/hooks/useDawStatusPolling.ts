@@ -5,6 +5,7 @@ import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { formatHostErrorMessage } from '../errorDisplay'
 import { translateHost } from '../i18n'
+import { dawLabel } from '../hostShellHelpers'
 
 type HostDawStatusState = {
   connected: boolean
@@ -151,12 +152,4 @@ export function useDawStatusPolling({
     dawRefreshKey,
     ...triggerRefresh,
   }
-}
-
-function dawLabel(target: DawTarget): string {
-  if (target === 'pro_tools') {
-    return 'Pro Tools'
-  }
-
-  return target
 }

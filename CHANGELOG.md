@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.5
+
+- 后端引入 `backend/presto/application/daw_runtime.py` 作为 DAW 运行时依赖解析入口，`build_service_container()` 通过 `target_daw` 统一解析 `daw`、`mac_automation` 和 `daw_ui_profile`，为后续多 DAW 扩展保留清晰接缝，但当前仍只接通 `pro_tools`。
+- DAW target 列表进入 `packages/contracts-manifest/daw-targets.json`，并生成 TypeScript / Python / Rust 三端共享产物，消除跨语言手写 target 常量漂移。
+- capability 执行链收口为“capability definition -> direct handler registry -> single execution context”，减少后端 handler 分发绕行。
+- React Host 进一步拆分为明确边界：`HostShellApp` 负责界面组合，偏好状态和导航状态分别下沉到独立 hook，桌面插件目录装配下沉到 `frontend/desktop/useHostPluginCatalogState.ts`。
+- 修复 `backend.daw-target.set` 只停后端不重启的问题，切换目标 DAW 现在会原子执行 `stop -> set target -> start -> wait ready`。
+- 修复插件目录刷新失败后继续保留旧插件状态的问题，失败时会清空旧 entries 并替换成干净的 error model。
+- 删除 `frontend/electron/`、`frontend/sidecar/`、`frontend/runtime/` 历史路径，并把自动化资源主路径统一到 `frontend/tauri/resources/automation/`。
+- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.5`。
+
 ## 0.3.4
 
 - 修复 Tauri 正式打包链在生成 `.app` 后没有把 `backend`、`frontend`、`plugins` 资源同步进最终 bundle 的问题，避免出现能打包成功但安装包实际缺少运行时资源的空壳 App。

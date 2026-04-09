@@ -1,9 +1,36 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from .capabilities import CapabilityRegistryProtocol, DawTarget
 from .jobs import JobManagerProtocol
+
+
+class ImportAnalysisStorePort(Protocol):
+    hits: int
+    misses: int
+
+    def get_or_set(self, key: str, builder: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        ...
+
+
+class JobExecutionHandlePort(Protocol):
+    def cancel(self) -> None:
+        ...
+
+
+class JobHandleRegistryPort(Protocol):
+    def register(self, job_id: str, handle: JobExecutionHandlePort) -> None:
+        ...
+
+    def get(self, job_id: str) -> JobExecutionHandlePort | None:
+        ...
+
+    def pop(self, job_id: str) -> JobExecutionHandlePort | None:
+        ...
+
+    def cancel(self, job_id: str) -> bool:
+        ...
 
 
 class ConfigStorePort(Protocol):
@@ -71,19 +98,33 @@ class LoggerPort(Protocol):
         ...
 
 
+class ErrorNormalizerPort(Protocol):
+    def normalize(
+        self,
+        error: Exception,
+        *,
+        capability: str | None = None,
+        adapter: str | None = None,
+    ) -> Any:
+        ...
+
+
 class CapabilityExecutionContext(Protocol):
     request_id: str
+    backend_ready: bool
     target_daw: DawTarget
     registry: CapabilityRegistryProtocol
     jobs: JobManagerProtocol
-    config_store: ConfigStorePort
-    keychain_store: KeychainStorePort
+    config_store: ConfigStorePort | None
+    keychain_store: KeychainStorePort | None
+    import_analysis_store: ImportAnalysisStorePort
+    job_handle_registry: JobHandleRegistryPort
     ai_service: AiServicePort | None
     daw: DawAdapterPort | None
     mac_automation: MacAutomationPort | None
     daw_ui_profile: DawUiProfilePort | None
-    logger: LoggerPort
+    logger: LoggerPort | None
+    error_normalizer: ErrorNormalizerPort
 
     def now(self) -> str:
         ...
-
