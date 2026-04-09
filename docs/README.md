@@ -12,7 +12,7 @@
 
 ## 如何选入口
 
-如果你要改宿主、sidecar、后端、contracts、通信边界，先读：
+如果你要改宿主、Rust runtime、后端、contracts、通信边界，先读：
 
 1. [内核开发总览](kernel-development/README.md)
 2. [架构总览](kernel-development/architecture-overview.md)

@@ -3,7 +3,10 @@
 ## 0.3.4
 
 - 修复 Tauri 正式打包链在生成 `.app` 后没有把 `backend`、`frontend`、`plugins` 资源同步进最终 bundle 的问题，避免出现能打包成功但安装包实际缺少运行时资源的空壳 App。
-- `arm64` 正式安装包体积回到真实值区间，当前验证结果约为 `90M .app / 27M .dmg`。
+- 修复 Tauri Rust runtime 的本地 HTTP 健康检查实现，避免后端已经启动成功后又被宿主误判失败并清理，导致主页面之外的功能全部不可用。
+- Tauri 启动链改为单窗口启动，移除独立 splashscreen 窗口，主窗口直接承载启动壳层。
+- 文档与技术文档基线统一更新到当前真实架构：正式发布路径是 `Tauri + Rust runtime + React + Python FastAPI`，不再把 Node sidecar 写成 Tauri 主线事实。
+- `0.3.4` 双架构正式安装包已完成验证：`arm64` 约 `79.8M .app / 27.1M .dmg`，`x64` 约 `81.0M .app / 27.4M .dmg`。
 - 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.4`。
 
 ## 0.3.3

@@ -61,7 +61,7 @@ const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'
 const productName = tauriConfig.productName
 const version = packageJson.version
 const artifactArch = resolveArtifactArch(targetTriple)
-const targetReleaseRoot = path.join(repoRoot, 'src-tauri', 'target', targetTriple, 'release')
+const stagedResourcesRoot = path.join(repoRoot, 'src-tauri', 'resources')
 const bundleRoot = path.join(repoRoot, 'src-tauri', 'target', targetTriple, 'release', 'bundle')
 const appPath = path.join(bundleRoot, 'macos', `${productName}.app`)
 const dmgDir = path.join(bundleRoot, 'dmg')
@@ -107,7 +107,7 @@ async function syncBundledResources(appBundlePath) {
   const resourcesRoot = path.join(appBundlePath, 'Contents', 'Resources')
 
   for (const resourceName of ['backend', 'frontend', 'plugins']) {
-    const stagedResourcePath = path.join(targetReleaseRoot, resourceName)
+    const stagedResourcePath = path.join(stagedResourcesRoot, resourceName)
     const bundledResourcePath = path.join(resourcesRoot, resourceName)
 
     await rm(bundledResourcePath, { recursive: true, force: true })

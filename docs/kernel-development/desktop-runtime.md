@@ -1,6 +1,6 @@
 # 桌面运行时
 
-本文档聚焦桌面宿主层，也就是 `Tauri + Node sidecar + React host` 这一段。
+本文档聚焦桌面宿主层，也就是 `Tauri + Rust runtime + React host` 这一段。
 
 ## 1. 宿主根节点
 
@@ -9,39 +9,39 @@
 它负责：
 
 - 创建 Tauri 应用
-- 启动 sidecar 进程
 - 暴露统一 command：`runtime_invoke`
-- 处理一部分桌面能力，如打开系统路径、打开外链、目录选择、文件系统操作
+- 初始化运行时状态
+- 处理桌面能力、插件管理、自动化入口、日志和后端监督
 
-这里最关键的事实是：Rust 宿主只保留桌面壳和命令入口，不直接承担完整业务编排。
+这里最关键的事实是：Rust 宿主不只是桌面壳。当前 Tauri 正式发布路径里，桌面运行时主逻辑已经直接实现在 Rust runtime。
 
-## 2. Sidecar 是什么
+## 2. Rust runtime 是什么
 
-当前 sidecar 入口在 `frontend/sidecar/main.ts`。
+当前桌面运行时实现入口在 `src-tauri/src/runtime.rs`。
 
 它负责装配这些运行时对象：
 
-- `createBackendSupervisor(...)`
-- `createPluginHostService(...)`
-- `createAutomationRuntime(...)`
-- `createMacAccessibilityRuntime(...)`
-- `createMobileProgressRuntimeController(...)`
+- backend supervisor
+- plugin catalog / install / uninstall / enable
+- automation definition list / run
+- mac accessibility preflight / execute
+- mobile progress session
 - 应用日志存储
 
-sidecar 的职责是业务宿主装配，而不是 UI 渲染。
+Rust runtime 的职责是桌面业务宿主装配，而不是 UI 渲染。
 
-当前 sidecar 也负责运行时日志落盘：
+当前 Rust runtime 也负责运行时日志落盘：
 
 - 日志目录位于应用数据目录下的 `logs/`
 - 每次应用启动生成一个新的 `presto-<timestamp>.log`
 - 主日志行优先记录真实错误原因，只有额外上下文才追加紧凑 JSON
 - `macAccessibility` 相关运行时失败如果命中辅助功能权限缺失，会被统一归类成 `MAC_ACCESSIBILITY_PERMISSION_REQUIRED`
-- sidecar 会把 `automation.definition.run`、`mac-accessibility.script.run`、`mac-accessibility.file.run` 这三类入口统一包进权限引导逻辑，而不是把原始 `osascript` 权限错误直接抛回上层
+- `automation.definition.run`、`mac-accessibility.script.run`、`mac-accessibility.file.run` 这三类入口都会走同一套权限引导逻辑，而不是把原始 `osascript` 权限错误直接抛回上层
 
-打包态 sidecar 还依赖两条关键环境事实：
+打包态 runtime 还依赖两条关键环境事实：
 
-- Rust 宿主会注入 `PRESTO_RESOURCES_DIR`，sidecar 由此解析 bundled backend、官方插件和自动化定义目录。
-- `frontend/runtime/backendSupervisor.ts` 在选择 bundled Python runtime 时，会同时把 `PYTHONHOME` 指向包内 `Python.framework/Versions/3.13`，避免回退到用户机器本地 Python framework。
+- Rust runtime 会优先从 bundle 内 `backend/`、`frontend/`、`plugins/` 解析运行时资源；开发态则直接回退到仓库根目录。
+- Rust runtime 在选择 bundled Python runtime 时，会同时把 `PYTHONHOME` 指向包内 `Python.framework/Versions/3.13`，避免回退到用户机器本地 Python framework。
 
 ## 3. Renderer 怎样访问宿主
 
@@ -55,7 +55,7 @@ Renderer 侧的关键入口是：
 
 1. Renderer 使用类型化 operation 表
 2. 通过 Tauri `invoke('runtime_invoke', ...)` 发起调用
-3. Rust 宿主把请求转发给 sidecar 或直接执行部分宿主操作
+3. Rust runtime 直接执行宿主操作，或把 capability 请求转发给本地 FastAPI
 4. Renderer 得到结构化返回值
 
 当前已组织好的 runtime 领域包括：
@@ -74,11 +74,11 @@ Renderer 侧的关键入口是：
 其中 `macAccessibility` 当前还有两个明确事实：
 
 - React Host 在应用启动时会主动调用 `developerRuntime.macAccessibility.preflight()` 做一次预检。
-- 如果缺少 macOS Accessibility 权限，宿主弹窗和 sidecar 运行时弹窗都会给出同一条引导：去 `System Settings > Privacy & Security > Accessibility` 为 Presto 授权。
+- 如果缺少 macOS Accessibility 权限，宿主弹窗和运行时弹窗都会给出同一条引导：去 `System Settings > Privacy & Security > Accessibility` 为 Presto 授权。
 
 ## 4. Backend Supervisor 在桌面侧的位置
 
-`frontend/runtime/backendSupervisor.ts` 负责把 Python FastAPI 后端当作本地受控服务来管理。
+`src-tauri/src/runtime.rs` 负责把 Python FastAPI 后端当作本地受控服务来管理。
 
 它会处理：
 
@@ -100,6 +100,11 @@ Renderer 侧的关键入口是：
 - backend stderr
 - backend 进程退出
 
+`0.3.4` 当前还补上了一条关键事实：
+
+- 健康检查使用 Rust 侧本地 HTTP 请求直接轮询 `/api/v1/health`。
+- 请求实现不能在写完后提前 `shutdown(Write)`；否则 uvicorn 不返回响应，宿主会误以为后端未就绪并主动清理进程。
+
 从 `0.3.3` 起，bundled Python runtime 的打包事实还包括：
 
 - `scripts/prepare-tauri-python.mjs` 会把运行时需要的 `Python.framework`、标准库和动态库依赖一起带入安装包。
@@ -112,7 +117,7 @@ Renderer 侧的关键入口是：
 
 ## 5. 插件宿主服务在桌面侧的位置
 
-`frontend/runtime/pluginHostService.ts` 是 sidecar 中的插件宿主管理器。
+插件宿主管理逻辑当前直接位于 `src-tauri/src/runtime.rs`。
 
 它负责：
 
@@ -143,7 +148,7 @@ Renderer 侧的关键入口是：
 
 ## 7. 当前边界上最容易写错的点
 
-- 当前不是 Electron preload 架构；`Tauri + runtime_invoke + sidecar` 才是主路径。
+- 当前不是 Electron preload 架构；`Tauri + runtime_invoke + Rust runtime` 才是主路径。
 - `sdk-runtime` 是宿主 runtime SDK，不是插件正式 SDK。
 - 插件页面虽然可以通过受限 `host` 请求目录选择，但这不等于插件拿到了通用 `runtime`。
-- sidecar 是业务宿主层，不是后端替身；正式业务能力仍以 FastAPI capability 调用为中心。
+- Rust runtime 是业务宿主层，不是后端替身；正式业务能力仍以 FastAPI capability 调用为中心。

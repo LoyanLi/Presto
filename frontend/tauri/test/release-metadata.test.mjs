@@ -120,7 +120,8 @@ test('tauri packaging script syncs staged runtime resources into the app bundle 
 
   assert.match(packageBuildSource, /async function syncBundledResources\(appBundlePath\)/)
   assert.match(packageBuildSource, /for \(const resourceName of \['backend', 'frontend', 'plugins'\]\)/)
-  assert.match(packageBuildSource, /const stagedResourcePath = path\.join\(targetReleaseRoot,\s*resourceName\)/)
+  assert.match(packageBuildSource, /const stagedResourcesRoot = path\.join\(repoRoot,\s*'src-tauri',\s*'resources'\)/)
+  assert.match(packageBuildSource, /const stagedResourcePath = path\.join\(stagedResourcesRoot,\s*resourceName\)/)
   assert.match(packageBuildSource, /const bundledResourcePath = path\.join\(resourcesRoot,\s*resourceName\)/)
   assert.match(packageBuildSource, /await cp\(stagedResourcePath,\s*bundledResourcePath,\s*\{\s*recursive: true\s*\}\)/)
   assert.match(packageBuildSource, /await syncBundledResources\(appPath\)\s*await run\('node', \['scripts\/inject-macos-app-icon\.mjs', '--app', appPath\]\)/)
