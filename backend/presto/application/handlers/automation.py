@@ -66,11 +66,11 @@ def strip_silence_runtime_error(
         message,
         source="runtime",
         retryable=retryable,
-        details=_raw_error_details(
-            raw_code,
-            raw_message,
+        details={
+            "rawCode": raw_code,
+            "rawMessage": raw_message,
             **details,
-        ),
+        },
         capability=capability,
         adapter="pro_tools",
     )

@@ -14,6 +14,7 @@ from presto.transport.http.routes.invoke import invoke_capability
 from presto.transport.http.schemas.capabilities import CapabilityInvokeRequestSchema
 from presto.application.service_container import build_service_container
 from presto.integrations.daw.base import DawAdapterCapabilitySnapshot, DawConnectionStatus, DawSessionInfo, DawTrackInfo
+from presto.integrations.mac import MacAutomationError
 
 
 class DummyRequest(SimpleNamespace):
@@ -946,6 +947,43 @@ def test_invoke_strip_silence_execute_runs_preflight_and_execute_script() -> Non
     assert response.data == {"completed": True}
     assert app.state.services.mac_automation.scripts == ["preflight", "execute-strip-silence"]
     assert app.state.services.daw_ui_profile.execute_script_calls == 1
+
+
+def test_invoke_strip_silence_execute_wraps_automation_failures_as_presto_error() -> None:
+    app = _app_with_fake_strip_silence()
+    request = DummyRequest(app=app)
+
+    def fail_on_execute(script: str) -> str:
+        app.state.services.mac_automation.scripts.append(script)
+        if script == "execute-strip-silence":
+            raise MacAutomationError(
+                "UI_ACTION_FAILED",
+                "Strip Silence failed.",
+                raw_message="Underlying UI automation failure.",
+                details={"script": script},
+            )
+        return ""
+
+    app.state.services.mac_automation.run_script = fail_on_execute
+
+    with pytest.raises(Exception) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-5d-execute-error",
+                capability="stripSilence.execute",
+                payload={"trackName": "Kick", "profile": {"thresholdDb": -40}},
+            ),
+        )
+
+    assert isinstance(exc_info.value, PrestoError)
+    assert exc_info.value.code == "UI_ACTION_FAILED"
+    assert exc_info.value.message == "Strip Silence failed."
+    assert exc_info.value.details == {
+        "rawCode": "UI_ACTION_FAILED",
+        "rawMessage": "Underlying UI automation failure.",
+        "script": "execute-strip-silence",
+    }
 
 
 def test_invoke_split_stereo_to_mono_execute_runs_dedicated_automation_flow() -> None:
