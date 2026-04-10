@@ -10,6 +10,7 @@
 - 修复插件目录刷新失败后继续保留旧插件状态的问题，失败时会清空旧 entries 并替换成干净的 error model。
 - 删除 `frontend/electron/`、`frontend/sidecar/`、`frontend/runtime/` 历史路径，并把桌面自动化执行主路径统一收口到插件 `automationItems`。
 - 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.5`。
+- `2026-04-10` 已按当前 `0.3.5` 代码基线重打 `arm64` / `x64` 安装包，并刷新发布说明中的产物校验值与体积基线。
 
 ## 0.3.4
 
