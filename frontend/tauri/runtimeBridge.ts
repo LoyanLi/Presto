@@ -16,10 +16,6 @@ const tauriRuntimeOperations = {
     checkForUpdates: 'app.release.check',
     viewLog: 'app.log.view',
   },
-  automation: {
-    listDefinitions: 'automation.definition.list',
-    runDefinition: 'automation.definition.run',
-  },
   backend: {
     getStatus: 'backend.status.get',
     listCapabilities: 'backend.capabilities.list',

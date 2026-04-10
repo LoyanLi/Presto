@@ -7,7 +7,6 @@
     "@presto/contracts": "file:../packages/contracts"
   },
   "exports": {
-    ".": "./index.ts",
     "./browser": "./browser.ts"
   }
 }

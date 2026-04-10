@@ -7,7 +7,6 @@
     ".": "./src/index.ts",
     "./createPrestoRuntime": "./src/createPrestoRuntime.ts",
     "./clients/app": "./src/clients/app.ts",
-    "./clients/automation": "./src/clients/automation.ts",
     "./clients/backend": "./src/clients/backend.ts",
     "./clients/dialog": "./src/clients/dialog.ts",
     "./clients/fs": "./src/clients/fs.ts",

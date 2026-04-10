@@ -8,7 +8,7 @@
 - React Host 进一步拆分为明确边界：`HostShellApp` 负责界面组合，偏好状态和导航状态分别下沉到独立 hook，桌面插件目录装配下沉到 `frontend/desktop/useHostPluginCatalogState.ts`。
 - 修复 `backend.daw-target.set` 只停后端不重启的问题，切换目标 DAW 现在会原子执行 `stop -> set target -> start -> wait ready`。
 - 修复插件目录刷新失败后继续保留旧插件状态的问题，失败时会清空旧 entries 并替换成干净的 error model。
-- 删除 `frontend/electron/`、`frontend/sidecar/`、`frontend/runtime/` 历史路径，并把自动化资源主路径统一到 `frontend/tauri/resources/automation/`。
+- 删除 `frontend/electron/`、`frontend/sidecar/`、`frontend/runtime/` 历史路径，并把桌面自动化执行主路径统一收口到插件 `automationItems`。
 - 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.5`。
 
 ## 0.3.4

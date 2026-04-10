@@ -28,7 +28,6 @@ export function applyHostShellPreferencesToConfig(
     hostPreferences: {
       ...config.hostPreferences,
       language: preferences.language,
-      dawTarget: preferences.dawTarget,
       includePrereleaseUpdates: preferences.includePrereleaseUpdates,
     },
   }

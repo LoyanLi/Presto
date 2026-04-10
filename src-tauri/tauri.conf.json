@@ -43,8 +43,7 @@
     "resources": {
       "resources/build/": "build/",
       "resources/backend/": "backend/",
-      "resources/plugins/": "plugins/",
-      "resources/frontend/": "frontend/"
+      "resources/plugins/": "plugins/"
     }
   }
 }

@@ -12,7 +12,7 @@ let mountingModulePromise = null
 async function loadMountingModule() {
   if (!mountingModulePromise) {
     mountingModulePromise = (async () => {
-      const entry = path.join(repoRoot, 'host-plugin-runtime/src/index.ts')
+      const entry = path.join(repoRoot, 'host-plugin-runtime/browser.ts')
       const buildResult = await esbuild.build({
         entryPoints: [entry],
         absWorkingDir: repoRoot,
@@ -35,7 +35,7 @@ async function loadMountingModule() {
 }
 
 test('mountPluginPages keeps workspace pages only while settings metadata stays declarative', async () => {
-  const { mountPluginPages, mountPluginNavigation } = await loadMountingModule()
+  const { mountPluginPages, mountPluginNavigation, mountPluginCommands } = await loadMountingModule()
   const manifest = {
     pluginId: 'plugin.settings.mount',
     version: '1.0.0',
@@ -80,29 +80,18 @@ test('mountPluginPages keeps workspace pages only while settings metadata stays 
         ],
       },
     ],
-    navigationItems: [
-      {
-        itemId: 'nav.workspace',
-        title: 'Workspace',
-        pageId: 'page.workspace',
-        section: 'sidebar',
-      },
-    ],
     requiredCapabilities: ['system.health'],
   }
 
   const mountedPages = mountPluginPages(manifest)
-  const mountedNavigation = mountPluginNavigation(manifest)
 
   assert.deepEqual(
     mountedPages.map((page) => ({ pageId: page.pageId, mount: page.mount })),
     [{ pageId: 'page.workspace', mount: 'workspace' }],
   )
 
-  assert.deepEqual(
-    mountedNavigation.map((item) => ({ itemId: item.itemId, section: item.section, order: item.order ?? null })),
-    [{ itemId: 'nav.workspace', section: 'sidebar', order: null }],
-  )
+  assert.equal(mountPluginNavigation, undefined)
+  assert.equal(mountPluginCommands, undefined)
 
   assert.equal(manifest.settingsPages[0]?.fields, undefined)
   assert.equal(manifest.settingsPages[0]?.sections[0]?.fields[0]?.kind, 'toggle')

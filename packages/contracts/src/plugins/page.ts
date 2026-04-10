@@ -8,20 +8,6 @@ export interface PluginPageDefinition {
   componentExport: string
 }
 
-export interface PluginNavigationItem {
-  itemId: string
-  title: string
-  pageId: string
-  section: 'sidebar'
-  order?: number
-}
-
-export interface PluginCommandDefinition {
-  commandId: string
-  title: string
-  pageId?: string
-}
-
 export interface PluginAutomationBooleanOptionDefinition {
   optionId: string
   kind: 'boolean'

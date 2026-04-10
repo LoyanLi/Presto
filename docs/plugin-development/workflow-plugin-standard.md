@@ -55,8 +55,6 @@ my-workflow-plugin/
 
 - `styleEntry`
 - `settingsPages`
-- `navigationItems`
-- `commands`
 
 ### 3.1 页面字段
 

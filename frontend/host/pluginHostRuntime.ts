@@ -8,8 +8,6 @@ import type { PluginRuntimeListResult } from '@presto/sdk-runtime/clients/plugin
 import {
   activatePlugin,
   createPluginRuntime,
-  mountPluginCommands,
-  mountPluginNavigation,
   mountPluginPages,
 } from '@presto/host-plugin-runtime/browser'
 import {
@@ -124,8 +122,6 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     }
 
     ensurePluginStyle(plugin.pluginId, plugin.manifest.styleEntry, plugin.pluginRoot)
-    mountPluginNavigation(plugin.manifest)
-    mountPluginCommands(plugin.manifest)
     const automationRunnerContext = createAutomationRunnerContext(context, input.runtime)
 
     for (const automationItem of (plugin.manifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {

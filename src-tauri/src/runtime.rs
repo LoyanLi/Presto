@@ -81,16 +81,6 @@ struct WorkflowDefinitionRef {
 }
 
 #[derive(Clone)]
-struct AutomationDefinitionRecord {
-    id: String,
-    title: String,
-    app: String,
-    description: Option<String>,
-    script_path: PathBuf,
-    input_keys: Vec<String>,
-}
-
-#[derive(Clone)]
 enum VersionPart {
     Number(u64),
     Text(String),
@@ -115,6 +105,8 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
     let current_log_path = log_dir.join(format!("presto-{session_stamp}.log"));
     ensure_file(&current_log_path)?;
 
+    let initial_backend_target_daw = load_initial_backend_target_daw(&app)?;
+
     let state = RuntimeState {
         app,
         log_state: Mutex::new(LogState {
@@ -128,7 +120,7 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
             port: DEFAULT_PORT,
             pid: None,
             child: None,
-            target_daw: DEFAULT_DAW_TARGET.to_string(),
+            target_daw: initial_backend_target_daw,
         }),
         mobile_state: Mutex::new(MobileProgressState {
             origin: None,
@@ -142,7 +134,11 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
     Arc::try_unwrap(wrapped).map_err(|_| "runtime_state_init_failed".to_string())
 }
 
-pub fn invoke(state: &Arc<RuntimeState>, operation: &str, args: Vec<Value>) -> Result<Value, String> {
+pub fn invoke(
+    state: &Arc<RuntimeState>,
+    operation: &str,
+    args: Vec<Value>,
+) -> Result<Value, String> {
     match operation {
         "app.log.current-path.get" => Ok(json!({
             "filePath": current_log_path(state)?,
@@ -227,7 +223,9 @@ pub fn invoke(state: &Arc<RuntimeState>, operation: &str, args: Vec<Value>) -> R
                 .get_webview_window("main")
                 .ok_or_else(|| "missing_main_window".to_string())?;
             Ok(Value::Bool(
-                window.is_always_on_top().map_err(|error| error.to_string())?,
+                window
+                    .is_always_on_top()
+                    .map_err(|error| error.to_string())?,
             ))
         }
         "window.always-on-top.set" => {
@@ -317,11 +315,6 @@ pub fn invoke(state: &Arc<RuntimeState>, operation: &str, args: Vec<Value>) -> R
             let plugin_id = args.first().and_then(Value::as_str).unwrap_or_default();
             plugins::uninstall_plugin(state, plugin_id)
         }
-        "automation.definition.list" => plugins::list_automation_definitions(state),
-        "automation.definition.run" => plugins::run_automation_definition(
-            state,
-            args.first().cloned().unwrap_or_else(|| Value::Object(Map::new())),
-        ),
         "mobile-progress.session.create" => {
             let task_id = args.first().and_then(Value::as_str).unwrap_or_default();
             mobile_progress::create_mobile_progress_session(state, task_id)
@@ -360,6 +353,42 @@ fn current_log_path(state: &Arc<RuntimeState>) -> Result<String, String> {
         .lock()
         .map_err(|_| "log_lock_failed".to_string())?;
     Ok(log_state.current_log_path.to_string_lossy().to_string())
+}
+
+fn load_initial_backend_target_daw(app: &AppHandle) -> Result<String, String> {
+    let config_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("config.json");
+    Ok(load_initial_backend_target_daw_from_path(&config_path))
+}
+
+fn load_initial_backend_target_daw_from_path(config_path: &Path) -> String {
+    let raw = match fs::read_to_string(config_path) {
+        Ok(contents) => contents,
+        Err(_) => return DEFAULT_DAW_TARGET.to_string(),
+    };
+    load_initial_backend_target_daw_from_contents(&raw)
+}
+
+fn load_initial_backend_target_daw_from_contents(raw: &str) -> String {
+    let parsed = match serde_json::from_str::<Value>(raw) {
+        Ok(value) => value,
+        Err(_) => return DEFAULT_DAW_TARGET.to_string(),
+    };
+    let target = parsed
+        .get("hostPreferences")
+        .and_then(Value::as_object)
+        .and_then(|host_preferences| host_preferences.get("dawTarget"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    if SUPPORTED_DAW_TARGETS.contains(&target) {
+        target.to_string()
+    } else {
+        DEFAULT_DAW_TARGET.to_string()
+    }
 }
 
 fn ensure_file(path: &Path) -> Result<(), String> {
@@ -444,21 +473,9 @@ fn managed_plugins_root(state: &Arc<RuntimeState>) -> Result<PathBuf, String> {
 }
 
 fn official_plugins_root(state: &Arc<RuntimeState>) -> Result<PathBuf, String> {
-    Ok(crate::resolve_runtime_resources_dir(&state.app)?.join("plugins").join("official"))
-}
-
-fn automation_definitions_dir(state: &Arc<RuntimeState>) -> Result<PathBuf, String> {
     Ok(crate::resolve_runtime_resources_dir(&state.app)?
-        .join("frontend")
-        .join("automation")
-        .join("definitions"))
-}
-
-fn automation_scripts_dir(state: &Arc<RuntimeState>) -> Result<PathBuf, String> {
-    Ok(crate::resolve_runtime_resources_dir(&state.app)?
-        .join("frontend")
-        .join("automation")
-        .join("scripts"))
+        .join("plugins")
+        .join("official"))
 }
 
 fn backend_root(state: &Arc<RuntimeState>) -> Result<PathBuf, String> {
@@ -568,15 +585,12 @@ fn std_out_key() -> String {
     ["std", "out"].concat()
 }
 
-fn get_dynamic_key<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
-    value.as_object().and_then(|map| map.get(key))
-}
-
 fn to_string_vec(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
         .map(|items| {
-            items.iter()
+            items
+                .iter()
                 .map(|item| item.as_str().unwrap_or_default().to_string())
                 .collect::<Vec<_>>()
         })
@@ -585,7 +599,13 @@ fn to_string_vec(value: Option<&Value>) -> Vec<String> {
 
 fn mac_accessibility_preflight() -> Result<Value, String> {
     if cfg!(target_os = "macos") {
-        let result = run_process_capture("osascript", &["-e", r#"tell application "System Events" to return UI elements enabled"#])?;
+        let result = run_process_capture(
+            "osascript",
+            &[
+                "-e",
+                r#"tell application "System Events" to return UI elements enabled"#,
+            ],
+        )?;
         if !result.success {
             let error_code = if is_accessibility_permission_denied(&result.stderr_text) {
                 ACCESSIBILITY_PERMISSION_REQUIRED
@@ -727,7 +747,10 @@ fn run_mac_accessibility_command(args: Vec<String>) -> Result<Value, String> {
     object.insert("ok".to_string(), Value::Bool(false));
     object.insert(std_out_key(), Value::String(result.output_text.clone()));
     if !result.stderr_text.is_empty() {
-        object.insert("stderr".to_string(), Value::String(result.stderr_text.clone()));
+        object.insert(
+            "stderr".to_string(),
+            Value::String(result.stderr_text.clone()),
+        );
     }
     object.insert(
         "error".to_string(),
@@ -776,7 +799,8 @@ fn check_for_updates(_state: &Arc<RuntimeState>, request: Option<&Value>) -> Res
     if !capture.success {
         return Err("github_release_fetch_failed".to_string());
     }
-    let releases = serde_json::from_str::<Value>(&capture.output_text).map_err(|error| error.to_string())?;
+    let releases =
+        serde_json::from_str::<Value>(&capture.output_text).map_err(|error| error.to_string())?;
     let release_array = releases.as_array().cloned().unwrap_or_default();
 
     let latest_release = select_latest_release(&release_array, include_prerelease);
@@ -804,10 +828,47 @@ fn check_for_updates(_state: &Arc<RuntimeState>, request: Option<&Value>) -> Res
     }))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{load_initial_backend_target_daw_from_contents, DEFAULT_DAW_TARGET};
+
+    #[test]
+    fn persisted_host_preferences_seed_initial_backend_target_daw() {
+        let target = load_initial_backend_target_daw_from_contents(
+            r#"{
+                "hostPreferences": {
+                    "dawTarget": "pro_tools"
+                }
+            }"#,
+        );
+
+        assert_eq!(target, "pro_tools");
+    }
+
+    #[test]
+    fn invalid_or_unsupported_persisted_target_falls_back_to_default() {
+        let invalid_target = load_initial_backend_target_daw_from_contents(
+            r#"{
+                "hostPreferences": {
+                    "dawTarget": "logic"
+                }
+            }"#,
+        );
+        let invalid_json = load_initial_backend_target_daw_from_contents("not-json");
+
+        assert_eq!(invalid_target, DEFAULT_DAW_TARGET);
+        assert_eq!(invalid_json, DEFAULT_DAW_TARGET);
+    }
+}
+
 fn select_latest_release(releases: &[Value], include_prerelease: bool) -> Option<Value> {
     let mut latest: Option<Value> = None;
     for release in releases {
-        if release.get("draft").and_then(Value::as_bool).unwrap_or(false) {
+        if release
+            .get("draft")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
             continue;
         }
         if !include_prerelease
@@ -900,7 +961,10 @@ fn compare_versions(left_raw: &str, right_raw: &str) -> Option<i32> {
                     (None, None) => return Some(0),
                     (None, Some(_)) => return Some(-1),
                     (Some(_), None) => return Some(1),
-                    (Some(VersionPart::Number(left_number)), Some(VersionPart::Number(right_number))) => {
+                    (
+                        Some(VersionPart::Number(left_number)),
+                        Some(VersionPart::Number(right_number)),
+                    ) => {
                         if left_number != right_number {
                             return Some(if left_number > right_number { 1 } else { -1 });
                         }

@@ -6,12 +6,6 @@ import type {
   AppViewLogResult,
 } from '@presto/sdk-runtime/clients/app'
 import type {
-  AutomationDefinition,
-  AutomationRunDefinitionRequest,
-  AutomationRunDefinitionResult,
-  AutomationRuntimeClient,
-} from '@presto/sdk-runtime/clients/automation'
-import type {
   BackendCapabilityDefinition,
   BackendRuntimeClient,
   BackendStatus,
@@ -45,10 +39,6 @@ export interface DesktopRuntimeOperationMap {
     getVersion: string
     checkForUpdates: string
     viewLog: string
-  }
-  automation: {
-    listDefinitions: string
-    runDefinition: string
   }
   backend: {
     getStatus: string
@@ -121,13 +111,6 @@ export function createDesktopRuntimeBridge(
     checkForUpdates: (request: AppReleaseCheckRequest) =>
       invokeTyped<AppReleaseCheckResult>(invoke, operations.app.checkForUpdates, request),
     viewLog: () => invokeTyped<AppViewLogResult>(invoke, operations.app.viewLog),
-  }
-
-  const automation: AutomationRuntimeClient = {
-    listDefinitions: () =>
-      invokeTyped<AutomationDefinition[]>(invoke, operations.automation.listDefinitions),
-    runDefinition: (request: AutomationRunDefinitionRequest) =>
-      invokeTyped<AutomationRunDefinitionResult>(invoke, operations.automation.runDefinition, request),
   }
 
   const backend = {
@@ -221,7 +204,6 @@ export function createDesktopRuntimeBridge(
 
   return createPrestoRuntime({
     app,
-    automation,
     backend,
     dialog,
     shell,

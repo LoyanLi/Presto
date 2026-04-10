@@ -14,7 +14,7 @@ test('createPluginRuntime does not attach runtime to plugin context', async () =
   assert.doesNotMatch(source, /return\s*\{[\s\S]*\bruntime\b[\s\S]*\}/)
 })
 
-test('host-plugin-runtime index does not export guardRuntimeAccess', async () => {
-  const source = await readSource('host-plugin-runtime/src/index.ts')
+test('host-plugin-runtime browser surface does not export guardRuntimeAccess', async () => {
+  const source = await readSource('host-plugin-runtime/browser.ts')
   assert.doesNotMatch(source, /\bguardRuntimeAccess\b/)
 })

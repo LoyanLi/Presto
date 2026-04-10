@@ -52,22 +52,6 @@
       ]
     }
   ],
-  "navigationItems": [
-    {
-      "itemId": "export-workflow.nav.main",
-      "title": "Export Workflow",
-      "pageId": "export-workflow.page.main",
-      "section": "sidebar",
-      "order": 70
-    }
-  ],
-  "commands": [
-    {
-      "commandId": "export-workflow.open",
-      "title": "Open Export Workflow",
-      "pageId": "export-workflow.page.main"
-    }
-  ],
   "requiredCapabilities": [
     "workflow.run.start",
     "daw.connection.getStatus",

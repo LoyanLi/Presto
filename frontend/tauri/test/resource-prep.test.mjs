@@ -68,7 +68,7 @@ async function listFilesMatching(relativeRoot, matcher) {
   return matches.sort()
 }
 
-test('prepared tauri runtime resources keep only packaged backend, plugin, and automation files', async () => {
+test('prepared tauri runtime resources keep only packaged backend and plugin files', async () => {
   const sidecarEntry = 'src-tauri/resources/build/sidecar/main.mjs'
   const sidecarNode = 'src-tauri/resources/build/sidecar/node'
   const backendMain = 'src-tauri/resources/backend/presto/main_api.py'
@@ -115,7 +115,7 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   const pluginManifest = 'src-tauri/resources/plugins/official/import-workflow/manifest.json'
   const pluginDist = 'src-tauri/resources/plugins/official/import-workflow/dist/entry.mjs'
   const pluginTests = 'src-tauri/resources/plugins/official/import-workflow/test'
-  const automationDefinition = 'src-tauri/resources/frontend/automation/definitions/splitStereoToMono.json'
+  const frontendResourcesRoot = 'src-tauri/resources/frontend'
   const legacyAutomationDefinition = 'src-tauri/resources/frontend/runtime/automation/definitions/splitStereoToMono.json'
   const legacyRuntimeResourcesRoot = 'build/runtime-resources'
 
@@ -126,7 +126,7 @@ test('prepared tauri runtime resources keep only packaged backend, plugin, and a
   assert.equal(await exists(backendPythonConfig), true)
   assert.equal(await exists(pluginManifest), true)
   assert.equal(await exists(pluginDist), true)
-  assert.equal(await exists(automationDefinition), true)
+  assert.equal(await exists(frontendResourcesRoot), false)
   assert.equal(await exists(legacyAutomationDefinition), false)
   assert.equal(await exists(backendTests), false)
   assert.equal(await exists(backendCache), false)

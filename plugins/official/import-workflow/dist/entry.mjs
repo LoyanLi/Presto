@@ -89,22 +89,6 @@ export const manifest = {
       ],
     },
   ],
-  navigationItems: [
-    {
-      itemId: 'import-workflow.nav.main',
-      title: 'Import Workflow',
-      pageId: 'import-workflow.page.main',
-      section: 'sidebar',
-      order: 60,
-    },
-  ],
-  commands: [
-    {
-      commandId: 'import-workflow.open',
-      title: 'Open Import Workflow',
-      pageId: 'import-workflow.page.main',
-    },
-  ],
   requiredCapabilities: [
     'workflow.run.start',
     'import.analyze',

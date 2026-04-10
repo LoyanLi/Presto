@@ -62,6 +62,13 @@ const productName = tauriConfig.productName
 const version = packageJson.version
 const artifactArch = resolveArtifactArch(targetTriple)
 const stagedResourcesRoot = path.join(repoRoot, 'src-tauri', 'resources')
+const bundledResourceNames = Array.from(
+  new Set(
+    Object.values(tauriConfig.bundle?.resources ?? {})
+      .map((resourcePath) => resourcePath.replace(/\/$/, ''))
+      .filter((resourcePath) => resourcePath.length > 0),
+  ),
+)
 const bundleRoot = path.join(repoRoot, 'src-tauri', 'target', targetTriple, 'release', 'bundle')
 const appPath = path.join(bundleRoot, 'macos', `${productName}.app`)
 const dmgDir = path.join(bundleRoot, 'dmg')
@@ -106,7 +113,7 @@ async function measureChildSizes(targetPath) {
 async function syncBundledResources(appBundlePath) {
   const resourcesRoot = path.join(appBundlePath, 'Contents', 'Resources')
 
-  for (const resourceName of ['backend', 'frontend', 'plugins']) {
+  for (const resourceName of bundledResourceNames) {
     const stagedResourcePath = path.join(stagedResourcesRoot, resourceName)
     const bundledResourcePath = path.join(resourcesRoot, resourceName)
 

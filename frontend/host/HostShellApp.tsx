@@ -101,7 +101,7 @@ export function HostShellApp({
   const [themeMode, setThemeModeState] = useState<'light' | 'dark'>(() => getThemeMode())
   const [themePreference, setThemePreferenceState] = useState(() => getThemePreference())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { preferences, preferencesHydrated, persistHostShellPreferences } = useHostShellPreferencesState({
+  const { preferences, preferencesHydrated, applyHostShellPreferences, persistHostShellPreferences } = useHostShellPreferencesState({
     developerPresto,
   })
   const resolvedLocale = resolveHostLocale(preferences.language, getSystemLocaleCandidates())
@@ -264,28 +264,18 @@ export function HostShellApp({
         })
       }}
       onDawTargetChange={async (target) => {
-        if (developerRuntime?.backend && typeof developerRuntime.backend.setDawTarget === 'function') {
-          setCheckingDawConnection(true)
-          try {
-            await developerRuntime.backend.setDawTarget(target)
-            await persistHostShellPreferences({
-              dawTarget: target,
-            })
-            setDawStatus((current) => ({
-              ...current,
-              targetLabel: dawLabel(target),
-            }))
-          } finally {
-            setCheckingDawConnection(false)
-          }
-        } else {
-          await persistHostShellPreferences({
+        setCheckingDawConnection(true)
+        try {
+          await developerRuntime.backend.setDawTarget(target)
+          applyHostShellPreferences({
             dawTarget: target,
           })
           setDawStatus((current) => ({
             ...current,
             targetLabel: dawLabel(target),
           }))
+        } finally {
+          setCheckingDawConnection(false)
         }
         refreshDawStatus()
       }}

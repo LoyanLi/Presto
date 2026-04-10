@@ -2,8 +2,6 @@ export type {
   PluginAutomationBooleanOptionDefinition,
   PluginAutomationItemDefinition,
   PluginAutomationOptionDefinition,
-  PluginCommandDefinition,
-  PluginNavigationItem,
   PluginPageDefinition,
   PluginPageHost,
   PluginPageProps,

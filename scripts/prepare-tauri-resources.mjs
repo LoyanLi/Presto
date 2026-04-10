@@ -64,20 +64,12 @@ async function prepareOfficialPluginResources() {
   }
 }
 
-async function prepareAutomationResources() {
-  await rm(path.join(outputRoot, 'frontend'), { recursive: true, force: true })
-  await copyFiltered(
-    path.join(repoRoot, 'frontend', 'tauri', 'resources', 'automation'),
-    path.join(outputRoot, 'frontend', 'automation'),
-  )
-}
-
 await mkdir(outputRoot, { recursive: true })
 await rm(legacyRuntimeResourcesRoot, { recursive: true, force: true })
 await rm(path.join(outputRoot, 'build', 'sidecar'), { recursive: true, force: true })
+await rm(path.join(outputRoot, 'frontend'), { recursive: true, force: true })
 
 await Promise.all([
   prepareBackendResources(),
   prepareOfficialPluginResources(),
-  prepareAutomationResources(),
 ])

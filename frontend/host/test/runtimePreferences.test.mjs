@@ -97,7 +97,7 @@ test('host runtime preferences write shell preferences back into config without 
       {
         language: 'en',
         developerMode: false,
-        dawTarget: 'pro_tools',
+        dawTarget: 'logic',
         includePrereleaseUpdates: true,
       },
     ),
@@ -132,4 +132,18 @@ test('HostShellApp delegates preference hydration and persistence through a dedi
   assert.match(source, /from '\.\/useHostShellPreferencesState'/)
   assert.doesNotMatch(source, /developerPresto\.config\.get\(\)/)
   assert.doesNotMatch(source, /developerPresto\.config\.update\(/)
+})
+
+test('HostShellApp does not persist DAW target through the generic host shell preferences config path', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /await developerRuntime\.backend\.setDawTarget\(target\)/)
+  assert.doesNotMatch(source, /persistHostShellPreferences\(\{\s*dawTarget:/)
+})
+
+test('host plugin runtime assembly no longer imports or mounts dead navigation and command surfaces', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/pluginHostRuntime.ts'), 'utf8')
+
+  assert.doesNotMatch(source, /\bmountPluginNavigation\b/)
+  assert.doesNotMatch(source, /\bmountPluginCommands\b/)
 })

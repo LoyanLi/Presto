@@ -2,8 +2,6 @@ import type { PublicCapabilityId } from '../capabilities/ids'
 import type { DawTarget } from '../daw/targets'
 import type {
   PluginPageDefinition,
-  PluginNavigationItem,
-  PluginCommandDefinition,
   PluginAutomationItemDefinition,
 } from './page'
 import type { WorkflowSettingsPageDefinition } from './settings'
@@ -35,8 +33,6 @@ export interface WorkflowPluginManifest {
   adapterModuleRequirements?: PluginAdapterModuleRequirement[]
   capabilityRequirements?: PluginCapabilityRequirement[]
   settingsPages?: WorkflowSettingsPageDefinition[]
-  navigationItems?: PluginNavigationItem[]
-  commands?: PluginCommandDefinition[]
   workflowDefinition?: WorkflowDefinitionReference
   requiredCapabilities: PublicCapabilityId[]
 }

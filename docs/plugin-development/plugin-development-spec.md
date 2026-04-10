@@ -14,8 +14,6 @@
 - `pages`
 - `automationItems`
 - `settingsPages`
-- `navigationItems`
-- `commands`
 - `workflowDefinition`
 
 这些对象全部由宿主读取 manifest、校验字段、加载入口模块后统一挂载。
@@ -78,8 +76,6 @@ my-plugin/
 - `pages`
 - `automationItems`
 - `settingsPages`
-- `navigationItems`
-- `commands`
 - `workflowDefinition`
 - `adapterModuleRequirements`
 - `capabilityRequirements`
@@ -152,11 +148,8 @@ export interface WorkflowPluginModule {
 1. 目录发现
 2. manifest 解析
 3. manifest 字段校验
-4. Host API 兼容性校验
-5. DAW 支持校验
-6. 权限字段校验
-7. workflow definition 校验
-8. 入口模块可加载校验
+4. workflow definition 校验
+5. 入口模块可加载校验
 
 只有通过这些校验后，插件才会进入可挂载状态。
 

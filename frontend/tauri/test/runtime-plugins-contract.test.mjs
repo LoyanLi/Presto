@@ -35,10 +35,6 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
         checkForUpdates: 'app.release.check',
         viewLog: 'app.log.view',
       },
-      automation: {
-        listDefinitions: 'automation.definition.list',
-        runDefinition: 'automation.definition.run',
-      },
       backend: {
         getStatus: 'backend.status.get',
         listCapabilities: 'backend.capabilities.list',
@@ -97,6 +93,8 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
       return Promise.resolve({ ok: true, managedPluginsRoot: '/tmp/extensions', plugins: [], issues: [] })
     },
   )
+
+  assert.equal('automation' in runtime, false)
 
   await runtime.plugins.list()
   await runtime.backend.listCapabilities()

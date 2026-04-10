@@ -1,5 +1,4 @@
 import type { AppRuntimeClient } from './clients/app'
-import type { AutomationRuntimeClient } from './clients/automation'
 import type { BackendRuntimeClient } from './clients/backend'
 import type { DialogRuntimeClient } from './clients/dialog'
 import type { FsRuntimeClient } from './clients/fs'
@@ -11,7 +10,6 @@ import type { WindowRuntimeClient } from './clients/window'
 
 export interface PrestoRuntime {
   app: AppRuntimeClient
-  automation: AutomationRuntimeClient
   backend: BackendRuntimeClient
   dialog: DialogRuntimeClient
   shell: ShellRuntimeClient
@@ -25,7 +23,6 @@ export interface PrestoRuntime {
 export function createPrestoRuntime(runtime: PrestoRuntime): PrestoRuntime {
   return {
     app: runtime.app,
-    automation: runtime.automation,
     backend: runtime.backend,
     dialog: runtime.dialog,
     shell: runtime.shell,

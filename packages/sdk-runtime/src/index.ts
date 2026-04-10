@@ -1,12 +1,5 @@
 export type { AppLatestReleaseInfo, AppRuntimeClient } from './clients/app'
 export type {
-  AutomationDefinition,
-  AutomationRunDefinitionRequest,
-  AutomationRunDefinitionResult,
-  AutomationRunDefinitionStepResult,
-  AutomationRuntimeClient,
-} from './clients/automation'
-export type {
   BackendCapabilityDefinition,
   BackendCapabilityFieldSupport,
   BackendLogEntry,

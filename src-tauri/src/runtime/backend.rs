@@ -10,10 +10,16 @@ use std::{
 };
 
 use super::{
-    append_log, app_data_dir, backend_root, log_backend_message, resolve_backend_python_bin,
+    app_data_dir, append_log, backend_root, log_backend_message, resolve_backend_python_bin,
     resolve_bundled_python_home, unique_suffix, BackendSupervisorState, RuntimeState, DEFAULT_PORT,
     SUPPORTED_DAW_TARGETS,
 };
+
+struct HttpJsonResponse {
+    status_code: u16,
+    status_line: String,
+    body: Value,
+}
 
 pub(super) fn backend_status(state: &Arc<RuntimeState>) -> Result<Value, String> {
     backend_snapshot(state)
@@ -28,7 +34,7 @@ pub(super) fn backend_capabilities(state: &Arc<RuntimeState>) -> Result<Value, S
             .map_err(|_| "backend_lock_failed".to_string())?;
         backend.port
     };
-    let response = http_json_request("GET", port, "/api/v1/capabilities", None)?;
+    let response = http_json_request_ok("GET", port, "/api/v1/capabilities", None)?;
     let capabilities = response
         .get("capabilities")
         .and_then(Value::as_array)
@@ -73,6 +79,7 @@ pub(super) fn set_backend_daw_target(
         ));
     }
 
+    persist_backend_target_daw_preference(state, next_target)?;
     stop_backend(state, "backend_daw_target_set")?;
     {
         let mut backend = state
@@ -87,6 +94,56 @@ pub(super) fn set_backend_daw_target(
         "ok": true,
         "target": next_target,
     }))
+}
+
+fn persist_backend_target_daw_preference(
+    state: &Arc<RuntimeState>,
+    next_target: &str,
+) -> Result<(), String> {
+    let request_suffix = unique_suffix();
+    let get_config = invoke_backend_capability(
+        state,
+        json!({
+            "requestId": format!("backend-set-target-daw-get-{request_suffix}"),
+            "capability": "config.get",
+            "payload": {},
+            "meta": runtime_meta("tauri-runtime"),
+        }),
+    )?;
+    let current_config = extract_capability_data(get_config, "Failed to load config.")?
+        .get("config")
+        .cloned()
+        .ok_or_else(|| "Invalid config payload.".to_string())?;
+
+    let mut next_config = current_config
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "Invalid config payload.".to_string())?;
+    let current_host_preferences = next_config
+        .get("hostPreferences")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut next_host_preferences = current_host_preferences;
+    next_host_preferences.insert("dawTarget".to_string(), Value::String(next_target.to_string()));
+    next_config.insert(
+        "hostPreferences".to_string(),
+        Value::Object(next_host_preferences),
+    );
+
+    invoke_backend_capability(
+        state,
+        json!({
+            "requestId": format!("backend-set-target-daw-update-{request_suffix}"),
+            "capability": "config.update",
+            "payload": {
+                "config": next_config,
+            },
+            "meta": runtime_meta("tauri-runtime"),
+        }),
+    )?;
+
+    Ok(())
 }
 
 pub(super) fn set_backend_developer_mode(
@@ -119,7 +176,10 @@ pub(super) fn set_backend_developer_mode(
         .unwrap_or_default();
     let mut next_ui_preferences = current_ui_preferences;
     next_ui_preferences.insert("developerModeEnabled".to_string(), Value::Bool(enabled));
-    next_config.insert("uiPreferences".to_string(), Value::Object(next_ui_preferences));
+    next_config.insert(
+        "uiPreferences".to_string(),
+        Value::Object(next_ui_preferences),
+    );
 
     invoke_backend_capability(
         state,
@@ -152,12 +212,21 @@ pub(super) fn invoke_backend_capability(
         backend.port
     };
     let enriched_request = enrich_capability_request(state, request)?;
-    http_json_request(
+    let response = http_json_request(
         "POST",
         port,
         "/api/v1/capabilities/invoke",
         Some(&enriched_request),
-    )
+    )?;
+
+    if response.status_code == 200 {
+        Ok(response.body)
+    } else {
+        Ok(backend_error_response_to_capability_response(
+            &enriched_request,
+            response,
+        ))
+    }
 }
 
 pub(super) fn extract_capability_data(
@@ -320,11 +389,8 @@ fn start_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
         .arg(port.to_string())
         .current_dir(backend_working_dir)
         .stderr(Stdio::piped());
-    for (key, value) in backend_env_vars(
-        &runtime_app_data_dir,
-        &target_daw,
-        python_home.as_deref(),
-    ) {
+    for (key, value) in backend_env_vars(&runtime_app_data_dir, &target_daw, python_home.as_deref())
+    {
         command.env(key, value);
     }
 
@@ -448,7 +514,10 @@ fn wait_for_backend_ready(state: &Arc<RuntimeState>) -> Result<(), String> {
     };
 
     for _ in 0..30 {
-        if http_json_request("GET", port, "/api/v1/health", None).is_ok() {
+        if http_json_request("GET", port, "/api/v1/health", None)
+            .map(|response| response.status_code == 200)
+            .unwrap_or(false)
+        {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(250));
@@ -478,7 +547,10 @@ fn ensure_backend_available(state: &Arc<RuntimeState>) -> Result<(), String> {
         backend.port
     };
 
-    if http_json_request("GET", port, "/api/v1/health", None).is_ok() {
+    if http_json_request("GET", port, "/api/v1/health", None)
+        .map(|response| response.status_code == 200)
+        .unwrap_or(false)
+    {
         return Ok(());
     }
 
@@ -491,7 +563,7 @@ fn http_json_request(
     port: u16,
     path: &str,
     body: Option<&Value>,
-) -> Result<Value, String> {
+) -> Result<HttpJsonResponse, String> {
     let mut stream = TcpStream::connect(("127.0.0.1", port))
         .map_err(|error| format!("backend_http_connect_failed:{error}"))?;
     stream
@@ -525,15 +597,103 @@ fn http_json_request(
         .split_once("\r\n\r\n")
         .ok_or_else(|| "backend_http_invalid_response".to_string())?;
     let status_line = head.lines().next().unwrap_or_default();
-    if !status_line.contains(" 200 ") {
-        return Err(format!("backend_http_status_failed:{status_line}"));
-    }
+    let status_code = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or_else(|| "backend_http_invalid_status".to_string())?;
 
-    if body_text.trim().is_empty() {
-        return Ok(Value::Object(Map::new()));
-    }
+    let parsed_body = if body_text.trim().is_empty() {
+        Value::Object(Map::new())
+    } else {
+        serde_json::from_str(body_text)
+            .map_err(|error| format!("backend_http_json_failed:{error}"))?
+    };
 
-    serde_json::from_str(body_text).map_err(|error| format!("backend_http_json_failed:{error}"))
+    Ok(HttpJsonResponse {
+        status_code,
+        status_line: status_line.to_string(),
+        body: parsed_body,
+    })
+}
+
+fn http_json_request_ok(
+    method: &str,
+    port: u16,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<Value, String> {
+    let response = http_json_request(method, port, path, body)?;
+    if response.status_code == 200 {
+        Ok(response.body)
+    } else {
+        Err(format!(
+            "backend_http_status_failed:{}",
+            response.status_line
+        ))
+    }
+}
+
+fn backend_error_response_to_capability_response(
+    request: &Value,
+    response: HttpJsonResponse,
+) -> Value {
+    let request_id = request.get("requestId").cloned().unwrap_or(Value::Null);
+    let capability = request.get("capability").cloned().unwrap_or(Value::Null);
+
+    json!({
+        "success": false,
+        "requestId": request_id,
+        "capability": capability,
+        "error": normalize_backend_error_payload(request, &response),
+    })
+}
+
+fn normalize_backend_error_payload(request: &Value, response: &HttpJsonResponse) -> Value {
+    let capability = request.get("capability").and_then(Value::as_str);
+    let body = response.body.as_object();
+    let code = body
+        .and_then(|value| value.get("code"))
+        .and_then(Value::as_str)
+        .unwrap_or("BACKEND_HTTP_STATUS_FAILED");
+    let message = body
+        .and_then(|value| value.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or(&response.status_line);
+    let source = body
+        .and_then(|value| value.get("source"))
+        .and_then(Value::as_str)
+        .unwrap_or("runtime");
+    let retryable = body
+        .and_then(|value| value.get("retryable"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let adapter = body
+        .and_then(|value| value.get("adapter"))
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    let mut details = body
+        .and_then(|value| value.get("details"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    details.insert("statusCode".to_string(), json!(response.status_code));
+    details.insert("statusLine".to_string(), json!(response.status_line));
+
+    json!({
+        "code": code,
+        "message": message,
+        "details": Value::Object(details),
+        "source": source,
+        "retryable": retryable,
+        "capability": body
+            .and_then(|value| value.get("capability"))
+            .cloned()
+            .or_else(|| capability.map(|value| json!(value)))
+            .unwrap_or(Value::Null),
+        "adapter": adapter,
+    })
 }
 
 fn normalize_capability_definition(raw: &Value) -> Value {
@@ -611,7 +771,10 @@ fn enrich_capability_request(state: &Arc<RuntimeState>, request: Value) -> Resul
         next_payload.insert("definition".to_string(), definition.clone());
     }
     if let Some(allowed_capabilities) = resolved.get("allowedCapabilities") {
-        next_payload.insert("allowedCapabilities".to_string(), allowed_capabilities.clone());
+        next_payload.insert(
+            "allowedCapabilities".to_string(),
+            allowed_capabilities.clone(),
+        );
     }
 
     let mut next_request = request
@@ -628,7 +791,10 @@ fn state_version() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::backend_env_vars;
+    use super::{
+        backend_env_vars, backend_error_response_to_capability_response, HttpJsonResponse,
+    };
+    use serde_json::{json, Value};
     use std::path::Path;
 
     #[test]
@@ -649,5 +815,56 @@ mod tests {
         assert!(env_vars
             .iter()
             .any(|(key, value)| *key == "PYTHONHOME" && value == "/tmp/python-home"));
+    }
+
+    #[test]
+    fn backend_error_response_to_capability_response_preserves_structured_backend_error_payloads() {
+        let response = backend_error_response_to_capability_response(
+            &json!({
+                "requestId": "req-1",
+                "capability": "system.health",
+            }),
+            HttpJsonResponse {
+                status_code: 404,
+                status_line: "HTTP/1.1 404 Not Found".to_string(),
+                body: json!({
+                    "code": "VALIDATION_ERROR",
+                    "message": "Capability not found: system.health",
+                    "details": {
+                        "capability_id": "system.health",
+                    },
+                    "source": "runtime",
+                    "retryable": false,
+                    "capability": "system.health",
+                }),
+            },
+        );
+
+        assert_eq!(
+            response.get("success").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            response.get("requestId").and_then(Value::as_str),
+            Some("req-1")
+        );
+        assert_eq!(
+            response
+                .get("error")
+                .and_then(Value::as_object)
+                .and_then(|error| error.get("code"))
+                .and_then(Value::as_str),
+            Some("VALIDATION_ERROR")
+        );
+        assert_eq!(
+            response
+                .get("error")
+                .and_then(Value::as_object)
+                .and_then(|error| error.get("details"))
+                .and_then(Value::as_object)
+                .and_then(|details| details.get("statusCode"))
+                .and_then(Value::as_u64),
+            Some(404)
+        );
     }
 }

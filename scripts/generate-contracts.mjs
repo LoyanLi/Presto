@@ -291,6 +291,7 @@ function generateRustDawTargets() {
 
   const content = `// Auto-generated from contracts-manifest/daw-targets.json; do not edit by hand.
 pub(super) const DEFAULT_DAW_TARGET: &str = ${JSON.stringify(DEFAULT_DAW_TARGET)};
+pub(super) const RESERVED_DAW_TARGETS: [&str; ${RESERVED_DAW_TARGETS.length}] = [${RESERVED_DAW_TARGETS.map((value) => JSON.stringify(value)).join(', ')}];
 pub(super) const SUPPORTED_DAW_TARGETS: [&str; ${SUPPORTED_DAW_TARGETS.length}] = [${SUPPORTED_DAW_TARGETS.map((value) => JSON.stringify(value)).join(', ')}];
 `
 

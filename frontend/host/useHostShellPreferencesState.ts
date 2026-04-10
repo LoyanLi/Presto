@@ -18,6 +18,7 @@ export interface UseHostShellPreferencesStateInput {
 export interface UseHostShellPreferencesStateResult {
   preferences: HostShellPreferences
   preferencesHydrated: boolean
+  applyHostShellPreferences(nextPreferences: Partial<HostShellPreferences>): HostShellPreferences
   persistHostShellPreferences(nextPreferences: Partial<HostShellPreferences>): Promise<HostShellPreferences>
 }
 
@@ -55,6 +56,10 @@ export function useHostShellPreferencesState({
     }
   }, [developerPresto])
 
+  const applyHostShellPreferences = (
+    nextPreferences: Partial<HostShellPreferences>,
+  ): HostShellPreferences => setHostShellPreferences(nextPreferences)
+
   const persistHostShellPreferences = async (
     nextPreferences: Partial<HostShellPreferences>,
   ): Promise<HostShellPreferences> => {
@@ -77,6 +82,7 @@ export function useHostShellPreferencesState({
   return {
     preferences,
     preferencesHydrated,
+    applyHostShellPreferences,
     persistHostShellPreferences,
   }
 }

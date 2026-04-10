@@ -55,7 +55,6 @@ test('package.json exposes Presto release metadata through the Tauri build chain
     'resources/build/': 'build/',
     'resources/backend/': 'backend/',
     'resources/plugins/': 'plugins/',
-    'resources/frontend/': 'frontend/',
   })
 })
 
@@ -115,16 +114,24 @@ test('tauri packaging script builds DMGs without hdiutil create', async () => {
   assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
 })
 
-test('tauri packaging script syncs staged runtime resources into the app bundle before signing', async () => {
+test('tauri packaging script syncs only configured bundle resources into the app bundle before signing', async () => {
+  const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri/tauri.conf.json'), 'utf8'))
   const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
 
+  assert.deepEqual(tauriConfig.bundle?.resources, {
+    'resources/build/': 'build/',
+    'resources/backend/': 'backend/',
+    'resources/plugins/': 'plugins/',
+  })
   assert.match(packageBuildSource, /async function syncBundledResources\(appBundlePath\)/)
-  assert.match(packageBuildSource, /for \(const resourceName of \['backend', 'frontend', 'plugins'\]\)/)
+  assert.match(packageBuildSource, /Object\.values\(tauriConfig\.bundle\?\.resources \?\? \{\}\)/)
+  assert.match(packageBuildSource, /for \(const resourceName of bundledResourceNames\)/)
   assert.match(packageBuildSource, /const stagedResourcesRoot = path\.join\(repoRoot,\s*'src-tauri',\s*'resources'\)/)
   assert.match(packageBuildSource, /const stagedResourcePath = path\.join\(stagedResourcesRoot,\s*resourceName\)/)
   assert.match(packageBuildSource, /const bundledResourcePath = path\.join\(resourcesRoot,\s*resourceName\)/)
   assert.match(packageBuildSource, /await cp\(stagedResourcePath,\s*bundledResourcePath,\s*\{\s*recursive: true\s*\}\)/)
   assert.match(packageBuildSource, /await syncBundledResources\(appPath\)\s*await run\('node', \['scripts\/inject-macos-app-icon\.mjs', '--app', appPath\]\)/)
+  assert.doesNotMatch(packageBuildSource, /'frontend'/)
 })
 
 test('package.json no longer exposes Electron build and packaging scripts', async () => {
