@@ -41,6 +41,16 @@ function normalizeSince(comment) {
   return match ? `${match[1]}.0`.replace(/\.0\.0$/, '.0') : null
 }
 
+function normalizeMessageName(value) {
+  if (!value) {
+    return null
+  }
+  if (value === 'CanceBatchJobRequestBody') {
+    return 'CancelBatchJobRequestBody'
+  }
+  return value
+}
+
 function parseProto(protoSource) {
   const entries = []
   const regex = /\/\*\*([\s\S]*?)\*\/\s*CId_([A-Za-z0-9_]+)\s*=\s*(\d+);/g
@@ -52,8 +62,8 @@ function parseProto(protoSource) {
     entries.push({
       command_name: name,
       command_id: Number.parseInt(match[3], 10),
-      request_message: requestMatch ? requestMatch[1] : null,
-      response_message: responseMatch ? responseMatch[1] : null,
+      request_message: normalizeMessageName(requestMatch ? requestMatch[1] : null),
+      response_message: normalizeMessageName(responseMatch ? responseMatch[1] : null),
       category: normalizeCategory(comment),
       introduced_version: normalizeSince(comment),
     })

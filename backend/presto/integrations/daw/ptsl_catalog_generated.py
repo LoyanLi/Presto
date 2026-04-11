@@ -1238,7 +1238,7 @@ PTSL_COMMAND_CATALOG = (
     {
         "command_name": "CId_CancelBatchJob",
         "command_id": 138,
-        "request_message": "CanceBatchJobRequestBody",
+        "request_message": "CancelBatchJobRequestBody",
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
@@ -1434,4 +1434,3 @@ PTSL_COMMAND_CATALOG = (
         "introduced_version": None,
     },
 )
-

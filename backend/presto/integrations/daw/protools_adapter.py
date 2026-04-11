@@ -6,7 +6,6 @@ from ctypes import cdll, c_bool, c_char_p, c_long, c_void_p, create_string_buffe
 from ctypes.util import find_library
 import math
 import re
-import subprocess
 import threading
 import time
 import uuid
@@ -20,14 +19,14 @@ from .base import (
     DawTrackInfo,
     DawTransportStatus,
 )
+from .ptsl_catalog import PtslCommandCatalogEntry, list_commands, require_command
 from .ptsl_runner import PtslCommandRunner
 
 try:  # pragma: no cover - exercised only in a Pro Tools runtime environment
-    from ptsl import Engine, PTSL_pb2 as pt, ops
+    from ptsl import Engine, PTSL_pb2 as pt
 except Exception:  # pragma: no cover - evaluated when py-ptsl is unavailable
     Engine = None  # type: ignore[assignment]
     pt = None  # type: ignore[assignment]
-    ops = None  # type: ignore[assignment]
 
 
 def _convert_posix_directory_to_hfs(path: str) -> str:
@@ -90,8 +89,6 @@ class ProToolsDawAdapter:
     """PTSL-backed Pro Tools adapter for the host integration layer."""
     DEFAULT_MIN_SUPPORTED_VERSION = "2025.10"
     DEFAULT_ADAPTER_VERSION = "2025.10.0"
-    DEFAULT_GET_EXPORT_MIX_SOURCE_LIST_COMMAND_ID = 128
-    DEFAULT_SET_TRACK_COLOR_COMMAND_ID = 153
     DEFAULT_MODULE_VERSIONS: dict[str, str] = {
         "system": DEFAULT_ADAPTER_VERSION,
         "config": DEFAULT_ADAPTER_VERSION,
@@ -245,41 +242,15 @@ class ProToolsDawAdapter:
             self._connected = False
 
     def save_session(self) -> None:
-        engine = self._require_engine()
-        save_session = getattr(engine, "save_session", None)
-        if not callable(save_session):
-            raise PrestoError(
-                "SAVE_SESSION_UNAVAILABLE",
-                "Pro Tools session save is unavailable on the current engine.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SAVE_SESSION_UNAVAILABLE",
-                    "Pro Tools session save is unavailable on the current engine.",
-                    address=self.address,
-                ),
-                capability="session.save",
-                adapter="pro_tools",
-            )
-
-        try:
-            save_session()
-        except Exception as exc:
-            raise PrestoError(
-                "SAVE_SESSION_FAILED",
-                str(exc) or "Failed to save the current Pro Tools session.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SAVE_SESSION_FAILED",
-                    str(exc) or "Failed to save the current Pro Tools session.",
-                    address=self.address,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="session.save",
-                adapter="pro_tools",
-            ) from exc
+        self._run_ptsl_command(
+            command_name="CId_SaveSession",
+            payload={},
+            capability="session.save",
+            unavailable_code="SAVE_SESSION_UNAVAILABLE",
+            unavailable_message="Pro Tools session save is unavailable on the current engine.",
+            failed_code="SAVE_SESSION_FAILED",
+            failed_message="Failed to save the current Pro Tools session.",
+        )
 
     def get_connection_status(self) -> DawConnectionStatus:
         engine = self._engine
@@ -310,27 +281,30 @@ class ProToolsDawAdapter:
         if session_path:
             return session_path
 
-        if ops is not None and pt is not None:
-            try:
-                op = ops.GetSessionPath()
-                engine.client.run(op)
-                session_path = str(getattr(getattr(op.response, "session_path", None), "path", "") or "").strip()
-            except Exception as exc:
-                raise PrestoError(
+        try:
+            response = self._ptsl_runner.run(
+                engine,
+                "CId_GetSessionPath",
+                {},
+                capability="session.getInfo",
+            )
+            session_path = self._string_or_empty(self._record_get(self._record_get(response, "session_path"), "path"))
+        except Exception as exc:
+            raise PrestoError(
+                "SESSION_CHECK_FAILED",
+                str(exc) or "Failed to read the open Pro Tools session.",
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
                     "SESSION_CHECK_FAILED",
                     str(exc) or "Failed to read the open Pro Tools session.",
-                    source="runtime",
-                    retryable=False,
-                    details=self._raw_error_details(
-                        "SESSION_CHECK_FAILED",
-                        str(exc) or "Failed to read the open Pro Tools session.",
-                        address=self.address,
-                        exception_type=type(exc).__name__,
-                        raw_exception=str(exc) or None,
-                    ),
-                    capability="session.getInfo",
-                    adapter="pro_tools",
-                ) from exc
+                    address=self.address,
+                    exception_type=type(exc).__name__,
+                    raw_exception=str(exc) or None,
+                ),
+                capability="session.getInfo",
+                adapter="pro_tools",
+            ) from exc
 
         if not session_path:
             raise PrestoError(
@@ -529,58 +503,30 @@ class ProToolsDawAdapter:
         tracks = self._read_tracks(engine)
         result: list[DawTrackInfo] = []
         for index, track in enumerate(tracks):
-            attrs = getattr(track, "track_attributes", None)
+            attrs = self._record_get(track, "track_attributes")
             result.append(
                 DawTrackInfo(
-                    track_id=str(getattr(track, "id", getattr(track, "track_id", index + 1))),
-                    track_name=str(getattr(track, "name", "")),
-                    track_type=self._map_track_type(getattr(track, "type", None)),
-                    track_format=self._map_track_format(getattr(track, "format", None)),
-                    is_muted=bool(getattr(attrs, "is_muted", getattr(track, "is_muted", False))),
-                    is_soloed=bool(getattr(attrs, "is_soloed", getattr(track, "is_soloed", False))),
-                    color=self._string_or_none(getattr(track, "color", None)),
+                    track_id=str(self._record_get(track, "id", "track_id", default=index + 1)),
+                    track_name=str(self._record_get(track, "name", default="")),
+                    track_type=self._map_track_type(self._record_get(track, "type")),
+                    track_format=self._map_track_format(self._record_get(track, "format")),
+                    is_muted=bool(self._record_get(attrs, "is_muted", default=self._record_get(track, "is_muted", default=False))),
+                    is_soloed=bool(self._record_get(attrs, "is_soloed", default=self._record_get(track, "is_soloed", default=False))),
+                    color=self._string_or_none(self._record_get(track, "color")),
                 )
             )
         return result
 
     def get_transport_status(self) -> DawTransportStatus:
-        engine = self._require_engine()
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRANSPORT_STATUS_UNAVAILABLE",
-                "The current Pro Tools engine cannot read transport state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRANSPORT_STATUS_UNAVAILABLE",
-                    "The current Pro Tools engine cannot read transport state.",
-                    address=self.address,
-                ),
-                capability="transport.getStatus",
-                adapter="pro_tools",
-            )
-
-        command_id = self._resolve_command_id("GetTransportState")
-        try:
-            response = client.run_command(command_id, {})
-        except Exception as exc:
-            raise PrestoError(
-                "TRANSPORT_STATUS_FAILED",
-                str(exc) or "Failed to read Pro Tools transport state.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRANSPORT_STATUS_FAILED",
-                    str(exc) or "Failed to read Pro Tools transport state.",
-                    address=self.address,
-                    command_id=command_id,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="transport.getStatus",
-                adapter="pro_tools",
-            ) from exc
+        response = self._run_ptsl_command(
+            command_name="CId_GetTransportState",
+            payload={},
+            capability="transport.getStatus",
+            unavailable_code="TRANSPORT_STATUS_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot read transport state.",
+            failed_code="TRANSPORT_STATUS_FAILED",
+            failed_message="Failed to read Pro Tools transport state.",
+        )
 
         state = self._read_transport_state(response)
         return DawTransportStatus(
@@ -596,12 +542,11 @@ class ProToolsDawAdapter:
             return
 
         self._run_transport_command(
-            engine,
-            "SetPlaybackMode",
+            "CId_SetPlaybackMode",
             {"playback_mode": getattr(pt, "PM_Normal", 0)},
             capability_id="transport.play",
         )
-        self._run_transport_command(engine, "TogglePlayState", {}, capability_id="transport.play")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.play")
 
     def stop(self) -> None:
         engine = self._require_engine()
@@ -609,7 +554,7 @@ class ProToolsDawAdapter:
         if not status.is_playing and not status.is_recording:
             return
 
-        self._run_transport_command(engine, "TogglePlayState", {}, capability_id="transport.stop")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.stop")
 
     def record(self) -> None:
         engine = self._require_engine()
@@ -618,15 +563,14 @@ class ProToolsDawAdapter:
             return
 
         self._run_transport_command(
-            engine,
-            "SetRecordMode",
+            "CId_SetRecordMode",
             {
                 "record_mode": getattr(pt, "RM_Normal", 0),
                 "record_arm_transport": True,
             },
             capability_id="transport.record",
         )
-        self._run_transport_command(engine, "TogglePlayState", {}, capability_id="transport.record")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.record")
 
     def import_audio_file(self, path: str) -> str:
         imported = self.import_audio_files([path])
@@ -741,138 +685,50 @@ class ProToolsDawAdapter:
         return new_tracks
 
     def set_timeline_selection(self, **kwargs) -> tuple[str, str]:
-        engine = self._require_engine()
         self.ensure_session_open()
-        setter = getattr(engine, "set_timeline_selection", None)
-        getter = getattr(engine, "get_timeline_selection", None)
-        if not callable(setter) or not callable(getter):
-            raise PrestoError(
-                "TIMELINE_SELECTION_UNAVAILABLE",
-                "Pro Tools timeline selection API is unavailable on the current engine.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TIMELINE_SELECTION_UNAVAILABLE",
-                    "Pro Tools timeline selection API is unavailable on the current engine.",
-                    address=self.address,
-                ),
-                capability="export.range.set",
-                adapter="pro_tools",
-            )
-
         request = {
             "in_time": str(kwargs.get("in_time", "")),
             "out_time": str(kwargs.get("out_time", "")),
+            "location_type": "TLType_TimeCode",
         }
-        try:
-            setter(**request)
-            selection = getter()
-        except Exception as exc:
-            raise PrestoError(
-                "TIMELINE_SELECTION_SET_FAILED",
-                str(exc) or "Failed to set timeline selection.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TIMELINE_SELECTION_SET_FAILED",
-                    str(exc) or "Failed to set timeline selection.",
-                    address=self.address,
-                    request=request,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="export.range.set",
-                adapter="pro_tools",
-            ) from exc
-
+        self._run_ptsl_command(
+            command_name="CId_SetTimelineSelection",
+            payload=request,
+            capability="export.range.set",
+            unavailable_code="TIMELINE_SELECTION_UNAVAILABLE",
+            unavailable_message="Pro Tools timeline selection API is unavailable on the current engine.",
+            failed_code="TIMELINE_SELECTION_SET_FAILED",
+            failed_message="Failed to set timeline selection.",
+            failed_details={"request": request},
+        )
+        selection = self._run_ptsl_command(
+            command_name="CId_GetTimelineSelection",
+            payload={"location_type": "TLType_TimeCode"},
+            capability="export.range.set",
+            unavailable_code="TIMELINE_SELECTION_UNAVAILABLE",
+            unavailable_message="Pro Tools timeline selection API is unavailable on the current engine.",
+            failed_code="TIMELINE_SELECTION_SET_FAILED",
+            failed_message="Failed to read timeline selection.",
+        )
         return self._coerce_timeline_selection(selection)
 
     def export_mix(self, **kwargs) -> None:
-        engine = self._require_engine()
         self.ensure_session_open()
-        exporter = getattr(engine, "export_mix", None)
-        if not callable(exporter):
-            raise PrestoError(
-                "EXPORT_MIX_UNAVAILABLE",
-                "Pro Tools export mix API is unavailable on the current engine.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "EXPORT_MIX_UNAVAILABLE",
-                    "Pro Tools export mix API is unavailable on the current engine.",
-                    address=self.address,
-                ),
-                capability="export.start",
-                adapter="pro_tools",
-            )
-
-        file_name = self._require_non_empty_text(kwargs.get("file_name"), field="fileName", capability="export.start")
-        output_path = self._require_non_empty_text(kwargs.get("output_path"), field="outputPath", capability="export.start")
-        source_type = kwargs.get("source_type", "physical_out")
-        source_name = self._require_non_empty_text(kwargs.get("source_name", "Out 1-2"), field="source.name", capability="export.start")
-        file_destination = str(kwargs.get("file_destination", "directory") or "directory").strip().lower().replace("-", "_")
-
-        if file_destination == "session_folder":
-            location_info = pt.EM_LocationInfo(
-                file_destination=getattr(pt, "EM_FD_SessionFolder", 2),
-                import_after_bounce=self._bool_to_triple_bool(
-                    kwargs.get("import_after_bounce", False),
-                    capability="export.start",
-                    field="importAfterBounce",
-                ),
-            )
-        else:
-            location_info = pt.EM_LocationInfo(
-                file_destination=getattr(pt, "EM_FD_Directory", 2),
-                directory=self._posix_directory_to_hfs(output_path),
-                import_after_bounce=self._bool_to_triple_bool(
-                    kwargs.get("import_after_bounce", False),
-                    capability="export.start",
-                    field="importAfterBounce",
-                ),
-            )
-
-        try:
-            exporter(
-                file_name,
-                self._resolve_export_mix_file_type(kwargs.get("file_type"), capability="export.start", field="fileType"),
-                [
-                    pt.EM_SourceInfo(
-                        source_type=self._resolve_export_mix_source_type(source_type, capability="export.start", field="source.type"),
-                        name=source_name,
-                    )
-                ],
-                self._build_export_mix_audio_info(kwargs),
-                pt.EM_VideoInfo(
-                    include_video=self._bool_to_triple_bool(
-                        kwargs.get("include_video", False),
-                        capability="export.start",
-                        field="video.includeVideo",
-                    )
-                ),
-                location_info,
-                pt.EM_DolbyAtmosInfo(),
-                self._bool_to_triple_bool(kwargs.get("offline", True), capability="export.start", field="offline"),
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "EXPORT_MIX_FAILED",
-                str(exc) or "Failed to export mix from Pro Tools.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "EXPORT_MIX_FAILED",
-                    str(exc) or "Failed to export mix from Pro Tools.",
-                    address=self.address,
-                    output_path=output_path,
-                    file_name=file_name,
-                    source_name=source_name,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="export.start",
-                adapter="pro_tools",
-            ) from exc
+        request = self._build_export_mix_request_payload(kwargs)
+        self._run_ptsl_command(
+            command_name="CId_ExportMix",
+            payload=request,
+            capability="export.start",
+            unavailable_code="EXPORT_MIX_UNAVAILABLE",
+            unavailable_message="Pro Tools export mix API is unavailable on the current engine.",
+            failed_code="EXPORT_MIX_FAILED",
+            failed_message="Failed to export mix from Pro Tools.",
+            failed_details={
+                "output_path": kwargs.get("output_path"),
+                "file_name": request.get("file_name"),
+                "source_name": self._record_get((request.get("mix_source_list") or [{}])[0], "name"),
+            },
+        )
 
     def export_mix_with_progress(self, **kwargs) -> str:
         task_id = str(kwargs.get("task_id") or "").strip() or str(uuid.uuid4())
@@ -921,25 +777,7 @@ class ProToolsDawAdapter:
         return task_id
 
     def list_export_mix_sources(self, source_type: str) -> list[str]:
-        engine = self._require_engine()
         self.ensure_session_open()
-        client = getattr(engine, "client", None)
-        run_command = getattr(client, "run_command", None)
-        if not callable(run_command):
-            raise PrestoError(
-                "EXPORT_MIX_SOURCE_LIST_UNAVAILABLE",
-                "Pro Tools export mix source list API is unavailable on the current engine.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "EXPORT_MIX_SOURCE_LIST_UNAVAILABLE",
-                    "Pro Tools export mix source list API is unavailable on the current engine.",
-                    address=self.address,
-                ),
-                capability="export.mixWithSource",
-                adapter="pro_tools",
-            )
-
         resolved_source_type_name = self._resolve_export_mix_source_type_name(
             source_type,
             capability="export.mixWithSource",
@@ -948,29 +786,16 @@ class ProToolsDawAdapter:
         request = {
             "type": resolved_source_type_name,
         }
-        command_id = self._resolve_export_mix_source_list_command_id()
-
-        try:
-            response = run_command(command_id, request)
-        except Exception as exc:
-            raise PrestoError(
-                "EXPORT_MIX_SOURCE_LIST_FAILED",
-                str(exc) or "Failed to list export mix sources from Pro Tools.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "EXPORT_MIX_SOURCE_LIST_FAILED",
-                    str(exc) or "Failed to list export mix sources from Pro Tools.",
-                    address=self.address,
-                    command_id=command_id,
-                    source_type=str(source_type),
-                    request=request,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="export.mixWithSource",
-                adapter="pro_tools",
-            ) from exc
+        response = self._run_ptsl_command(
+            command_name="CId_GetExportMixSourceList",
+            payload=request,
+            capability="export.mixWithSource",
+            unavailable_code="EXPORT_MIX_SOURCE_LIST_UNAVAILABLE",
+            unavailable_message="Pro Tools export mix source list API is unavailable on the current engine.",
+            failed_code="EXPORT_MIX_SOURCE_LIST_FAILED",
+            failed_message="Failed to list export mix sources from Pro Tools.",
+            failed_details={"source_type": str(source_type), "request": request},
+        )
 
         source_list = response.get("source_list") if isinstance(response, dict) else None
         if not isinstance(source_list, list):
@@ -993,7 +818,6 @@ class ProToolsDawAdapter:
         return [str(item) for item in source_list if str(item).strip()]
 
     def rename_track(self, track_name: str, new_name: str) -> None:
-        engine = self._require_engine()
         self.ensure_session_open()
         current_name = str(track_name).strip()
         next_name = str(new_name).strip()
@@ -1025,49 +849,19 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        client = getattr(engine, "client", None)
-        run_command = getattr(client, "run_command", None) if client is not None else None
-        if not callable(run_command):
-            raise PrestoError(
-                "RENAME_TRACK_UNAVAILABLE",
-                "The current Pro Tools engine cannot rename tracks.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "RENAME_TRACK_UNAVAILABLE",
-                    "The current Pro Tools engine cannot rename tracks.",
-                    address=self.address,
-                ),
-                capability="track.rename",
-                adapter="pro_tools",
-            )
-
-        try:
-            run_command(
-                self._resolve_command_id("RenameTargetTrack"),
-                {
-                    "current_name": current_name,
-                    "new_name": next_name,
-                },
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "RENAME_TRACK_FAILED",
-                str(exc) or f"Failed to rename track '{current_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "RENAME_TRACK_FAILED",
-                    str(exc) or f"Failed to rename track '{current_name}'.",
-                    address=self.address,
-                    track_name=current_name,
-                    new_name=next_name,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.rename",
-                adapter="pro_tools",
-            ) from exc
+        self._run_ptsl_command(
+            command_name="CId_RenameTargetTrack",
+            payload={
+                "current_name": current_name,
+                "new_name": next_name,
+            },
+            capability="track.rename",
+            unavailable_code="RENAME_TRACK_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot rename tracks.",
+            failed_code="RENAME_TRACK_FAILED",
+            failed_message=f"Failed to rename track '{current_name}'.",
+            failed_details={"track_name": current_name, "new_name": next_name},
+        )
 
     def select_track(self, track_name: str) -> None:
         self.select_tracks([track_name])
@@ -1090,48 +884,19 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        client = getattr(engine, "client", None)
-        run_command = getattr(client, "run_command", None) if client is not None else None
-        if not callable(run_command):
-            raise PrestoError(
-                "TRACK_SELECT_UNAVAILABLE",
-                "The current Pro Tools engine cannot select tracks by name.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_SELECT_UNAVAILABLE",
-                    "The current Pro Tools engine cannot select tracks by name.",
-                    address=self.address,
-                ),
-                capability="track.select",
-                adapter="pro_tools",
-            )
-
-        try:
-            run_command(
-                self._resolve_command_id("SelectTracksByName"),
-                {
-                    "track_names": normalized_track_names,
-                    "selection_mode": "SM_Replace",
-                },
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "SELECT_TRACK_FAILED",
-                str(exc) or "Failed to select tracks.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SELECT_TRACK_FAILED",
-                    str(exc) or "Failed to select tracks.",
-                    address=self.address,
-                    track_names=normalized_track_names,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.select",
-                adapter="pro_tools",
-            ) from exc
+        self._run_ptsl_command(
+            command_name="CId_SelectTracksByName",
+            payload={
+                "track_names": normalized_track_names,
+                "selection_mode": "SM_Replace",
+            },
+            capability="track.select",
+            unavailable_code="TRACK_SELECT_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot select tracks by name.",
+            failed_code="SELECT_TRACK_FAILED",
+            failed_message="Failed to select tracks.",
+            failed_details={"track_names": normalized_track_names},
+        )
 
         selected_tracks = set(self._detect_selected_track_names(engine))
         if any(track_name not in selected_tracks for track_name in normalized_track_names):
@@ -1152,7 +917,6 @@ class ProToolsDawAdapter:
             )
 
     def apply_track_color(self, track_name: str, color_slot: int) -> None:
-        engine = self._require_engine()
         self.ensure_session_open()
         normalized_track_name = str(track_name).strip()
         if not normalized_track_name:
@@ -1170,49 +934,23 @@ class ProToolsDawAdapter:
             )
 
         normalized_color_slot = self._normalize_color_slot(color_slot)
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "SET_TRACK_COLOR_UNAVAILABLE",
-                "The current Pro Tools engine cannot set track color.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SET_TRACK_COLOR_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set track color.",
-                    address=self.address,
-                ),
-                capability="track.color.apply",
-                adapter="pro_tools",
-            )
-
-        command_id = self.DEFAULT_SET_TRACK_COLOR_COMMAND_ID
         request = {
             "track_names": [normalized_track_name],
             "color_index": normalized_color_slot,
         }
-
-        try:
-            response = client.run_command(command_id, request)
-        except Exception as exc:
-            raise PrestoError(
-                "SET_TRACK_COLOR_FAILED",
-                str(exc) or f"Failed to apply color to track '{normalized_track_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SET_TRACK_COLOR_FAILED",
-                    str(exc) or f"Failed to apply color to track '{normalized_track_name}'.",
-                    address=self.address,
-                    track_name=normalized_track_name,
-                    color_slot=normalized_color_slot,
-                    command_id=command_id,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.color.apply",
-                adapter="pro_tools",
-            ) from exc
+        response = self._run_ptsl_command(
+            command_name="CId_SetTrackColor",
+            payload=request,
+            capability="track.color.apply",
+            unavailable_code="SET_TRACK_COLOR_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set track color.",
+            failed_code="SET_TRACK_COLOR_FAILED",
+            failed_message=f"Failed to apply color to track '{normalized_track_name}'.",
+            failed_details={
+                "track_name": normalized_track_name,
+                "color_slot": normalized_color_slot,
+            },
+        )
 
         success_count = self._read_track_color_success_count(response)
         if success_count is None:
@@ -1227,7 +965,7 @@ class ProToolsDawAdapter:
                     address=self.address,
                     track_name=normalized_track_name,
                     color_slot=normalized_color_slot,
-                    command_id=command_id,
+                    command_name="CId_SetTrackColor",
                     raw_response=repr(response),
                 ),
                 capability="track.color.apply",
@@ -1246,7 +984,7 @@ class ProToolsDawAdapter:
                     address=self.address,
                     track_name=normalized_track_name,
                     color_slot=normalized_color_slot,
-                    command_id=command_id,
+                    command_name="CId_SetTrackColor",
                     raw_response=repr(response),
                 ),
                 capability="track.color.apply",
@@ -1254,7 +992,6 @@ class ProToolsDawAdapter:
             )
 
     def set_track_pan(self, track_name: str, pan: float) -> None:
-        engine = self._require_engine()
         self.ensure_session_open()
         normalized_track_name = str(track_name).strip()
         if not normalized_track_name:
@@ -1307,22 +1044,6 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRACK_PAN_UNAVAILABLE",
-                "The current Pro Tools engine cannot set pan.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_PAN_UNAVAILABLE",
-                    "The current Pro Tools engine cannot set pan.",
-                    address=self.address,
-                ),
-                capability="track.pan.set",
-                adapter="pro_tools",
-            )
-
         request = {
             "track_name": normalized_track_name,
             "control_id": {
@@ -1344,30 +1065,16 @@ class ProToolsDawAdapter:
                 }
             ],
         }
-
-        try:
-            client.run_command(
-                self._resolve_track_control_breakpoints_command_id(),
-                request,
-            )
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_PAN_SET_FAILED",
-                str(exc) or f"Failed to update pan for '{normalized_track_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_PAN_SET_FAILED",
-                    str(exc) or f"Failed to update pan for '{normalized_track_name}'.",
-                    address=self.address,
-                    track_name=normalized_track_name,
-                    value=normalized_pan,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.pan.set",
-                adapter="pro_tools",
-            ) from exc
+        self._run_ptsl_command(
+            command_name="CId_SetTrackControlBreakpoints",
+            payload=request,
+            capability="track.pan.set",
+            unavailable_code="TRACK_PAN_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot set pan.",
+            failed_code="TRACK_PAN_SET_FAILED",
+            failed_message=f"Failed to update pan for '{normalized_track_name}'.",
+            failed_details={"track_name": normalized_track_name, "value": normalized_pan},
+        )
 
     def apply_track_color_batch(
         self,
@@ -1377,7 +1084,6 @@ class ProToolsDawAdapter:
         self._unimplemented("apply_track_color_batch")
 
     def select_all_clips_on_track(self, track_name: str) -> None:
-        engine = self._require_engine()
         self.ensure_session_open()
         normalized_track_name = str(track_name).strip()
         if not normalized_track_name:
@@ -1394,41 +1100,16 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        select_all_clips = getattr(engine, "select_all_clips_on_track", None)
-        if not callable(select_all_clips):
-            raise PrestoError(
-                "CLIP_SELECTION_UNAVAILABLE",
-                "The current Pro Tools engine cannot select all clips on a track.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "CLIP_SELECTION_UNAVAILABLE",
-                    "The current Pro Tools engine cannot select all clips on a track.",
-                    address=self.address,
-                ),
-                capability="clip.selectAllOnTrack",
-                adapter="pro_tools",
-            )
-
-        try:
-            select_all_clips(normalized_track_name)
-        except Exception as exc:
-            raise PrestoError(
-                "SELECT_CLIPS_FAILED",
-                str(exc) or f"Failed to select clips on track '{normalized_track_name}'.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "SELECT_CLIPS_FAILED",
-                    str(exc) or f"Failed to select clips on track '{normalized_track_name}'.",
-                    address=self.address,
-                    track_name=normalized_track_name,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="clip.selectAllOnTrack",
-                adapter="pro_tools",
-            ) from exc
+        self._run_ptsl_command(
+            command_name="CId_SelectAllClipsOnTrack",
+            payload={"track_name": normalized_track_name},
+            capability="clip.selectAllOnTrack",
+            unavailable_code="CLIP_SELECTION_UNAVAILABLE",
+            unavailable_message="The current Pro Tools engine cannot select all clips on a track.",
+            failed_code="SELECT_CLIPS_FAILED",
+            failed_message=f"Failed to select clips on track '{normalized_track_name}'.",
+            failed_details={"track_name": normalized_track_name},
+        )
 
     def set_track_mute_state(self, track_name: str, muted: bool) -> None:
         self.set_track_mute_state_batch([track_name], muted)
@@ -1565,6 +1246,49 @@ class ProToolsDawAdapter:
     def cancel_export(self) -> None:
         self._unimplemented("cancel_export")
 
+    def list_ptsl_commands(
+        self,
+        *,
+        category: str | None = None,
+        only_with_py_ptsl_op: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        entries = list(list_commands())
+        if category:
+            normalized_category = str(category).strip()
+            entries = [entry for entry in entries if entry.category == normalized_category]
+        if only_with_py_ptsl_op is not None:
+            entries = [entry for entry in entries if entry.has_py_ptsl_op is bool(only_with_py_ptsl_op)]
+        return [self._serialize_ptsl_command_entry(entry) for entry in entries]
+
+    def describe_ptsl_command(self, command_name: str) -> dict[str, Any]:
+        entry = require_command(str(command_name).strip())
+        return self._serialize_ptsl_command_entry(entry)
+
+    def execute_ptsl_command(
+        self,
+        command_name: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        minimum_host_version: str | None = None,
+    ) -> Any:
+        normalized_command_name = str(command_name).strip()
+        entry = require_command(normalized_command_name)
+        return self._run_ptsl_command(
+            command_name=entry.command_name,
+            payload=dict(payload or {}),
+            capability="daw.ptsl.command.execute",
+            unavailable_code="PTSL_COMMAND_EXECUTION_UNAVAILABLE",
+            unavailable_message=f"The current Pro Tools engine cannot execute {entry.command_name}.",
+            failed_code="PTSL_COMMAND_EXECUTION_FAILED",
+            failed_message=f"Failed to execute {entry.command_name}.",
+            minimum_host_version=minimum_host_version,
+            failed_details={
+                "command_name": entry.command_name,
+                "payload": dict(payload or {}),
+                "minimum_host_version": minimum_host_version,
+            },
+        )
+
     def _require_engine(self):
         if self._engine is None:
             raise PrestoError(
@@ -1623,10 +1347,6 @@ class ProToolsDawAdapter:
         return self._read_engine_value(engine, "session_bit_depth")
 
     def _read_tracks(self, engine: Any) -> list[Any]:
-        tracks = self._read_tracks_via_track_list(engine)
-        if tracks is not None:
-            return tracks
-
         tracks = self._read_tracks_via_ptsl_command(engine)
         if tracks is not None:
             return tracks
@@ -1645,96 +1365,56 @@ class ProToolsDawAdapter:
             adapter="pro_tools",
         )
 
-    def _read_tracks_via_track_list(self, engine: Any) -> list[Any] | None:
-        track_list = getattr(engine, "track_list", None)
-        if not callable(track_list):
-            return None
-        try:
-            tracks = track_list()
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_LIST_FAILED",
-                str(exc) or "Failed to read track list.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_LIST_FAILED",
-                    str(exc) or "Failed to read track list.",
-                    address=self.address,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability="track.list",
-                adapter="pro_tools",
-            ) from exc
-        if tracks is None:
-            return []
-        return list(tracks)
-
     def _read_tracks_via_ptsl_command(self, engine: Any) -> list[Any] | None:
-        if ops is None or pt is None:
-            return None
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run"):
-            return None
-
-        pagination_request_type = getattr(pt, "PaginationRequest", None)
-        if pagination_request_type is None:
-            return None
-
         limit = 1000
         offset = 0
         tracks: list[Any] = []
-        try:
-            while True:
-                op = ops.GetTrackList(
-                    page_limit=limit,
-                    pagination_request=pagination_request_type(limit=limit, offset=offset),
-                )
-                client.run(op)
-                chunk = list(getattr(op, "track_list", []) or [])
-                tracks.extend(chunk)
-                if len(chunk) < limit:
-                    break
-                offset += limit
-        except Exception as exc:
-            raise PrestoError(
-                "TRACK_LIST_FAILED",
-                str(exc) or "Failed to read track list via PTSL command.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRACK_LIST_FAILED",
-                    str(exc) or "Failed to read track list via PTSL command.",
-                    address=self.address,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
+        while True:
+            response = self._run_ptsl_command(
+                engine=engine,
+                command_name="CId_GetTrackList",
+                payload={
+                    "page_limit": limit,
+                    "pagination_request": {
+                        "limit": limit,
+                        "offset": offset,
+                    },
+                },
                 capability="track.list",
-                adapter="pro_tools",
-            ) from exc
+                unavailable_code="TRACK_LIST_UNAVAILABLE",
+                unavailable_message="Pro Tools track list API is unavailable on the current engine.",
+                failed_code="TRACK_LIST_FAILED",
+                failed_message="Failed to read track list via PTSL command.",
+                failed_details={"limit": limit, "offset": offset},
+            )
+            chunk = response.get("track_list") if isinstance(response, dict) else None
+            if chunk is None:
+                raise PrestoError(
+                    "TRACK_LIST_FAILED",
+                    "PTSL GetTrackList did not return track_list.",
+                    source="runtime",
+                    retryable=False,
+                    details=self._raw_error_details(
+                        "TRACK_LIST_FAILED",
+                        "PTSL GetTrackList did not return track_list.",
+                        address=self.address,
+                        limit=limit,
+                        offset=offset,
+                        response=response,
+                    ),
+                    capability="track.list",
+                    adapter="pro_tools",
+                )
+            tracks.extend(list(chunk))
+            if len(chunk) < limit:
+                break
+            offset += limit
 
         return tracks
 
     def _import_audio(self, engine: Any, file_paths: list[str], *, convert: bool) -> None:
         session_path = self.ensure_session_open()
-        client = getattr(engine, "client", None)
-        run_command = getattr(client, "run_command", None) if client is not None else None
-        if not callable(run_command):
-            raise PrestoError(
-                "IMPORT_UNAVAILABLE",
-                "Pro Tools import API is unavailable on the current engine.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "IMPORT_UNAVAILABLE",
-                    "Pro Tools import API is unavailable on the current engine.",
-                    address=self.address,
-                ),
-                capability="import.run.start",
-                adapter="pro_tools",
-            )
-
+        import_type = getattr(pt, "Audio", getattr(pt, "IType_Audio", 2)) if pt is not None else 2
         audio_operation = self._resolve_audio_operation(convert=convert)
         audio_destination = getattr(pt, "MD_NewTrack", 0) if pt is not None else 0
         audio_location = getattr(pt, "ML_SessionStart", 0) if pt is not None else 0
@@ -1742,7 +1422,7 @@ class ProToolsDawAdapter:
         location_options = getattr(pt, "TimeCode", getattr(pt, "TOOptions_TimeCode", 0)) if pt is not None else 0
         request = {
             "session_path": session_path,
-            "import_type": 1,
+            "import_type": import_type,
             "audio_data": {
                 "file_list": list(file_paths),
                 "audio_operations": audio_operation,
@@ -1755,7 +1435,17 @@ class ProToolsDawAdapter:
                 },
             },
         }
-        run_command(self._resolve_command_id("Import"), request)
+        self._run_ptsl_command(
+            engine=engine,
+            command_name="CId_Import",
+            payload=request,
+            capability="import.run.start",
+            unavailable_code="IMPORT_UNAVAILABLE",
+            unavailable_message="Pro Tools import API is unavailable on the current engine.",
+            failed_code="IMPORT_FAILED",
+            failed_message="Failed to import audio into Pro Tools.",
+            failed_details={"file_paths": list(file_paths), "convert": bool(convert)},
+        )
 
     @staticmethod
     def _resolve_audio_operation(*, convert: bool) -> int:
@@ -1868,6 +1558,8 @@ class ProToolsDawAdapter:
 
     @staticmethod
     def _coerce_timeline_selection(selection: Any) -> tuple[str, str]:
+        if isinstance(selection, dict):
+            return str(selection.get("in_time", "")), str(selection.get("out_time", ""))
         if isinstance(selection, tuple) and len(selection) >= 2:
             return str(selection[0]), str(selection[1])
         if isinstance(selection, list) and len(selection) >= 2:
@@ -2146,8 +1838,7 @@ class ProToolsDawAdapter:
             return None
         return int(match.group(1)), int(match.group(2))
 
-    @staticmethod
-    def _detect_selected_track_names(engine: Any) -> list[str]:
+    def _detect_selected_track_names(self, engine: Any) -> list[str]:
         for attr in ("selected_track_names", "get_selected_track_names"):
             if not hasattr(engine, attr):
                 continue
@@ -2167,31 +1858,28 @@ class ProToolsDawAdapter:
                     return selected
                 return []
 
-        if hasattr(engine, "track_list"):
-            try:
-                tracks = engine.track_list()
-            except Exception as exc:
-                raise PrestoError(
-                    "TRACK_SELECTION_CHECK_FAILED",
-                    str(exc) or "Failed to inspect selected tracks.",
-                    source="runtime",
-                    retryable=False,
-                    details={"exception_type": type(exc).__name__},
-                    capability="track.color.apply",
-                    adapter="pro_tools",
-                ) from exc
+        try:
+            tracks = self._read_tracks(engine)
+        except PrestoError as exc:
+            raise PrestoError(
+                "TRACK_SELECTION_CHECK_FAILED",
+                str(exc) or "Failed to inspect selected tracks.",
+                source="runtime",
+                retryable=False,
+                details={"exception_type": type(exc).__name__},
+                capability="track.color.apply",
+                adapter="pro_tools",
+            ) from exc
 
-            selected: list[str] = []
-            for track in tracks or []:
-                attrs = getattr(track, "track_attributes", None)
-                if (
-                    ProToolsDawAdapter._is_selected_track_attribute(getattr(attrs, "is_selected", None))
-                    or ProToolsDawAdapter._is_selected_track_attribute(getattr(track, "is_selected", None))
-                ):
-                    selected.append(str(getattr(track, "name", "")).strip())
-            return [name for name in selected if name]
-
-        return []
+        selected: list[str] = []
+        for track in tracks or []:
+            attrs = self._record_get(track, "track_attributes")
+            if (
+                ProToolsDawAdapter._is_selected_track_attribute(self._record_get(attrs, "is_selected"))
+                or ProToolsDawAdapter._is_selected_track_attribute(self._record_get(track, "is_selected"))
+            ):
+                selected.append(str(self._record_get(track, "name", default="")).strip())
+        return [name for name in selected if name]
 
     @staticmethod
     def _is_selected_track_attribute(value: Any) -> bool:
@@ -2289,6 +1977,21 @@ class ProToolsDawAdapter:
         return text or None
 
     @staticmethod
+    def _record_get(value: Any, *keys: str, default: Any = None) -> Any:
+        if value is None:
+            return default
+        if isinstance(value, dict):
+            for key in keys:
+                if key in value:
+                    return value[key]
+            return default
+        for key in keys:
+            candidate = getattr(value, key, None)
+            if candidate is not None:
+                return candidate
+        return default
+
+    @staticmethod
     def _is_unknown_command_error(exc: Exception) -> bool:
         text = str(exc).lower()
         return "unknown command" in text or "unrecognized command" in text or "command not found" in text
@@ -2330,6 +2033,76 @@ class ProToolsDawAdapter:
                 details[key] = value
         return details
 
+    def _run_ptsl_command(
+        self,
+        *,
+        command_name: str,
+        payload: dict[str, Any],
+        capability: str,
+        unavailable_code: str,
+        unavailable_message: str,
+        failed_code: str,
+        failed_message: str,
+        engine: Any | None = None,
+        minimum_host_version: str | None = None,
+        failed_details: dict[str, Any] | None = None,
+    ) -> Any:
+        resolved_engine = engine or self._require_engine()
+        try:
+            return self._ptsl_runner.run(
+                resolved_engine,
+                command_name,
+                payload,
+                capability=capability,
+                minimum_host_version=minimum_host_version,
+            )
+        except PrestoError as exc:
+            if exc.code in {"PTSL_CLIENT_UNAVAILABLE", "PTSL_COMMAND_UNAVAILABLE", "PTSL_NOT_INSTALLED", "PTSL_SCHEMA_UNAVAILABLE"}:
+                raise PrestoError(
+                    unavailable_code,
+                    unavailable_message,
+                    source="runtime",
+                    retryable=False,
+                    details=self._raw_error_details(
+                        unavailable_code,
+                        unavailable_message,
+                        address=self.address,
+                        command_name=command_name,
+                    ),
+                    capability=capability,
+                    adapter="pro_tools",
+                ) from exc
+
+            details = dict(failed_details or {})
+            details.setdefault("command_name", command_name)
+            raise PrestoError(
+                failed_code,
+                str(exc) or failed_message,
+                source="runtime",
+                retryable=False,
+                details=self._raw_error_details(
+                    failed_code,
+                    str(exc) or failed_message,
+                    address=self.address,
+                    **details,
+                    raw_exception=str(exc) or None,
+                ),
+                capability=capability,
+                adapter="pro_tools",
+            ) from exc
+
+    @staticmethod
+    def _serialize_ptsl_command_entry(entry: PtslCommandCatalogEntry) -> dict[str, Any]:
+        return {
+            "commandName": entry.command_name,
+            "commandId": entry.command_id,
+            "requestMessage": entry.request_message,
+            "responseMessage": entry.response_message,
+            "hasPyPtslOp": entry.has_py_ptsl_op,
+            "category": entry.category,
+            "introducedVersion": entry.introduced_version,
+        }
+
     def _set_track_toggle_state_batch(
         self,
         *,
@@ -2359,40 +2132,32 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        try:
-            self._ptsl_runner.run(
-                engine,
-                command_name,
-                {"track_names": normalized_track_names, "enabled": bool(enabled)},
-                capability=capability,
-            )
-        except PrestoError as exc:
-            if exc.code in {"PTSL_CLIENT_UNAVAILABLE", "PTSL_COMMAND_UNAVAILABLE"}:
-                raise PrestoError(
-                    unavailable_code,
-                    unavailable_message,
-                    source="runtime",
-                    retryable=False,
-                    details=self._raw_error_details(unavailable_code, unavailable_message, address=self.address),
+        if command_name == "CId_SetTrackOnlineState":
+            for track_name in normalized_track_names:
+                self._run_ptsl_command(
+                    engine=engine,
+                    command_name=command_name,
+                    payload={"track_name": track_name, "enabled": bool(enabled)},
                     capability=capability,
-                    adapter="pro_tools",
-                ) from exc
-            raise PrestoError(
-                failed_code,
-                str(exc) or failed_message,
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    failed_code,
-                    str(exc) or failed_message,
-                    address=self.address,
-                    track_names=normalized_track_names,
-                    enabled=bool(enabled),
-                    raw_exception=str(exc) or None,
-                ),
-                capability=capability,
-                adapter="pro_tools",
-            ) from exc
+                    unavailable_code=unavailable_code,
+                    unavailable_message=unavailable_message,
+                    failed_code=failed_code,
+                    failed_message=failed_message,
+                    failed_details={"track_name": track_name, "enabled": bool(enabled)},
+                )
+            return
+
+        self._run_ptsl_command(
+            engine=engine,
+            command_name=command_name,
+            payload={"track_names": normalized_track_names, "enabled": bool(enabled)},
+            capability=capability,
+            unavailable_code=unavailable_code,
+            unavailable_message=unavailable_message,
+            failed_code=failed_code,
+            failed_message=failed_message,
+            failed_details={"track_names": normalized_track_names, "enabled": bool(enabled)},
+        )
 
     @staticmethod
     def _read_track_color_success_count(response: Any) -> int | None:
@@ -2419,51 +2184,21 @@ class ProToolsDawAdapter:
 
     def _run_transport_command(
         self,
-        engine: Any,
         command_name: str,
         request: dict[str, Any],
         *,
         capability_id: str,
     ) -> Any:
-        client = getattr(engine, "client", None)
-        if client is None or not hasattr(client, "run_command"):
-            raise PrestoError(
-                "TRANSPORT_COMMAND_UNAVAILABLE",
-                f"The current Pro Tools engine cannot run {command_name}.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRANSPORT_COMMAND_UNAVAILABLE",
-                    f"The current Pro Tools engine cannot run {command_name}.",
-                    address=self.address,
-                    command_name=command_name,
-                ),
-                capability=capability_id,
-                adapter="pro_tools",
-            )
-
-        command_id = self._resolve_command_id(command_name)
-        try:
-            return client.run_command(command_id, request)
-        except Exception as exc:
-            raise PrestoError(
-                "TRANSPORT_COMMAND_FAILED",
-                str(exc) or f"Failed to run {command_name}.",
-                source="runtime",
-                retryable=False,
-                details=self._raw_error_details(
-                    "TRANSPORT_COMMAND_FAILED",
-                    str(exc) or f"Failed to run {command_name}.",
-                    address=self.address,
-                    command_id=command_id,
-                    command_name=command_name,
-                    request=request,
-                    exception_type=type(exc).__name__,
-                    raw_exception=str(exc) or None,
-                ),
-                capability=capability_id,
-                adapter="pro_tools",
-            ) from exc
+        return self._run_ptsl_command(
+            command_name=command_name,
+            payload=request,
+            capability=capability_id,
+            unavailable_code="TRANSPORT_COMMAND_UNAVAILABLE",
+            unavailable_message=f"The current Pro Tools engine cannot run {command_name}.",
+            failed_code="TRANSPORT_COMMAND_FAILED",
+            failed_message=f"Failed to run {command_name}.",
+            failed_details={"request": request},
+        )
 
     def _read_transport_state(self, response: Any) -> str:
         raw_state = None
@@ -2503,89 +2238,3 @@ class ProToolsDawAdapter:
         if "play" in text:
             return "playing"
         return "stopped"
-
-    @staticmethod
-    def _resolve_command_id(name: str) -> int:
-        if pt is None:
-            raise PrestoError(
-                "PTSL_NOT_INSTALLED",
-                "py-ptsl is not available in this environment.",
-                source="runtime",
-                retryable=False,
-                capability="daw.connection.connect",
-                adapter="pro_tools",
-            )
-        if hasattr(pt, "CommandId") and hasattr(pt.CommandId, name):
-            return int(getattr(pt.CommandId, name))
-        if hasattr(pt, name):
-            return int(getattr(pt, name))
-        raise PrestoError(
-            "PTSL_COMMAND_UNAVAILABLE",
-            f"PTSL command id '{name}' not found.",
-            source="runtime",
-            retryable=False,
-            capability="daw.connection.connect",
-            adapter="pro_tools",
-        )
-
-    @staticmethod
-    def _resolve_export_mix_source_list_command_id() -> int:
-        try:
-            return ProToolsDawAdapter._resolve_command_id("GetExportMixSourceList")
-        except PrestoError:
-            pass
-
-        try:
-            return ProToolsDawAdapter._resolve_command_id("CId_GetExportMixSourceList")
-        except PrestoError:
-            pass
-
-        return ProToolsDawAdapter.DEFAULT_GET_EXPORT_MIX_SOURCE_LIST_COMMAND_ID
-
-    @staticmethod
-    def _resolve_track_control_breakpoints_command_id() -> int:
-        try:
-            return ProToolsDawAdapter._resolve_command_id("SetTrackControlBreakpoints")
-        except PrestoError:
-            pass
-
-        try:
-            return ProToolsDawAdapter._resolve_command_id("CId_SetTrackControlBreakpoints")
-        except PrestoError as exc:
-            raise PrestoError(
-                "PTSL_COMMAND_UNAVAILABLE",
-                "PTSL command id 'SetTrackControlBreakpoints' not found.",
-                source="runtime",
-                retryable=False,
-                details={
-                    "command_name": "SetTrackControlBreakpoints",
-                    "fallback_name": "CId_SetTrackControlBreakpoints",
-                    "raw_exception": str(exc) or None,
-                },
-                capability="track.pan.set",
-                adapter="pro_tools",
-            ) from exc
-
-    @staticmethod
-    def _resolve_export_mix_command_id() -> int:
-        try:
-            return ProToolsDawAdapter._resolve_command_id("CId_ExportMix")
-        except PrestoError:
-            pass
-
-        try:
-            return ProToolsDawAdapter._resolve_command_id("ExportMix")
-        except PrestoError as exc:
-            raise PrestoError(
-                "PTSL_COMMAND_UNAVAILABLE",
-                "PTSL command id 'ExportMix' not found.",
-                source="runtime",
-                retryable=False,
-                details={
-                    "command_name": "ExportMix",
-                    "fallback_name": "CId_ExportMix",
-                    "raw_exception": str(exc) or None,
-                },
-                capability="export.start",
-                adapter="pro_tools",
-            ) from exc

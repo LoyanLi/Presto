@@ -8,6 +8,7 @@ import pytest
 
 from presto.integrations.daw import protools_adapter as protools_adapter_module
 from presto.domain.errors import PrestoError
+from presto.integrations.daw.ptsl_catalog import list_commands
 from presto.integrations.daw.protools_adapter import ProToolsDawAdapter, _convert_posix_directory_to_hfs
 
 
@@ -20,6 +21,55 @@ def _pt_constant(name: str) -> int:
     if not isinstance(value, int):
         raise AssertionError(f"missing ptsl constant {name}")
     return value
+
+
+def _track_record(
+    name: str,
+    *,
+    index: int,
+    track_format: str = "TF_Stereo",
+    is_selected: str | int = "TAState_None",
+    is_muted: bool = False,
+    is_soloed: bool = False,
+) -> dict[str, object]:
+    return {
+        "id": str(index),
+        "name": name,
+        "type": "TT_Audio",
+        "format": track_format,
+        "track_attributes": {
+            "is_selected": is_selected,
+            "is_muted": is_muted,
+            "is_soloed": is_soloed,
+        },
+    }
+
+
+def _track_list_response(
+    track_names: list[str],
+    *,
+    selected_track_names: set[str] | None = None,
+    track_formats: dict[str, str] | None = None,
+) -> dict[str, object]:
+    selected = selected_track_names or set()
+    formats = track_formats or {}
+    track_list = [
+        _track_record(
+            name,
+            index=index,
+            track_format=formats.get(name, "TF_Stereo"),
+            is_selected="TAState_SetExplicitly" if name in selected else "TAState_None",
+        )
+        for index, name in enumerate(track_names, start=1)
+    ]
+    return {
+        "track_list": track_list,
+        "pagination_response": {
+            "limit": max(len(track_list), 1),
+            "offset": 0,
+            "total": len(track_list),
+        },
+    }
 
 
 def test_coerce_session_length_seconds_uses_session_timecode_rate() -> None:
@@ -67,6 +117,7 @@ def test_connect_honors_timeout_seconds_when_host_ready_check_hangs(monkeypatch:
 class FakeSelectionEngine:
     def __init__(self) -> None:
         self.selected_track_names: list[str] = []
+        self.track_names = ["Kick", "Snare", "Bass", "Lead Vox", "Pad", "FX"]
         self.select_calls: list[list[str]] = []
         self.session_path = "/Sessions/Presto.ptx"
         self.renamed_tracks: list[tuple[str, str]] = []
@@ -77,45 +128,52 @@ class FakeSelectionEngine:
         self.client = type("Client", (), {"run_command": self._run_command})()
         self.command_calls: list[tuple[object, dict[str, object]]] = []
 
-    def select_tracks_by_name(self, track_names: list[str]) -> None:
-        self.select_calls.append(track_names)
-        self.selected_track_names = list(track_names)
-
-    def rename_target_track(self, current_name: str, new_name: str) -> None:
-        self.renamed_tracks.append((current_name, new_name))
-
-    def select_all_clips_on_track(self, track_name: str) -> None:
-        self.selected_clip_tracks.append(track_name)
-
-    def save_session(self) -> None:
-        self.saved_sessions += 1
-
     def _run_command(self, command_id, request):
         self.command_calls.append((command_id, request))
-        if command_id == 73:
+        if command_id == _pt_constant("CId_SelectTracksByName"):
             self.selected_track_names = [str(name) for name in request.get("track_names", [])]
-            return {"track_names": list(self.selected_track_names)}
-        if command_id == 8:
+            return _track_list_response(
+                self.selected_track_names,
+                selected_track_names=set(self.selected_track_names),
+            )
+        if command_id == _pt_constant("CId_GetTrackList"):
+            return _track_list_response(
+                self.track_names,
+                selected_track_names=set(self.selected_track_names),
+            )
+        if command_id == _pt_constant("CId_RenameTargetTrack"):
             current_name = str(request.get("current_name", ""))
             new_name = str(request.get("new_name", ""))
             self.renamed_tracks.append((current_name, new_name))
+            if current_name and new_name:
+                self.track_names = [new_name if name == current_name else name for name in self.track_names]
             return {}
-        if command_id == 128:
+        if command_id == _pt_constant("CId_SelectAllClipsOnTrack"):
+            track_name = str(request.get("track_name", ""))
+            if track_name:
+                self.selected_clip_tracks.append(track_name)
+            return {}
+        if command_id == _pt_constant("CId_SaveSession"):
+            self.saved_sessions += 1
+            return None
+        if command_id == _pt_constant("CId_SetTrackColor"):
+            return {"success_count": len(request.get("track_names", []))}
+        if command_id == _pt_constant("CId_GetExportMixSourceList"):
             source_type = str(request.get("type", ""))
             return {"source_list": [f"{source_type}-A", f"{source_type}-B"]}
-        if command_id == 59:
+        if command_id == _pt_constant("CId_GetTransportState"):
             transport_state_map = {
                 "playing": _pt_constant("TS_TransportPlaying"),
                 "stopped": _pt_constant("TS_TransportStopped"),
                 "recording": _pt_constant("TS_TransportRecording"),
             }
             return {"current_setting": transport_state_map[self.transport_state]}
-        if command_id == 32:
+        if command_id == _pt_constant("CId_SetPlaybackMode"):
             return {"current_setting": 0}
-        if command_id == 33:
+        if command_id == _pt_constant("CId_SetRecordMode"):
             self.record_mode_armed = bool(request.get("record_arm_transport"))
             return {"current_setting": 0}
-        if command_id == 64:
+        if command_id == _pt_constant("CId_TogglePlayState"):
             if self.transport_state == "playing":
                 self.transport_state = "stopped"
             elif self.transport_state == "recording":
@@ -123,7 +181,7 @@ class FakeSelectionEngine:
             else:
                 self.transport_state = "recording" if self.record_mode_armed else "playing"
             return {"current_setting": 0}
-        return {"success_count": len(request.get("track_names", []))}
+        return {}
 
 
 class FakeImportEngine:
@@ -133,25 +191,10 @@ class FakeImportEngine:
         self.track_names = ["Existing"]
         self.client = type("Client", (), {"run_command": self._run_command})()
 
-    def track_list(self):
-        return [
-            type(
-                "Track",
-                (),
-                {
-                    "id": index + 1,
-                    "name": name,
-                    "type": 2,
-                    "format": 2,
-                    "track_attributes": type("Attrs", (), {"is_muted": False, "is_soloed": False})(),
-                    "color": None,
-                },
-            )()
-            for index, name in enumerate(self.track_names)
-        ]
-
     def _run_command(self, command_id, request):
-        if command_id != 2:
+        if command_id == _pt_constant("CId_GetTrackList"):
+            return _track_list_response(self.track_names)
+        if command_id != _pt_constant("CId_Import"):
             return {}
         self.import_calls.append(dict(request))
         audio_data = request.get("audio_data", {})
@@ -169,25 +212,10 @@ class FakeReorderedImportEngine:
         self.track_names = ["Existing"]
         self.client = type("Client", (), {"run_command": self._run_command})()
 
-    def track_list(self):
-        return [
-            type(
-                "Track",
-                (),
-                {
-                    "id": index + 1,
-                    "name": name,
-                    "type": 2,
-                    "format": 2,
-                    "track_attributes": type("Attrs", (), {"is_muted": False, "is_soloed": False})(),
-                    "color": None,
-                },
-            )()
-            for index, name in enumerate(self.track_names)
-        ]
-
     def _run_command(self, command_id, request):
-        if command_id != 2:
+        if command_id == _pt_constant("CId_GetTrackList"):
+            return _track_list_response(self.track_names)
+        if command_id != _pt_constant("CId_Import"):
             return {}
         self.import_calls.append(dict(request))
         audio_data = request.get("audio_data", {})
@@ -203,55 +231,44 @@ class FakeReorderedImportEngine:
 class FakeTimelineEngine:
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
-        self.set_calls: list[dict[str, object]] = []
+        self.command_calls: list[tuple[object, dict[str, object]]] = []
         self.selection = ("00:00:00:00", "00:00:00:00")
+        self.client = type("Client", (), {"run_command": self._run_command})()
 
-    def set_timeline_selection(self, **kwargs) -> None:
-        self.set_calls.append(dict(kwargs))
-        self.selection = (str(kwargs.get("in_time", "")), str(kwargs.get("out_time", "")))
-
-    def get_timeline_selection(self):
-        return self.selection
+    def _run_command(self, command_id, request):
+        self.command_calls.append((command_id, dict(request)))
+        if command_id == _pt_constant("CId_SetTimelineSelection"):
+            self.selection = (str(request.get("in_time", "")), str(request.get("out_time", "")))
+            return None
+        if command_id == _pt_constant("CId_GetTimelineSelection"):
+            return {"in_time": self.selection[0], "out_time": self.selection[1]}
+        return None
 
 
 class FakeTrackSelectionStateEngine:
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
+        self.client = type("Client", (), {"run_command": self._run_command})()
 
-    def track_list(self):
-        return [
-            type(
-                "Track",
-                (),
-                {
-                    "id": 1,
-                    "name": "Kick",
-                    "type": 2,
-                    "format": 2,
-                    "track_attributes": type("Attrs", (), {"is_selected": 1})(),
-                },
-            )(),
-            type(
-                "Track",
-                (),
-                {
-                    "id": 2,
-                    "name": "Snare",
-                    "type": 2,
-                    "format": 1,
-                    "track_attributes": type("Attrs", (), {"is_selected": 2})(),
-                },
-            )(),
-        ]
+    def _run_command(self, command_id, request):
+        if command_id != _pt_constant("CId_GetTrackList"):
+            return None
+        return _track_list_response(
+            ["Kick", "Snare"],
+            selected_track_names={"Snare"},
+            track_formats={"Kick": "TF_Stereo", "Snare": "TF_Mono"},
+        )
 
 
 class FakeExportEngine:
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
-        self.export_mix_calls: list[dict[str, object]] = []
+        self.command_calls: list[tuple[object, dict[str, object]]] = []
+        self.client = type("Client", (), {"run_command": self._run_command})()
 
-    def export_mix(self, *args) -> None:
-        self.export_mix_calls.append({"args": args})
+    def _run_command(self, command_id, request):
+        self.command_calls.append((command_id, dict(request)))
+        return None
 
 
 def test_select_track_uses_ptsl_selection_by_name() -> None:
@@ -265,7 +282,7 @@ def test_select_track_uses_ptsl_selection_by_name() -> None:
     assert engine.select_calls == []
     assert engine.command_calls == [
         (
-            73,
+            _pt_constant("CId_SelectTracksByName"),
             {
                 "track_names": ["Kick"],
                 "selection_mode": "SM_Replace",
@@ -308,7 +325,6 @@ def test_set_track_solo_state_batch_uses_single_ptsl_command() -> None:
         ("set_track_record_enable_state_batch", "CId_SetTrackRecordEnableState"),
         ("set_track_record_safe_state_batch", "CId_SetTrackRecordSafeEnableState"),
         ("set_track_input_monitor_state_batch", "CId_SetTrackInputMonitorState"),
-        ("set_track_online_state_batch", "CId_SetTrackOnlineState"),
         ("set_track_frozen_state_batch", "CId_SetTrackFrozenState"),
         ("set_track_open_state_batch", "CId_SetTrackOpenState"),
     ],
@@ -325,6 +341,34 @@ def test_new_track_toggle_batches_use_expected_ptsl_command(method_name: str, co
         _pt_constant(command_name),
         {"track_names": ["Kick"], "enabled": True},
     )
+
+
+def test_set_track_online_state_batch_uses_singular_ptsl_request() -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    adapter.set_track_online_state_batch(["Kick"], True)
+
+    assert engine.command_calls[-1] == (
+        _pt_constant("CId_SetTrackOnlineState"),
+        {"track_name": "Kick", "enabled": True},
+    )
+
+
+def test_set_track_online_state_batch_keeps_batch_interface_by_iterating_tracks() -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    adapter.set_track_online_state_batch(["Kick", "Snare"], False)
+
+    assert engine.command_calls[-2:] == [
+        (_pt_constant("CId_SetTrackOnlineState"), {"track_name": "Kick", "enabled": False}),
+        (_pt_constant("CId_SetTrackOnlineState"), {"track_name": "Snare", "enabled": False}),
+    ]
 
 
 def test_list_tracks_exposes_track_format_from_ptsl_track_list() -> None:
@@ -353,13 +397,64 @@ def test_track_color_surface_does_not_expose_ui_probe_state() -> None:
     adapter = _adapter()
 
     assert not hasattr(adapter, "ensure_track_color_supported")
-    assert not hasattr(adapter, "_set_track_color_command_id")
     assert not hasattr(adapter, "automation_engine")
     assert not hasattr(adapter, "ui_profile")
 
 
-def test_set_track_color_uses_default_command_id() -> None:
-    assert ProToolsDawAdapter.DEFAULT_SET_TRACK_COLOR_COMMAND_ID == 153
+def test_list_ptsl_commands_exposes_full_catalog_metadata() -> None:
+    adapter = _adapter()
+
+    commands = adapter.list_ptsl_commands()
+
+    assert len(commands) == len(list_commands())
+    assert commands[0]["commandName"].startswith("CId_")
+    assert "commandId" in commands[0]
+    assert "requestMessage" in commands[0]
+    assert "responseMessage" in commands[0]
+    assert "hasPyPtslOp" in commands[0]
+    assert "introducedVersion" in commands[0]
+
+
+def test_describe_ptsl_command_returns_single_catalog_entry() -> None:
+    adapter = _adapter()
+
+    command = adapter.describe_ptsl_command("CId_GetTrackList")
+
+    assert command["commandName"] == "CId_GetTrackList"
+    assert command["commandId"] == _pt_constant("CId_GetTrackList")
+    assert command["requestMessage"] == "GetTrackListRequestBody"
+    assert command["responseMessage"] == "GetTrackListResponseBody"
+
+
+def test_execute_ptsl_command_runs_generic_cataloged_command() -> None:
+    adapter = _adapter()
+    engine = FakeSelectionEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    response = adapter.execute_ptsl_command(
+        "CId_SelectTracksByName",
+        {
+            "track_names": ["Kick"],
+            "selection_mode": "SM_Replace",
+        },
+    )
+
+    assert response["track_list"][0]["name"] == "Kick"
+    assert engine.command_calls[-1] == (
+        _pt_constant("CId_SelectTracksByName"),
+        {
+            "track_names": ["Kick"],
+            "selection_mode": "SM_Replace",
+        },
+    )
+
+
+def test_adapter_does_not_expose_command_id_resolution_helpers() -> None:
+    assert not hasattr(ProToolsDawAdapter, "_resolve_command_id")
+    assert not hasattr(ProToolsDawAdapter, "_resolve_export_mix_source_list_command_id")
+    assert not hasattr(ProToolsDawAdapter, "_resolve_track_control_breakpoints_command_id")
+    assert not hasattr(ProToolsDawAdapter, "_resolve_export_mix_command_id")
 
 
 def test_apply_track_color_uses_track_names_request_from_proto() -> None:
@@ -371,7 +466,12 @@ def test_apply_track_color_uses_track_names_request_from_proto() -> None:
     adapter.apply_track_color("Kick", 5)
 
     assert engine.select_calls == []
-    assert engine.command_calls == [(153, {"track_names": ["Kick"], "color_index": 5})]
+    assert engine.command_calls == [
+        (
+            _pt_constant("CId_SetTrackColor"),
+            {"track_names": ["Kick"], "color_index": 5},
+        )
+    ]
 
 
 def test_set_track_pan_uses_track_control_breakpoints_command() -> None:
@@ -379,13 +479,12 @@ def test_set_track_pan_uses_track_control_breakpoints_command() -> None:
     engine = FakeSelectionEngine()
     adapter._engine = engine
     adapter._connected = True
-    adapter._resolve_track_control_breakpoints_command_id = lambda: 150  # type: ignore[method-assign]
 
     adapter.set_track_pan("Kick", 0.0)
 
     assert engine.command_calls == [
         (
-            150,
+            _pt_constant("CId_SetTrackControlBreakpoints"),
             {
                 "track_name": "Kick",
                 "control_id": {
@@ -417,10 +516,9 @@ def test_set_track_hidden_state_uses_ptsl_track_names_request() -> None:
     adapter._engine = engine
     adapter._connected = True
 
-    command_id = adapter._resolve_command_id("SetTrackHiddenState")
     adapter.set_track_hidden_state("Kick", True)
 
-    assert engine.command_calls == [(command_id, {"track_names": ["Kick"], "enabled": True})]
+    assert engine.command_calls == [(_pt_constant("CId_SetTrackHiddenState"), {"track_names": ["Kick"], "enabled": True})]
 
 
 def test_set_track_inactive_state_uses_ptsl_track_names_request() -> None:
@@ -429,10 +527,9 @@ def test_set_track_inactive_state_uses_ptsl_track_names_request() -> None:
     adapter._engine = engine
     adapter._connected = True
 
-    command_id = adapter._resolve_command_id("SetTrackInactiveState")
     adapter.set_track_inactive_state("Bass", False)
 
-    assert engine.command_calls == [(command_id, {"track_names": ["Bass"], "enabled": False})]
+    assert engine.command_calls == [(_pt_constant("CId_SetTrackInactiveState"), {"track_names": ["Bass"], "enabled": False})]
 
 
 def test_set_track_hidden_state_batch_uses_single_ptsl_command() -> None:
@@ -441,10 +538,11 @@ def test_set_track_hidden_state_batch_uses_single_ptsl_command() -> None:
     adapter._engine = engine
     adapter._connected = True
 
-    command_id = adapter._resolve_command_id("SetTrackHiddenState")
     adapter.set_track_hidden_state_batch(["Kick", "Snare"], True)
 
-    assert engine.command_calls == [(command_id, {"track_names": ["Kick", "Snare"], "enabled": True})]
+    assert engine.command_calls == [
+        (_pt_constant("CId_SetTrackHiddenState"), {"track_names": ["Kick", "Snare"], "enabled": True})
+    ]
 
 
 def test_set_track_inactive_state_batch_uses_single_ptsl_command() -> None:
@@ -453,10 +551,11 @@ def test_set_track_inactive_state_batch_uses_single_ptsl_command() -> None:
     adapter._engine = engine
     adapter._connected = True
 
-    command_id = adapter._resolve_command_id("SetTrackInactiveState")
     adapter.set_track_inactive_state_batch(["Bass", "Lead Vox"], False)
 
-    assert engine.command_calls == [(command_id, {"track_names": ["Bass", "Lead Vox"], "enabled": False})]
+    assert engine.command_calls == [
+        (_pt_constant("CId_SetTrackInactiveState"), {"track_names": ["Bass", "Lead Vox"], "enabled": False})
+    ]
 
 
 def test_set_track_pan_rejects_out_of_range_values() -> None:
@@ -494,7 +593,7 @@ def test_apply_track_color_requires_success_count_confirmation() -> None:
     exc = exc_info.value
     assert exc.code == "SET_TRACK_COLOR_FAILED"
     assert exc.capability == "track.color.apply"
-    assert exc.details["command_id"] == 153
+    assert exc.details["command_name"] == "CId_SetTrackColor"
     assert exc.details["track_name"] == "Kick"
     assert exc.details["color_slot"] == 5
     assert "success_count=0" in exc.message
@@ -530,7 +629,7 @@ def test_list_export_mix_sources_uses_ptsl_command_with_enum_name() -> None:
     response = adapter.list_export_mix_sources("output")
 
     assert response == ["EMSType_Output-A", "EMSType_Output-B"]
-    assert engine.command_calls[-1] == (128, {"type": "EMSType_Output"})
+    assert engine.command_calls[-1] == (_pt_constant("CId_GetExportMixSourceList"), {"type": "EMSType_Output"})
 
 
 def test_list_export_mix_sources_rebinds_ptsl_failure_to_export_capability() -> None:
@@ -552,35 +651,6 @@ def test_list_export_mix_sources_rebinds_ptsl_failure_to_export_capability() -> 
     assert exc.capability == "export.mixWithSource"
     assert exc.details["source_type"] == "bus"
 
-
-def test_list_export_mix_sources_falls_back_to_default_command_id_when_generated_constant_is_missing(monkeypatch) -> None:
-    adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
-    engine = FakeSelectionEngine()
-    adapter._engine = engine
-    adapter._connected = True
-
-    original_resolve_command_id = ProToolsDawAdapter._resolve_command_id
-
-    def fake_resolve_command_id(name: str) -> int:
-        if name in ("GetExportMixSourceList", "CId_GetExportMixSourceList"):
-            raise PrestoError(
-                "PTSL_COMMAND_UNAVAILABLE",
-                f"PTSL command id '{name}' not found.",
-                source="runtime",
-                retryable=False,
-                capability="export.mixWithSource",
-                adapter="pro_tools",
-            )
-        return original_resolve_command_id(name)
-
-    monkeypatch.setattr(ProToolsDawAdapter, "_resolve_command_id", staticmethod(fake_resolve_command_id))
-
-    response = adapter.list_export_mix_sources("output")
-
-    assert response == ["EMSType_Output-A", "EMSType_Output-B"]
-    assert engine.command_calls[-1] == (128, {"type": "EMSType_Output"})
-
-
 def test_rename_track_uses_engine_rename() -> None:
     adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
     engine = FakeSelectionEngine()
@@ -591,7 +661,7 @@ def test_rename_track_uses_engine_rename() -> None:
 
     assert engine.command_calls == [
         (
-            8,
+            _pt_constant("CId_RenameTargetTrack"),
             {
                 "current_name": "Kick",
                 "new_name": "Kick In",
@@ -609,6 +679,9 @@ def test_select_all_clips_on_track_uses_engine_command() -> None:
     adapter.select_all_clips_on_track("Kick")
 
     assert engine.selected_clip_tracks == ["Kick"]
+    assert engine.command_calls == [
+        (_pt_constant("CId_SelectAllClipsOnTrack"), {"track_name": "Kick"})
+    ]
 
 
 def test_get_transport_status_reads_ptsl_state() -> None:
@@ -672,6 +745,7 @@ def test_save_session_uses_engine_save_session() -> None:
     adapter.save_session()
 
     assert engine.saved_sessions == 1
+    assert engine.command_calls == [(_pt_constant("CId_SaveSession"), {})]
 
 
 def test_import_audio_files_uses_ptsl_import_and_detects_new_tracks() -> None:
@@ -685,8 +759,10 @@ def test_import_audio_files_uses_ptsl_import_and_detects_new_tracks() -> None:
     assert imported == ["Kick", "Snare"]
     assert len(engine.import_calls) == 2
     assert engine.import_calls[0]["session_path"] == "/Sessions/Presto.ptx"
+    assert engine.import_calls[0]["import_type"] == "Audio"
     assert engine.import_calls[0]["audio_data"]["file_list"] == [str(Path("/tmp/Kick.wav").resolve())]
     assert engine.import_calls[1]["session_path"] == "/Sessions/Presto.ptx"
+    assert engine.import_calls[1]["import_type"] == "Audio"
     assert engine.import_calls[1]["audio_data"]["file_list"] == [str(Path("/tmp/Snare.aiff").resolve())]
 
 
@@ -715,7 +791,14 @@ def test_set_timeline_selection_uses_engine_wrapper_and_reads_back_selection() -
     selection = adapter.set_timeline_selection(in_time="00:00:01:00", out_time="00:00:05:00")
 
     assert selection == ("00:00:01:00", "00:00:05:00")
-    assert engine.set_calls == [{"in_time": "00:00:01:00", "out_time": "00:00:05:00"}]
+    assert engine.command_calls[0][0] == _pt_constant("CId_SetTimelineSelection")
+    assert engine.command_calls[0][1]["in_time"] == "00:00:01:00"
+    assert engine.command_calls[0][1]["out_time"] == "00:00:05:00"
+    assert engine.command_calls[0][1]["location_type"] == "TLType_TimeCode"
+    assert engine.command_calls[1] == (
+        _pt_constant("CId_GetTimelineSelection"),
+        {"location_type": "TLType_TimeCode"},
+    )
 
 
 def test_convert_posix_directory_to_hfs_handles_unicode_paths_without_osascript() -> None:
@@ -756,15 +839,15 @@ def test_export_mix_uses_posix_directory_and_default_physical_output(monkeypatch
         sample_rate=48000,
     )
 
-    assert len(engine.export_mix_calls) == 1
-    call = engine.export_mix_calls[0]["args"]
-    assert call[0] == "mix-print"
-    assert call[1] == _pt_constant("EM_WAV")
-    assert call[2][0].name == "Out 1-2"
-    assert call[2][0].source_type == _pt_constant("PhysicalOut")
-    assert call[5].directory == "Macintosh HD:Users:test:Exports:"
-    assert call[5].file_destination == _pt_constant("EM_FD_Directory")
-    assert call[7] == _pt_constant("TB_True")
+    assert len(engine.command_calls) == 1
+    command_id, request = engine.command_calls[0]
+    assert command_id == _pt_constant("CId_ExportMix")
+    assert request["file_name"] == "mix-print"
+    assert request["file_type"] == "EMFType_WAV"
+    assert request["mix_source_list"] == [{"source_type": "EMSType_PhysicalOut", "name": "Out 1-2"}]
+    assert request["location_info"]["directory"] == "Macintosh HD:Users:test:Exports:"
+    assert request["location_info"]["file_destination"] == "EM_FD_Directory"
+    assert request["offline_bounce"] == "TB_True"
 
 
 def test_export_direct_start_reuses_export_mix_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -789,7 +872,7 @@ def test_export_direct_start_reuses_export_mix_path(monkeypatch: pytest.MonkeyPa
         sample_rate=48000,
     )
 
-    assert engine.export_mix_calls[-1]["args"][0] == "clip-print"
+    assert engine.command_calls[-1][1]["file_name"] == "clip-print"
 
 
 def test_export_mix_supports_directory_destination_for_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -815,11 +898,11 @@ def test_export_mix_supports_directory_destination_for_workflow(monkeypatch: pyt
         file_destination="directory",
     )
 
-    assert len(engine.export_mix_calls) == 1
-    call = engine.export_mix_calls[0]["args"]
-    assert call[0] == "temp_export_Verse"
-    assert call[5].file_destination == _pt_constant("EM_FD_Directory")
-    assert call[5].directory == "Macintosh HD:Users:test:Exports:"
+    assert len(engine.command_calls) == 1
+    request = engine.command_calls[0][1]
+    assert request["file_name"] == "temp_export_Verse"
+    assert request["location_info"]["file_destination"] == "EM_FD_Directory"
+    assert request["location_info"]["directory"] == "Macintosh HD:Users:test:Exports:"
 
 
 def test_export_mix_with_progress_delegates_to_export_mix_and_emits_start_and_complete(
@@ -853,7 +936,7 @@ def test_export_mix_with_progress_delegates_to_export_mix_and_emits_start_and_co
     )
 
     assert task_id == "task-export-1"
-    assert len(engine.export_mix_calls) == 1
+    assert len(engine.command_calls) == 1
     assert [event["status"] for event in events] == ["running", "completed"]
     assert [event["progressPercent"] for event in events] == [0.0, 100.0]
     assert all(event["taskId"] == "task-export-1" for event in events)

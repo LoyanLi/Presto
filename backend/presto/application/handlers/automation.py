@@ -76,8 +76,12 @@ def strip_silence_runtime_error(
     )
 
 
-def open_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "stripSilence.open"
+def _open_strip_silence_payload(
+    ctx: CapabilityExecutionContext,
+    payload: dict[str, Any],
+    *,
+    capability_id: str,
+) -> dict[str, Any]:
     del payload
     mac_automation = get_mac_automation(ctx, capability_id)
     daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
@@ -95,8 +99,20 @@ def open_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[st
     return {"opened": True}
 
 
-def execute_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "stripSilence.execute"
+def open_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return _open_strip_silence_payload(ctx, payload, capability_id="stripSilence.open")
+
+
+def open_strip_silence_via_ui_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return _open_strip_silence_payload(ctx, payload, capability_id="stripSilence.openViaUi")
+
+
+def _execute_strip_silence_payload(
+    ctx: CapabilityExecutionContext,
+    payload: dict[str, Any],
+    *,
+    capability_id: str,
+) -> dict[str, Any]:
     mac_automation = get_mac_automation(ctx, capability_id)
     daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
 
@@ -115,6 +131,14 @@ def execute_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict
         ) from exc
 
     return {"completed": True}
+
+
+def execute_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return _execute_strip_silence_payload(ctx, payload, capability_id="stripSilence.execute")
+
+
+def execute_strip_silence_via_ui_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
+    return _execute_strip_silence_payload(ctx, payload, capability_id="stripSilence.executeViaUi")
 
 
 def automation_runtime_error(

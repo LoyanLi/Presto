@@ -22,6 +22,7 @@ class WorkflowExecutorFakeDaw:
         self.renames: list[tuple[str, str]] = []
         self.colors: list[tuple[str, int]] = []
         self.imported_paths: list[str] = []
+        self.ptsl_execute_calls: list[tuple[str, dict[str, object], str | None]] = []
         self.import_release_event = threading.Event()
         self.rename_release_event = threading.Event()
         self.block_after_import_count: int | None = None
@@ -46,6 +47,20 @@ class WorkflowExecutorFakeDaw:
         if self.block_after_import_count is not None and len(self.imported_paths) > self.block_after_import_count:
             self.import_release_event.wait(timeout=5)
         return Path(path).stem
+
+    def execute_ptsl_command(
+        self,
+        command_name: str,
+        payload: dict[str, object] | None = None,
+        *,
+        minimum_host_version: str | None = None,
+    ) -> dict[str, object]:
+        resolved_payload = dict(payload or {})
+        self.ptsl_execute_calls.append((command_name, resolved_payload, minimum_host_version))
+        return {
+            "echo": resolved_payload,
+            "minimumHostVersion": minimum_host_version,
+        }
 
 
 def _services() -> ServiceContainer:
@@ -109,6 +124,48 @@ def test_workflow_run_start_executes_declarative_steps_and_exposes_terminal_job_
     assert record.result["steps"]["renameResult"]["trackName"] == "Lead Vox"
     assert services.daw.renames == [("Lead Vox RAW", "Lead Vox")]
     assert services.daw.saved == 1
+
+
+def test_workflow_run_start_can_use_generated_public_daw_semantic_capability_without_executor_changes() -> None:
+    services = _services()
+    payload = {
+        "pluginId": "official.ptsl-workflow",
+        "workflowId": "test.workflow.ptsl",
+        "definition": {
+            "workflowId": "test.workflow.ptsl",
+            "version": "1.0.0",
+            "inputSchemaId": "test.workflow.ptsl.v1",
+            "steps": [
+                {
+                    "stepId": "read_tracks",
+                    "usesCapability": "daw.sessionFile.createSession",
+                    "input": {
+                        "session_name": "Workflow Session",
+                    },
+                    "saveAs": "trackListResult",
+                }
+            ],
+        },
+        "allowedCapabilities": ["daw.sessionFile.createSession"],
+        "input": {},
+    }
+
+    accepted = execute_capability(services, "workflow.run.start", payload)
+
+    job_id = accepted["jobId"]
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        job = services.job_manager.get(job_id)
+        if job.state in {"succeeded", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow job did not finish in time")
+
+    record = services.job_manager.get(job_id)
+    assert record.state == "succeeded"
+    assert record.result["steps"]["trackListResult"]["command"]["commandName"] == "CId_CreateSession"
+    assert services.daw.ptsl_execute_calls == [("CId_CreateSession", {"session_name": "Workflow Session"}, None)]
 
 
 def test_workflow_run_start_rejects_steps_outside_allowed_capabilities() -> None:

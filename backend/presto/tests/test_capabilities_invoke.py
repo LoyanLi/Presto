@@ -14,6 +14,8 @@ from presto.transport.http.routes.invoke import invoke_capability
 from presto.transport.http.schemas.capabilities import CapabilityInvokeRequestSchema
 from presto.application.service_container import build_service_container
 from presto.integrations.daw.base import DawAdapterCapabilitySnapshot, DawConnectionStatus, DawSessionInfo, DawTrackInfo
+from presto.integrations.daw.ptsl_catalog import list_commands, require_command
+from presto.integrations.daw.ptsl_semantic import is_generated_semantic_command, semantic_capability_id
 from presto.integrations.mac import MacAutomationError
 
 
@@ -55,6 +57,7 @@ class FakeDawAdapter:
         self.transport_state = "stopped"
         self.transport_command_calls: list[tuple[int, dict[str, object]]] = []
         self.record_mode_armed = False
+        self.ptsl_execute_calls: list[tuple[str, dict[str, object], str | None]] = []
         self.track_catalog: list[dict[str, object]] = [
             {
                 "id": "track-1",
@@ -262,6 +265,51 @@ class FakeDawAdapter:
 
     def set_track_open_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self.open_batch_updates.append((list(track_names), enabled))
+
+    def list_ptsl_commands(self, *, category: str | None = None, only_with_py_ptsl_op: bool | None = None) -> list[dict[str, object]]:
+        commands = list_commands()
+        if category:
+            commands = [entry for entry in commands if entry.category == category]
+        if only_with_py_ptsl_op is not None:
+            commands = [entry for entry in commands if entry.has_py_ptsl_op is only_with_py_ptsl_op]
+        return [
+            {
+                "commandName": entry.command_name,
+                "commandId": entry.command_id,
+                "requestMessage": entry.request_message,
+                "responseMessage": entry.response_message,
+                "hasPyPtslOp": entry.has_py_ptsl_op,
+                "category": entry.category,
+                "introducedVersion": entry.introduced_version,
+            }
+            for entry in commands
+        ]
+
+    def describe_ptsl_command(self, command_name: str) -> dict[str, object]:
+        entry = require_command(command_name)
+        return {
+            "commandName": entry.command_name,
+            "commandId": entry.command_id,
+            "requestMessage": entry.request_message,
+            "responseMessage": entry.response_message,
+            "hasPyPtslOp": entry.has_py_ptsl_op,
+            "category": entry.category,
+            "introducedVersion": entry.introduced_version,
+        }
+
+    def execute_ptsl_command(
+        self,
+        command_name: str,
+        payload: dict[str, object] | None = None,
+        *,
+        minimum_host_version: str | None = None,
+    ) -> dict[str, object]:
+        resolved_payload = dict(payload or {})
+        self.ptsl_execute_calls.append((command_name, resolved_payload, minimum_host_version))
+        return {
+            "echo": resolved_payload,
+            "minimumHostVersion": minimum_host_version,
+        }
 
     def select_all_clips_on_track(self, track_name: str) -> None:
         self.selected_clip_tracks.append(track_name)
@@ -984,6 +1032,68 @@ def test_invoke_strip_silence_execute_wraps_automation_failures_as_presto_error(
         "rawMessage": "Underlying UI automation failure.",
         "script": "execute-strip-silence",
     }
+
+
+def test_invoke_strip_silence_open_via_ui_preserves_alias_capability_on_failure() -> None:
+    app = _app_with_fake_strip_silence()
+    request = DummyRequest(app=app)
+
+    def fail_on_open(script: str) -> str:
+        app.state.services.mac_automation.scripts.append(script)
+        if script == "open-strip-silence":
+            raise MacAutomationError(
+                "UI_ACTION_FAILED",
+                "Strip Silence failed.",
+                raw_message="Underlying UI automation failure.",
+                details={"script": script},
+            )
+        return ""
+
+    app.state.services.mac_automation.run_script = fail_on_open
+
+    with pytest.raises(PrestoError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-5d-open-via-ui-error",
+                capability="stripSilence.openViaUi",
+                payload={},
+            ),
+        )
+
+    assert exc_info.value.code == "UI_ACTION_FAILED"
+    assert exc_info.value.capability == "stripSilence.openViaUi"
+
+
+def test_invoke_strip_silence_execute_via_ui_preserves_alias_capability_on_failure() -> None:
+    app = _app_with_fake_strip_silence()
+    request = DummyRequest(app=app)
+
+    def fail_on_execute(script: str) -> str:
+        app.state.services.mac_automation.scripts.append(script)
+        if script == "execute-strip-silence":
+            raise MacAutomationError(
+                "UI_ACTION_FAILED",
+                "Strip Silence failed.",
+                raw_message="Underlying UI automation failure.",
+                details={"script": script},
+            )
+        return ""
+
+    app.state.services.mac_automation.run_script = fail_on_execute
+
+    with pytest.raises(PrestoError) as exc_info:
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-5d-execute-via-ui-error",
+                capability="stripSilence.executeViaUi",
+                payload={"trackName": "Kick"},
+            ),
+        )
+
+    assert exc_info.value.code == "UI_ACTION_FAILED"
+    assert exc_info.value.capability == "stripSilence.executeViaUi"
 
 
 def test_invoke_split_stereo_to_mono_execute_runs_dedicated_automation_flow() -> None:
@@ -1852,6 +1962,130 @@ def test_capabilities_routes_expose_canonical_metadata() -> None:
     assert detail_response.capability.canonical_source == "pro_tools"
     assert "pro_tools" in detail_response.capability.field_support
     assert detail_response.capability.field_support["pro_tools"].request_fields == ["trackNames", "enabled"]
+    assert detail_response.capability.workflow_scope == "shared"
+    assert detail_response.capability.portability == "canonical"
+    assert detail_response.capability.implementations["pro_tools"].kind == "handler"
+    assert detail_response.capability.implementations["pro_tools"].handler == "track.mute.set"
+
+
+def test_capabilities_routes_hide_internal_ptsl_capabilities_from_public_listing() -> None:
+    app = create_app()
+    request = DummyRequest(app=app)
+
+    list_response = list_capabilities(request)
+
+    capability_ids = {capability.id for capability in list_response.capabilities}
+    assert "daw.ptsl.catalog.list" not in capability_ids
+    assert "daw.ptsl.command.describe" not in capability_ids
+    assert "daw.ptsl.command.execute" not in capability_ids
+
+
+def test_invoke_internal_ptsl_catalog_list_returns_command_metadata() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-ptsl-list",
+            capability="daw.ptsl.catalog.list",
+            payload={"category": "transport"},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data["commands"]
+    assert all(command["category"] == "transport" for command in response.data["commands"])
+
+
+def test_invoke_internal_ptsl_command_describe_returns_single_command() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-ptsl-describe",
+            capability="daw.ptsl.command.describe",
+            payload={"commandName": "CId_GetTrackList"},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data["command"]["commandName"] == "CId_GetTrackList"
+    assert response.data["command"]["responseMessage"] == "GetTrackListResponseBody"
+
+
+def test_invoke_internal_ptsl_command_execute_dispatches_to_adapter() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-ptsl-execute",
+            capability="daw.ptsl.command.execute",
+            payload={
+                "commandName": "CId_SetTrackMuteState",
+                "payload": {"track_names": ["Kick"], "enabled": True},
+                "minimumHostVersion": "2023.12.0",
+            },
+        ),
+    )
+
+    assert response.success is True
+    assert response.data["command"]["commandName"] == "CId_SetTrackMuteState"
+    assert response.data["result"]["echo"] == {"track_names": ["Kick"], "enabled": True}
+    assert app.state.services.daw.ptsl_execute_calls == [
+        ("CId_SetTrackMuteState", {"track_names": ["Kick"], "enabled": True}, "2023.12.0")
+    ]
+
+
+def test_invoke_public_ptsl_semantic_capability_dispatches_to_bound_command() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-ptsl-semantic",
+            capability="daw.sessionFile.createSession",
+            payload={"session_name": "Test Session"},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data["command"]["commandName"] == "CId_CreateSession"
+    assert response.data["result"] == {"echo": {"session_name": "Test Session"}, "minimumHostVersion": None}
+    assert app.state.services.daw.ptsl_execute_calls == [("CId_CreateSession", {"session_name": "Test Session"}, None)]
+
+
+def test_every_public_ptsl_semantic_capability_dispatches_to_its_catalog_command() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+    generated_entries = [entry for entry in list_commands() if is_generated_semantic_command(entry)]
+
+    for index, entry in enumerate(generated_entries, start=1):
+        capability_id = semantic_capability_id(entry)
+        payload = {"probe": entry.command_name, "sequence": index}
+        response = invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId=f"req-ptsl-{index}",
+                capability=capability_id,
+                payload=payload,
+            ),
+        )
+
+        assert response.success is True
+        assert response.capability == capability_id
+        assert response.data["command"]["commandName"] == entry.command_name
+        assert response.data["result"] == {"echo": payload, "minimumHostVersion": None}
+
+    assert app.state.services.daw.ptsl_execute_calls == [
+        (entry.command_name, {"probe": entry.command_name, "sequence": index}, None)
+        for index, entry in enumerate(generated_entries, start=1)
+    ]
 
 
 def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:

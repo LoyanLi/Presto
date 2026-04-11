@@ -3,10 +3,13 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from ...domain.ports import CapabilityExecutionContext
+from ...integrations.daw.ptsl_semantic import list_semantic_capability_definitions
 from . import track as track_handlers
 from .automation import (
     execute_strip_silence_payload,
+    execute_strip_silence_via_ui_payload,
     open_strip_silence_payload,
+    open_strip_silence_via_ui_payload,
     split_stereo_to_mono_execute_payload,
 )
 from .clip import clip_select_all_on_track_payload
@@ -25,6 +28,12 @@ from .jobs import (
     get_job_payload,
     list_jobs_payload,
     update_job_payload,
+)
+from .ptsl import (
+    build_daw_ptsl_semantic_execute_payload,
+    daw_ptsl_catalog_list_payload,
+    daw_ptsl_command_describe_payload,
+    daw_ptsl_command_execute_payload,
 )
 from .session import (
     session_get_info_payload,
@@ -61,6 +70,9 @@ HANDLER_BINDINGS: dict[str, CapabilityHandler] = {
     "system.health": system_health_payload,
     "daw.connection.getStatus": daw_connection_get_status_payload,
     "daw.adapter.getSnapshot": daw_adapter_snapshot_payload,
+    "daw.ptsl.catalog.list": daw_ptsl_catalog_list_payload,
+    "daw.ptsl.command.describe": daw_ptsl_command_describe_payload,
+    "daw.ptsl.command.execute": daw_ptsl_command_execute_payload,
     "automation.splitStereoToMono.execute": split_stereo_to_mono_execute_payload,
     "config.get": config_payload,
     "config.update": update_config_payload,
@@ -111,6 +123,13 @@ HANDLER_BINDINGS: dict[str, CapabilityHandler] = {
     "jobs.update": update_job_payload,
     "jobs.cancel": cancel_job_payload,
     "jobs.delete": delete_job_payload,
-    "stripSilence.openViaUi": open_strip_silence_payload,
-    "stripSilence.executeViaUi": execute_strip_silence_payload,
+    "stripSilence.openViaUi": open_strip_silence_via_ui_payload,
+    "stripSilence.executeViaUi": execute_strip_silence_via_ui_payload,
 }
+
+for definition in list_semantic_capability_definitions():
+    implementation = definition["implementations"]["pro_tools"]
+    HANDLER_BINDINGS[str(definition["handler"])] = build_daw_ptsl_semantic_execute_payload(
+        str(definition["id"]),
+        str(implementation["command"]),
+    )

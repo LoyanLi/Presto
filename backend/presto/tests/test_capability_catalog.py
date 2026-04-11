@@ -82,6 +82,103 @@ def test_public_capabilities_declare_canonical_metadata() -> None:
         assert definition.canonical_source in definition.field_support
 
 
+def test_capability_catalog_declares_workflow_scope_portability_and_implementations() -> None:
+    definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+
+    for definition in DEFAULT_CAPABILITY_DEFINITIONS:
+        assert definition.workflow_scope in ("shared", "daw_specific", "internal")
+        assert definition.portability in ("canonical", "daw_specific")
+        assert definition.implementations
+        assert set(definition.implementations.keys()) == set(definition.supported_daws)
+        assert definition.canonical_source in definition.implementations
+
+    track_mute = definitions["track.mute.set"]
+    track_mute_impl = track_mute.implementations["pro_tools"]
+    assert track_mute.workflow_scope == "shared"
+    assert track_mute.portability == "canonical"
+    assert track_mute_impl.kind == "handler"
+    assert track_mute_impl.handler == "track.mute.set"
+
+    ptsl_execute = definitions["daw.ptsl.command.execute"]
+    ptsl_execute_impl = ptsl_execute.implementations["pro_tools"]
+    assert ptsl_execute.workflow_scope == "internal"
+    assert ptsl_execute.portability == "daw_specific"
+    assert ptsl_execute_impl.kind == "handler"
+    assert ptsl_execute_impl.handler == "daw.ptsl.command.execute"
+
+    strip_silence_ui = definitions["stripSilence.executeViaUi"]
+    strip_silence_ui_impl = strip_silence_ui.implementations["pro_tools"]
+    assert strip_silence_ui.workflow_scope == "internal"
+    assert strip_silence_ui.portability == "daw_specific"
+    assert strip_silence_ui_impl.kind == "ui_automation"
+    assert strip_silence_ui_impl.handler == "stripSilence.executeViaUi"
+
+
+def test_generated_ptsl_semantic_capabilities_use_vendor_neutral_public_ids() -> None:
+    definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+    public_ptsl_command_capabilities = [
+        definition
+        for definition in DEFAULT_CAPABILITY_DEFINITIONS
+        if definition.visibility == "public"
+        and definition.implementations[definition.canonical_source].kind == "ptsl_command"
+    ]
+
+    assert len(public_ptsl_command_capabilities) == 143
+    assert all(not definition.id.startswith("daw.ptsl.") for definition in public_ptsl_command_capabilities)
+
+    create_session = definitions["daw.sessionFile.createSession"]
+    implementation = create_session.implementations["pro_tools"]
+
+    assert create_session.workflow_scope == "daw_specific"
+    assert create_session.portability == "daw_specific"
+    assert implementation.kind == "ptsl_command"
+    assert implementation.command == "CId_CreateSession"
+
+
+def test_duplicate_ptsl_commands_collapse_into_existing_canonical_public_capabilities() -> None:
+    capability_ids = {definition.id for definition in DEFAULT_CAPABILITY_DEFINITIONS}
+
+    for canonical_capability_id in (
+        "track.list",
+        "clip.selectAllOnTrack",
+        "session.save",
+        "session.getLength",
+        "track.select",
+        "track.color.apply",
+        "track.mute.set",
+        "track.solo.set",
+        "track.hidden.set",
+        "track.inactive.set",
+        "track.recordEnable.set",
+        "track.recordSafe.set",
+        "track.inputMonitor.set",
+        "track.online.set",
+        "track.frozen.set",
+        "track.open.set",
+    ):
+        assert canonical_capability_id in capability_ids
+
+    for removed_duplicate_id in (
+        "daw.sessionRead.getTrackList",
+        "daw.editing.selectAllClipsOnTrack",
+        "daw.sessionFile.saveSession",
+        "daw.sessionRead.getSessionLength",
+        "daw.editing.selectTracksByName",
+        "daw.editing.setTrackColor",
+        "daw.editing.setTrackMuteState",
+        "daw.editing.setTrackSoloState",
+        "daw.editing.setTrackHiddenState",
+        "daw.editing.setTrackInactiveState",
+        "daw.editing.setTrackRecordEnableState",
+        "daw.editing.setTrackRecordSafeEnableState",
+        "daw.editing.setTrackInputMonitorState",
+        "daw.editing.setTrackOnlineState",
+        "daw.editing.setTrackFrozenState",
+        "daw.editing.setTrackOpenState",
+    ):
+        assert removed_duplicate_id not in capability_ids
+
+
 def test_track_toggle_capabilities_expose_canonical_toggle_shape() -> None:
     definitions = {definition.id: definition for definition in DEFAULT_CAPABILITY_DEFINITIONS}
 
@@ -112,3 +209,19 @@ def test_capability_catalog_declares_runtime_dependencies_used_by_handlers() -> 
     assert definitions["stripSilence.execute"].depends_on == ("mac_automation", "daw_ui_profile")
     assert definitions["stripSilence.openViaUi"].depends_on == ("mac_automation", "daw_ui_profile")
     assert definitions["stripSilence.executeViaUi"].depends_on == ("mac_automation", "daw_ui_profile")
+
+
+def test_internal_ptsl_capabilities_stay_out_of_public_registry_listing() -> None:
+    from presto.application.capabilities.registry import build_default_capability_registry
+
+    registry = build_default_capability_registry()
+
+    public_ids = {definition.id for definition in registry.list_public()}
+    all_ids = {definition.id for definition in registry.list_all()}
+
+    assert "daw.ptsl.catalog.list" not in public_ids
+    assert "daw.ptsl.command.describe" not in public_ids
+    assert "daw.ptsl.command.execute" not in public_ids
+    assert "daw.ptsl.catalog.list" in all_ids
+    assert "daw.ptsl.command.describe" in all_ids
+    assert "daw.ptsl.command.execute" in all_ids

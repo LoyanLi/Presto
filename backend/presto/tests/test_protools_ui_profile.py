@@ -24,6 +24,16 @@ def test_protools_ui_profile_builds_strip_silence_scripts() -> None:
     assert "Strip" in execute_script
 
 
+def test_protools_ui_profile_execute_strip_silence_script_detects_modal_errors() -> None:
+    profile = ProToolsUiProfile()
+
+    script = profile.build_execute_strip_silence_script()
+
+    assert 'button "OK"' in script
+    assert "audio selection" in script
+    assert "Strip Silence failed:" in script
+
+
 def test_protools_ui_profile_builds_delete_selected_track_script() -> None:
     profile = ProToolsUiProfile()
 

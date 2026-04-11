@@ -120,6 +120,62 @@ class ProToolsUiProfile:
                             end try
                         end try
                     end tell
+
+                    set stripSilenceErrorMessage to ""
+                    repeat with waitAttempt from 1 to 10
+                        try
+                            if exists sheet 1 of window 1 then
+                                tell sheet 1 of window 1
+                                    if exists button "OK" then
+                                        try
+                                            set stripSilenceErrorMessage to value of static text 1
+                                        on error
+                                            try
+                                                set stripSilenceErrorMessage to name of static text 1
+                                            on error
+                                                set stripSilenceErrorMessage to "Unknown Strip Silence error."
+                                            end try
+                                        end try
+                                        click button "OK"
+                                        exit repeat
+                                    end if
+                                end tell
+                            end if
+                        end try
+
+                        try
+                            set dialogWindows to (every window whose subrole is "AXDialog")
+                            repeat with dialogWindow in dialogWindows
+                                if exists button "OK" of dialogWindow then
+                                    try
+                                        set stripSilenceErrorMessage to value of static text 1 of dialogWindow
+                                    on error
+                                        try
+                                            set stripSilenceErrorMessage to name of static text 1 of dialogWindow
+                                        on error
+                                            set stripSilenceErrorMessage to "Unknown Strip Silence error."
+                                        end try
+                                    end try
+                                    click button "OK" of dialogWindow
+                                    exit repeat
+                                end if
+                            end repeat
+                        end try
+
+                        if stripSilenceErrorMessage is not "" then
+                            exit repeat
+                        end if
+
+                        delay 0.1
+                    end repeat
+
+                    if stripSilenceErrorMessage contains "audio selection" then
+                        error "Strip Silence failed: " & stripSilenceErrorMessage number 1204
+                    end if
+
+                    if stripSilenceErrorMessage is not "" then
+                        error "Strip Silence failed: " & stripSilenceErrorMessage number 1204
+                    end if
                 end tell
             end tell
         '''
