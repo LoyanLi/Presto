@@ -112,6 +112,57 @@ test('public capability manifest entries declare canonical source and field supp
   assert.deepEqual(missingMetadata, [])
 })
 
+test('capability manifest entries declare workflow portability and per-daw implementations explicitly', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
+  )
+
+  const missingMetadata = manifest
+    .filter((capability) => !capability.workflowScope || !capability.portability || !capability.implementations)
+    .map((capability) => capability.id)
+
+  assert.deepEqual(missingMetadata, [])
+
+  const trackMute = manifest.find((capability) => capability.id === 'track.mute.set')
+  assert.equal(trackMute?.workflowScope, 'shared')
+  assert.equal(trackMute?.portability, 'canonical')
+  assert.deepEqual(trackMute?.implementations?.pro_tools, {
+    kind: 'handler',
+    handler: 'track.mute.set',
+  })
+
+  const ptslExecute = manifest.find((capability) => capability.id === 'daw.ptsl.command.execute')
+  assert.equal(ptslExecute?.workflowScope, 'internal')
+  assert.equal(ptslExecute?.portability, 'daw_specific')
+  assert.deepEqual(ptslExecute?.implementations?.pro_tools, {
+    kind: 'handler',
+    handler: 'daw.ptsl.command.execute',
+  })
+
+  const stripSilenceExecuteViaUi = manifest.find((capability) => capability.id === 'stripSilence.executeViaUi')
+  assert.equal(stripSilenceExecuteViaUi?.workflowScope, 'internal')
+  assert.equal(stripSilenceExecuteViaUi?.portability, 'daw_specific')
+  assert.deepEqual(stripSilenceExecuteViaUi?.implementations?.pro_tools, {
+    kind: 'ui_automation',
+    handler: 'stripSilence.executeViaUi',
+  })
+})
+
+test('generated capability registry includes full vendor-neutral public daw semantic wrapper surface', async () => {
+  const source = await readFile(path.join(repoRoot, 'packages/contracts/src/generated/capabilityRegistry.ts'), 'utf8')
+  const capabilityIdsSource = await readFile(path.join(repoRoot, 'packages/contracts/src/generated/capabilityIds.ts'), 'utf8')
+
+  const publicSemantic = source.match(/kind":"ptsl_command","command":"CId_[^"]+"/g) ?? []
+  const ptslSemanticIdsMatch = capabilityIdsSource.match(/export const PTSL_SEMANTIC_CAPABILITY_IDS = (\[[\s\S]*?\]) as const/)
+
+  assert.equal(publicSemantic.length, 143)
+  assert.ok(ptslSemanticIdsMatch)
+  assert.doesNotMatch(ptslSemanticIdsMatch[1], /daw\.ptsl\./)
+  assert.match(ptslSemanticIdsMatch[1], /daw\.sessionFile\.createSession/)
+  assert.match(source, /id: 'daw\.sessionFile\.createSession'/)
+  assert.match(source, /implementations: \{\"pro_tools\":\{\"kind\":\"ptsl_command\",\"command\":\"CId_CreateSession\"\}\} as const/)
+})
+
 test('track inactive capability keeps its own handler in the manifest', async () => {
   const manifest = JSON.parse(
     await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),

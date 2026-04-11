@@ -23,6 +23,39 @@ export interface CapabilityFieldSupport {
   responseFields: readonly string[]
 }
 
+export type CapabilityWorkflowScope = 'shared' | 'daw_specific' | 'internal'
+
+export type CapabilityPortability = 'canonical' | 'daw_specific'
+
+export type CapabilityImplementationKind = 'handler' | 'ptsl_command' | 'ptsl_composed' | 'ui_automation'
+
+export interface HandlerCapabilityImplementation {
+  kind: 'handler'
+  handler: string
+}
+
+export interface PtslCommandCapabilityImplementation {
+  kind: 'ptsl_command'
+  command: string
+}
+
+export interface PtslComposedCapabilityImplementation {
+  kind: 'ptsl_composed'
+  commands: readonly string[]
+  handler?: string
+}
+
+export interface UiAutomationCapabilityImplementation {
+  kind: 'ui_automation'
+  handler: string
+}
+
+export type CapabilityImplementation =
+  | HandlerCapabilityImplementation
+  | PtslCommandCapabilityImplementation
+  | PtslComposedCapabilityImplementation
+  | UiAutomationCapabilityImplementation
+
 export interface CapabilityDefinition<TRequest = unknown, TResponse = unknown> {
   id: CapabilityId
   version: 1
@@ -33,9 +66,12 @@ export interface CapabilityDefinition<TRequest = unknown, TResponse = unknown> {
   requestSchema: SchemaRef<TRequest>
   responseSchema: SchemaRef<TResponse>
   dependsOn: readonly CapabilityDependency[]
+  workflowScope: CapabilityWorkflowScope
+  portability: CapabilityPortability
   supportedDaws: readonly DawTarget[]
   canonicalSource: DawTarget
   fieldSupport: Partial<Record<DawTarget, CapabilityFieldSupport>>
+  implementations: Partial<Record<DawTarget, CapabilityImplementation>>
   handler: string
   emitsEvents?: readonly PrestoEventName[]
 }

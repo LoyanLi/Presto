@@ -1,4 +1,5 @@
 import type { DawTarget } from '../daw/targets'
+import { PTSL_SEMANTIC_CAPABILITY_IDS } from '../generated/capabilityIds'
 import type { JobAcceptedResponse, JobsCancelResponse, JobsCreateResponse, JobsDeleteResponse, JobsGetResponse, JobsListResponse, JobsUpdateResponse } from '../jobs/job'
 
 export interface HealthStatus {
@@ -148,6 +149,34 @@ export interface DawAdapterGetSnapshotResponse {
   hostVersion: string
   modules: DawAdapterModuleSnapshot[]
   capabilities: DawAdapterCapabilitySnapshot[]
+}
+
+export interface DawPtslCommandDescriptor {
+  commandName: string
+  commandId: number
+  requestMessage?: string | null
+  responseMessage?: string | null
+  hasPyPtslOp: boolean
+  category?: string | null
+  introducedVersion?: string | null
+}
+
+export interface DawPtslCatalogListResponse {
+  commands: DawPtslCommandDescriptor[]
+}
+
+export interface DawPtslCommandDescribeResponse {
+  command: DawPtslCommandDescriptor
+}
+
+export interface DawPtslCommandExecuteResponse {
+  command: DawPtslCommandDescriptor
+  result: unknown
+}
+
+export interface DawPtslSemanticResponse {
+  command: DawPtslCommandDescriptor
+  result: unknown
 }
 
 export interface AutomationSplitStereoToMonoExecuteItem {
@@ -358,7 +387,7 @@ export interface SessionGetSnapshotInfoResponse {
   }
 }
 
-export interface CapabilityResponseMap {
+type CoreCapabilityResponseMap = {
   'system.health': SystemHealthResponse
   'config.get': ConfigGetResponse
   'config.update': ConfigUpdateResponse
@@ -366,6 +395,9 @@ export interface CapabilityResponseMap {
   'daw.connection.disconnect': DawConnectionDisconnectResponse
   'daw.connection.getStatus': DawConnectionGetStatusResponse
   'daw.adapter.getSnapshot': DawAdapterGetSnapshotResponse
+  'daw.ptsl.catalog.list': DawPtslCatalogListResponse
+  'daw.ptsl.command.describe': DawPtslCommandDescribeResponse
+  'daw.ptsl.command.execute': DawPtslCommandExecuteResponse
   'automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteResponse
   'session.getInfo': SessionGetInfoResponse
   'session.getLength': SessionGetLengthResponse
@@ -411,4 +443,10 @@ export interface CapabilityResponseMap {
   'jobs.list': JobsListResponse
   'jobs.cancel': JobsCancelResponse
   'jobs.delete': JobsDeleteResponse
+}
+
+type PtslSemanticCapabilityId = (typeof PTSL_SEMANTIC_CAPABILITY_IDS)[number]
+
+export type CapabilityResponseMap = CoreCapabilityResponseMap & {
+  [K in PtslSemanticCapabilityId]: DawPtslSemanticResponse
 }

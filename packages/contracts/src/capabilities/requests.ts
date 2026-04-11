@@ -3,6 +3,7 @@ import type {
   SilenceProfile,
   Snapshot,
 } from './responses'
+import { PTSL_SEMANTIC_CAPABILITY_IDS } from '../generated/capabilityIds'
 import type { JobsCancelRequest, JobsCreateRequest, JobsDeleteRequest, JobsGetRequest, JobsListRequest, JobsUpdateRequest } from '../jobs/job'
 
 export interface SystemHealthRequest {}
@@ -25,6 +26,26 @@ export interface DawConnectionDisconnectRequest {}
 export interface DawConnectionGetStatusRequest {}
 
 export interface DawAdapterGetSnapshotRequest {}
+
+export interface DawPtslCatalogListRequest {
+  category?: string
+  onlyWithPyPtslOp?: boolean
+}
+
+export interface DawPtslCommandDescribeRequest {
+  commandName: string
+}
+
+export interface DawPtslCommandExecuteRequest {
+  commandName: string
+  payload?: Record<string, unknown>
+  minimumHostVersion?: string
+}
+
+export interface DawPtslSemanticRequest {
+  minimumHostVersion?: string
+  [key: string]: unknown
+}
 
 export interface AutomationSplitStereoToMonoExecuteRequest {
   keepChannel?: 'left' | 'right'
@@ -269,7 +290,7 @@ export interface SessionGetSnapshotInfoRequest {
   snapshot: Snapshot
 }
 
-export interface CapabilityRequestMap {
+type CoreCapabilityRequestMap = {
   'system.health': SystemHealthRequest
   'config.get': ConfigGetRequest
   'config.update': ConfigUpdateRequest
@@ -277,6 +298,9 @@ export interface CapabilityRequestMap {
   'daw.connection.disconnect': DawConnectionDisconnectRequest
   'daw.connection.getStatus': DawConnectionGetStatusRequest
   'daw.adapter.getSnapshot': DawAdapterGetSnapshotRequest
+  'daw.ptsl.catalog.list': DawPtslCatalogListRequest
+  'daw.ptsl.command.describe': DawPtslCommandDescribeRequest
+  'daw.ptsl.command.execute': DawPtslCommandExecuteRequest
   'automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteRequest
   'session.getInfo': SessionGetInfoRequest
   'session.getLength': SessionGetLengthRequest
@@ -323,4 +347,10 @@ export interface CapabilityRequestMap {
   'jobs.list': JobsListRequest
   'jobs.cancel': JobsCancelRequest
   'jobs.delete': JobsDeleteRequest
+}
+
+type PtslSemanticCapabilityId = (typeof PTSL_SEMANTIC_CAPABILITY_IDS)[number]
+
+export type CapabilityRequestMap = CoreCapabilityRequestMap & {
+  [K in PtslSemanticCapabilityId]: DawPtslSemanticRequest
 }

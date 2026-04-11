@@ -1,3 +1,5 @@
+import { ALL_CAPABILITY_IDS, INTERNAL_CAPABILITY_IDS, PUBLIC_CAPABILITY_IDS } from '../generated/capabilityIds'
+
 export type CapabilityKind = 'query' | 'command' | 'job'
 
 export type CapabilityVisibility = 'public' | 'internal'
@@ -27,63 +29,10 @@ export type CapabilityDependency =
   | 'mac_automation'
   | 'daw_ui_profile'
 
-export type PublicCapabilityId =
-  | 'system.health'
-  | 'config.get'
-  | 'config.update'
-  | 'daw.connection.connect'
-  | 'daw.connection.disconnect'
-  | 'daw.connection.getStatus'
-  | 'daw.adapter.getSnapshot'
-  | 'automation.splitStereoToMono.execute'
-  | 'session.getInfo'
-  | 'session.getLength'
-  | 'session.save'
-  | 'session.applySnapshot'
-  | 'session.getSnapshotInfo'
-  | 'track.list'
-  | 'track.listNames'
-  | 'track.selection.get'
-  | 'track.rename'
-  | 'track.select'
-  | 'track.color.apply'
-  | 'track.pan.set'
-  | 'track.mute.set'
-  | 'track.solo.set'
-  | 'track.hidden.set'
-  | 'track.inactive.set'
-  | 'track.recordEnable.set'
-  | 'track.recordSafe.set'
-  | 'track.inputMonitor.set'
-  | 'track.online.set'
-  | 'track.frozen.set'
-  | 'track.open.set'
-  | 'clip.selectAllOnTrack'
-  | 'transport.play'
-  | 'transport.stop'
-  | 'transport.record'
-  | 'transport.getStatus'
-  | 'workflow.run.start'
-  | 'import.analyze'
-  | 'import.cache.save'
-  | 'import.planRunItems'
-  | 'import.run.start'
-  | 'stripSilence.open'
-  | 'stripSilence.execute'
-  | 'export.range.set'
-  | 'export.start'
-  | 'export.direct.start'
-  | 'export.run.start'
-  | 'export.mixWithSource'
-  | 'jobs.create'
-  | 'jobs.update'
-  | 'jobs.get'
-  | 'jobs.list'
-  | 'jobs.cancel'
-  | 'jobs.delete'
+export type PublicCapabilityId = (typeof PUBLIC_CAPABILITY_IDS)[number]
 
-export type InternalCapabilityId =
-  | 'stripSilence.openViaUi'
-  | 'stripSilence.executeViaUi'
+export type InternalCapabilityId = (typeof INTERNAL_CAPABILITY_IDS)[number]
 
-export type CapabilityId = PublicCapabilityId | InternalCapabilityId
+export type CapabilityId = (typeof ALL_CAPABILITY_IDS)[number]
+
+export { ALL_CAPABILITY_IDS, INTERNAL_CAPABILITY_IDS, PUBLIC_CAPABILITY_IDS }

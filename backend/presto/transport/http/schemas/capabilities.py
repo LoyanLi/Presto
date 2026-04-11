@@ -19,6 +19,12 @@ class CapabilitySchema(BaseModel):
         request_fields: List[str] = Field(default_factory=list)
         response_fields: List[str] = Field(default_factory=list)
 
+    class CapabilityImplementationSchema(BaseModel):
+        kind: str
+        handler: str | None = None
+        command: str | None = None
+        commands: List[str] = Field(default_factory=list)
+
     id: str
     version: int
     kind: str
@@ -28,9 +34,12 @@ class CapabilitySchema(BaseModel):
     request_schema: str
     response_schema: str
     depends_on: List[str] = Field(default_factory=list)
+    workflow_scope: str
+    portability: str
     supported_daws: List[str] = Field(default_factory=list)
     canonical_source: str
     field_support: dict[str, CapabilityFieldSupportSchema] = Field(default_factory=dict)
+    implementations: dict[str, CapabilityImplementationSchema] = Field(default_factory=dict)
     handler: str
     emits_events: List[str] = Field(default_factory=list)
 
@@ -46,6 +55,8 @@ class CapabilitySchema(BaseModel):
             request_schema=definition.request_schema.name,
             response_schema=definition.response_schema.name,
             depends_on=list(definition.depends_on),
+            workflow_scope=definition.workflow_scope,
+            portability=definition.portability,
             supported_daws=list(definition.supported_daws),
             canonical_source=definition.canonical_source,
             field_support={
@@ -54,6 +65,15 @@ class CapabilitySchema(BaseModel):
                     response_fields=list(support.response_fields),
                 )
                 for daw, support in definition.field_support.items()
+            },
+            implementations={
+                daw: cls.CapabilityImplementationSchema(
+                    kind=implementation.kind,
+                    handler=implementation.handler,
+                    command=implementation.command,
+                    commands=list(implementation.commands),
+                )
+                for daw, implementation in definition.implementations.items()
             },
             handler=definition.handler,
             emits_events=list(definition.emits_events),

@@ -8,6 +8,9 @@ from .daw_targets_generated import DawTarget, DEFAULT_DAW_TARGET, RESERVED_DAW_T
 
 CapabilityKind = Literal["query", "command", "job"]
 CapabilityVisibility = Literal["public", "internal"]
+CapabilityWorkflowScope = Literal["shared", "daw_specific", "internal"]
+CapabilityPortability = Literal["canonical", "daw_specific"]
+CapabilityImplementationKind = Literal["handler", "ptsl_command", "ptsl_composed", "ui_automation"]
 CapabilityDomain = Literal[
     "system",
     "config",
@@ -52,6 +55,14 @@ class CapabilityFieldSupport:
 
 
 @dataclass(frozen=True)
+class CapabilityImplementation:
+    kind: CapabilityImplementationKind
+    handler: str | None = None
+    command: str | None = None
+    commands: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
 class CapabilityDefinition:
     id: str
     version: int
@@ -62,9 +73,12 @@ class CapabilityDefinition:
     request_schema: CapabilitySchemaRef
     response_schema: CapabilitySchemaRef
     depends_on: tuple[CapabilityDependency, ...] = field(default_factory=tuple)
+    workflow_scope: CapabilityWorkflowScope = "shared"
+    portability: CapabilityPortability = "canonical"
     supported_daws: tuple[DawTarget, ...] = field(default_factory=tuple)
     canonical_source: DawTarget = DEFAULT_DAW_TARGET
     field_support: dict[DawTarget, CapabilityFieldSupport] = field(default_factory=dict)
+    implementations: dict[DawTarget, CapabilityImplementation] = field(default_factory=dict)
     handler: str = ""
     emits_events: tuple[str, ...] = field(default_factory=tuple)
 
