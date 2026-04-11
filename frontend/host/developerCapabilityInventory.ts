@@ -1,14 +1,12 @@
-import type { PublicCapabilityId } from '@presto/contracts'
+import {
+  CAPABILITY_REGISTRY,
+  PUBLIC_CAPABILITY_IDS as CANONICAL_PUBLIC_CAPABILITY_IDS,
+  type CapabilityDefinition,
+  type PublicCapabilityId,
+} from '@presto/contracts'
 
 export type CapabilityStatus = 'live' | 'public'
-export type DeveloperCapabilityId =
-  | PublicCapabilityId
-  | 'import.run.start'
-  | 'export.range.set'
-  | 'export.start'
-  | 'export.direct.start'
-  | 'jobs.create'
-  | 'jobs.update'
+export type DeveloperCapabilityId = PublicCapabilityId
 
 export interface DeveloperCapabilityDefinition {
   id: DeveloperCapabilityId
@@ -18,99 +16,9 @@ export interface DeveloperCapabilityDefinition {
   note: string
 }
 
-export const CORE_CONSOLE_CAPABILITY_IDS = [
-  'system.health',
-  'config.get',
-  'config.update',
-  'daw.connection.connect',
-  'daw.connection.disconnect',
-  'daw.connection.getStatus',
-  'session.getInfo',
-  'session.getLength',
-  'session.save',
-  'track.list',
-  'track.listNames',
-  'track.selection.get',
-  'track.rename',
-  'track.select',
-  'track.color.apply',
-  'track.hidden.set',
-  'track.inactive.set',
-  'track.mute.set',
-  'track.solo.set',
-  'track.recordEnable.set',
-  'track.recordSafe.set',
-  'track.inputMonitor.set',
-  'track.online.set',
-  'track.frozen.set',
-  'track.open.set',
-  'clip.selectAllOnTrack',
-  'transport.play',
-  'transport.stop',
-  'transport.record',
-  'transport.getStatus',
-  'import.run.start',
-  'stripSilence.open',
-  'stripSilence.execute',
-  'export.range.set',
-  'export.start',
-  'export.direct.start',
-  'jobs.get',
-  'jobs.list',
-  'jobs.create',
-  'jobs.update',
-  'jobs.cancel',
-  'jobs.delete',
-] as const satisfies readonly DeveloperCapabilityId[]
+type DeveloperCapabilityOverride = DeveloperCapabilityDefinition
 
-export const PUBLIC_CAPABILITY_IDS = [
-  'system.health',
-  'config.get',
-  'config.update',
-  'daw.connection.connect',
-  'daw.connection.disconnect',
-  'daw.connection.getStatus',
-  'session.getInfo',
-  'session.getLength',
-  'session.save',
-  'session.applySnapshot',
-  'session.getSnapshotInfo',
-  'track.list',
-  'track.listNames',
-  'track.selection.get',
-  'track.rename',
-  'track.select',
-  'track.color.apply',
-  'track.hidden.set',
-  'track.inactive.set',
-  'track.mute.set',
-  'track.solo.set',
-  'track.recordEnable.set',
-  'track.recordSafe.set',
-  'track.inputMonitor.set',
-  'track.online.set',
-  'track.frozen.set',
-  'track.open.set',
-  'clip.selectAllOnTrack',
-  'transport.play',
-  'transport.stop',
-  'transport.record',
-  'transport.getStatus',
-  'import.run.start',
-  'stripSilence.open',
-  'stripSilence.execute',
-  'export.range.set',
-  'export.start',
-  'export.direct.start',
-  'jobs.get',
-  'jobs.list',
-  'jobs.create',
-  'jobs.update',
-  'jobs.cancel',
-  'jobs.delete',
-] as const satisfies readonly PublicCapabilityId[]
-
-export const DEVELOPER_CAPABILITIES: readonly DeveloperCapabilityDefinition[] = [
+const MANUAL_DEVELOPER_CAPABILITIES: readonly DeveloperCapabilityOverride[] = [
   { id: 'system.health', status: 'live', minimumDawVersion: 'Host only', defaultPayload: {}, note: 'Verified through the Tauri host -> sdk -> backend live chain.' },
   { id: 'config.get', status: 'live', minimumDawVersion: 'Host only', defaultPayload: {}, note: 'Verified through the final live backend chain.' },
   { id: 'config.update', status: 'live', minimumDawVersion: 'Host only', defaultPayload: { values: { audioImportRoot: '/Volumes/Samples' } }, note: 'Verified through the final live backend chain.' },
@@ -241,3 +149,61 @@ export const DEVELOPER_CAPABILITIES: readonly DeveloperCapabilityDefinition[] = 
   { id: 'jobs.cancel', status: 'live', minimumDawVersion: 'Host only', defaultPayload: { jobId: 'job-xxxxxxxxxxxx' }, note: 'Cancels queued/running jobs through the unified job manager for producer and manual jobs.' },
   { id: 'jobs.delete', status: 'live', minimumDawVersion: 'Host only', defaultPayload: { jobId: 'job-xxxxxxxxxxxx' }, note: 'Deletes non-running jobs through the unified job manager for producer and manual jobs.' },
 ] as const
+
+const MANUAL_DEVELOPER_CAPABILITY_BY_ID = new Map(
+  MANUAL_DEVELOPER_CAPABILITIES.map((capability) => [capability.id, capability]),
+)
+
+export const PUBLIC_CAPABILITY_IDS = CANONICAL_PUBLIC_CAPABILITY_IDS
+
+export const CORE_CONSOLE_CAPABILITY_IDS = PUBLIC_CAPABILITY_IDS
+
+function resolveDefaultMinimumDawVersion(capability: CapabilityDefinition): string {
+  const implementation = capability.implementations[capability.canonicalSource]
+
+  if (capability.domain === 'system' || capability.domain === 'config' || capability.domain === 'jobs') {
+    return 'Host only'
+  }
+
+  if (capability.id === 'workflow.run.start') {
+    return 'Host orchestrator'
+  }
+
+  if (implementation?.kind === 'ptsl_command') {
+    return 'PTSL catalog'
+  }
+
+  if (capability.supportedDaws.length === 1 && capability.supportedDaws[0] === 'pro_tools') {
+    return 'Pro Tools'
+  }
+
+  return capability.supportedDaws.join(', ') || 'Unspecified'
+}
+
+function resolveDefaultNote(capability: CapabilityDefinition): string {
+  const implementation = capability.implementations[capability.canonicalSource]
+  if (implementation?.kind === 'ptsl_command' && 'command' in implementation) {
+    return `Unified semantic wrapper over Pro Tools PTSL command ${implementation.command}. Edit the payload per command schema before execution.`
+  }
+
+  return capability.description
+}
+
+export const DEVELOPER_CAPABILITIES: readonly DeveloperCapabilityDefinition[] = CAPABILITY_REGISTRY
+  .filter((capability) => capability.visibility === 'public')
+  .map((capability) => {
+    const capabilityId = capability.id as DeveloperCapabilityId
+    const override = MANUAL_DEVELOPER_CAPABILITY_BY_ID.get(capabilityId)
+
+    if (override) {
+      return override
+    }
+
+    return {
+      id: capabilityId,
+      status: 'live',
+      minimumDawVersion: resolveDefaultMinimumDawVersion(capability),
+      defaultPayload: {},
+      note: resolveDefaultNote(capability),
+    }
+  })

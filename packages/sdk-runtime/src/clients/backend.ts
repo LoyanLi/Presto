@@ -1,4 +1,12 @@
-import type { DawTarget, SchemaRef } from '@presto/contracts'
+import type {
+  CapabilityImplementationKind,
+  CapabilityPortability,
+  CapabilityRequestEnvelope,
+  CapabilityResponseEnvelope,
+  CapabilityWorkflowScope,
+  DawTarget,
+  SchemaRef,
+} from '@presto/contracts'
 
 export interface BackendLogEntry {
   id: string
@@ -36,6 +44,13 @@ export interface BackendCapabilityFieldSupport {
   responseFields: string[]
 }
 
+export interface BackendCapabilityImplementation {
+  kind: CapabilityImplementationKind
+  handler?: string
+  command?: string
+  commands?: string[]
+}
+
 export interface BackendCapabilityDefinition {
   id: string
   version: number
@@ -46,9 +61,12 @@ export interface BackendCapabilityDefinition {
   requestSchema: SchemaRef
   responseSchema: SchemaRef
   dependsOn: string[]
+  workflowScope: CapabilityWorkflowScope
+  portability: CapabilityPortability
   supportedDaws: DawTarget[]
   canonicalSource: DawTarget
   fieldSupport: Record<string, BackendCapabilityFieldSupport>
+  implementations: Record<string, BackendCapabilityImplementation>
   handler: string
   emitsEvents: string[]
 }
@@ -64,6 +82,9 @@ export interface DawAdapterSnapshot {
 export interface BackendRuntimeClient {
   getStatus(): Promise<BackendStatus>
   listCapabilities(): Promise<BackendCapabilityDefinition[]>
+  invokeCapability<TRequest, TResponse>(
+    request: CapabilityRequestEnvelope<TRequest>
+  ): Promise<CapabilityResponseEnvelope<TResponse>>
   getDawAdapterSnapshot(): Promise<DawAdapterSnapshot>
   restart(): Promise<{ ok: true }>
   setDawTarget(target: string): Promise<{ ok: true; target: string }>

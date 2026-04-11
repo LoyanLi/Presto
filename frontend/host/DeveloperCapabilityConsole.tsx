@@ -436,7 +436,6 @@ function capabilitySearchMatchesQuery(
 }
 
 export function DeveloperCapabilityConsole({
-  presto,
   developerRuntime,
   activeDawTarget,
   smokeTarget,
@@ -603,7 +602,7 @@ export function DeveloperCapabilityConsole({
         errorText: '',
       }))
 
-      const result = await invokePublicCapability(presto, capability.id, resolvedPayload)
+      const result = await invokePublicCapability(developerRuntime, capability.id, resolvedPayload as never)
       updateState(capability.id, (prev) => ({
         ...prev,
         phase: 'success',
@@ -898,7 +897,7 @@ export function DeveloperCapabilityConsole({
     return () => {
       cancelled = true
     }
-  }, [definitions, isSmokeMode, presto, smokeImportFolder, smokeTarget])
+  }, [definitions, developerRuntime, isSmokeMode, smokeImportFolder, smokeTarget])
 
   return (
     <div style={developerConsoleShellStyle}>
