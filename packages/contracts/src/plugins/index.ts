@@ -3,14 +3,28 @@ export type {
   PluginAutomationItemDefinition,
   PluginAutomationOptionDefinition,
   PluginPageDefinition,
+  PluginPageMount,
   PluginPageHost,
   PluginPageProps,
   PluginAutomationSelectOptionDefinition,
   PluginAutomationSelectOptionFieldDefinition,
+  PluginToolDialogHost,
+  PluginToolFsHost,
+  PluginToolPageHost,
+  PluginToolPageProps,
+  PluginToolShellHost,
+  PluginWorkflowPageHost,
+  PluginWorkflowPageProps,
 } from './page'
 export type {
   PluginAdapterModuleRequirement,
+  PluginBundledResourceDefinition,
+  PluginBundledResourceKind,
   PluginCapabilityRequirement,
+  PluginExtensionType,
+  PluginManifest,
+  PluginToolDefinition,
+  PluginToolRuntimePermission,
   WorkflowPluginManifest,
 } from './manifest'
 export type {
@@ -20,6 +34,11 @@ export type {
   PluginAutomationRunnerContext,
   PluginAutomationStepResult,
   PluginAutomationStepStatus,
+  PluginModule,
+  PluginToolBundledProcessHost,
+  PluginToolRunResult,
+  PluginToolRunner,
+  PluginToolRunnerContext,
   WorkflowPluginModule,
 } from './module'
 export type {

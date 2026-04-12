@@ -27,6 +27,40 @@ test('WorkflowPluginManifest no longer exposes runtime service requirements', as
   assert.doesNotMatch(source, /requiredRuntimeServices\??:/)
 })
 
+test('plugin contracts expose tool plugin page and runner surfaces', async () => {
+  const manifestSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/manifest.ts'), 'utf8')
+  const pageSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/page.ts'), 'utf8')
+  const moduleSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/module.ts'), 'utf8')
+  const pluginIndexSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/index.ts'), 'utf8')
+
+  assert.match(manifestSource, /extensionType:\s*PluginExtensionType/)
+  assert.match(manifestSource, /'workflow' \| 'automation' \| 'tool'/)
+  assert.match(manifestSource, /tools\??:\s*PluginToolDefinition\[\]/)
+  assert.match(manifestSource, /toolRuntimePermissions\??:\s*PluginToolRuntimePermission\[\]/)
+  assert.match(manifestSource, /bundledResources\??:\s*PluginBundledResourceDefinition\[\]/)
+
+  assert.match(pageSource, /mount:\s*PluginPageMount/)
+  assert.match(pageSource, /'workspace' \| 'tools'/)
+  assert.match(pageSource, /export interface PluginToolPageHost/)
+  assert.match(pageSource, /dialog:\s*PluginToolDialogHost/)
+  assert.match(pageSource, /fs:\s*PluginToolFsHost/)
+  assert.match(pageSource, /shell:\s*PluginToolShellHost/)
+  assert.match(pageSource, /export interface PluginToolPageProps/)
+
+  assert.match(moduleSource, /export interface PluginToolBundledProcessHost/)
+  assert.match(moduleSource, /execBundled\(/)
+  assert.match(moduleSource, /export interface PluginToolRunnerContext extends PluginContext/)
+  assert.match(moduleSource, /export type PluginToolRunner =/)
+
+  assert.match(pluginIndexSource, /PluginExtensionType/)
+  assert.match(pluginIndexSource, /PluginToolDefinition/)
+  assert.match(pluginIndexSource, /PluginToolRuntimePermission/)
+  assert.match(pluginIndexSource, /PluginBundledResourceDefinition/)
+  assert.match(pluginIndexSource, /PluginToolPageProps/)
+  assert.match(pluginIndexSource, /PluginToolRunnerContext/)
+  assert.match(pluginIndexSource, /PluginToolRunner/)
+})
+
 test('workflow plugin contracts expose workflow definition references and step definitions', async () => {
   const manifestSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/manifest.ts'), 'utf8')
   const workflowSource = await readFile(path.join(repoRoot, 'packages/contracts/src/plugins/index.ts'), 'utf8')

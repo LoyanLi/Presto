@@ -1,10 +1,13 @@
 import type { PluginContext } from './context'
 
+// `workspace` remains the canonical mount for existing workflow pages.
+export type PluginPageMount = 'workspace' | 'tools'
+
 export interface PluginPageDefinition {
   pageId: string
   path: string
   title: string
-  mount: 'workspace'
+  mount: PluginPageMount
   componentExport: string
 }
 
@@ -44,16 +47,56 @@ export interface PluginAutomationItemDefinition {
   optionsSchema?: PluginAutomationOptionDefinition[]
 }
 
-export interface PluginPageHost {
+export interface PluginWorkflowPageHost {
   pickFolder(): Promise<{
     canceled: boolean
     paths: string[]
   }>
 }
 
-export interface PluginPageProps {
+export interface PluginToolDialogHost {
+  openFile(): Promise<{
+    canceled: boolean
+    paths: string[]
+  }>
+  openDirectory(): Promise<{
+    canceled: boolean
+    paths: string[]
+  }>
+}
+
+export interface PluginToolFsHost {
+  // Tool pages only receive the file operations we explicitly permit today.
+  readFile(path: string): Promise<string | null>
+  writeFile(path: string, content: string): Promise<boolean>
+  exists(path: string): Promise<boolean>
+  readdir(path: string): Promise<string[]>
+  deleteFile(path: string): Promise<boolean>
+}
+
+export interface PluginToolShellHost {
+  openPath(path: string): Promise<string>
+}
+
+export interface PluginToolPageHost {
+  dialog: PluginToolDialogHost
+  fs: PluginToolFsHost
+  shell: PluginToolShellHost
+}
+
+export interface PluginWorkflowPageProps {
   context: PluginContext
-  host: PluginPageHost
+  host: PluginWorkflowPageHost
   params: Record<string, string>
   searchParams: URLSearchParams
 }
+
+export interface PluginToolPageProps {
+  context: PluginContext
+  host: PluginToolPageHost
+  params: Record<string, string>
+  searchParams: URLSearchParams
+}
+
+export type PluginPageHost = PluginWorkflowPageHost
+export type PluginPageProps = PluginWorkflowPageProps
