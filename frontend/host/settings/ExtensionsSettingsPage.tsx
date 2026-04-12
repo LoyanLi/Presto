@@ -355,7 +355,11 @@ export function ExtensionsSettingsPage({
   const extensions = pluginManagerModel?.plugins ?? []
   const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null)
   const filteredExtensions = filterExtensions(extensions, extensionType)
-  const titleKey = extensionType === 'workflow' ? 'extensions.group.workflow' : 'extensions.group.automation'
+  const titleKey = extensionType === 'workflow'
+    ? 'extensions.group.workflow'
+    : extensionType === 'automation'
+      ? 'extensions.group.automation'
+      : 'extensions.group.tools'
 
   return (
     <div style={pageStackStyle}>

@@ -106,6 +106,9 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   await runtime.plugins.installFromZip(false)
   await runtime.plugins.setEnabled('official.export-workflow', false)
   await runtime.plugins.uninstall('official.export-workflow')
+  await runtime.dialog.openFolder()
+  await runtime.dialog.openFile()
+  await runtime.dialog.openDirectory()
 
   assert.deepEqual(calls, [
     ['plugins.catalog.list'],
@@ -115,5 +118,8 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
     ['plugins.install.zip', false],
     ['plugins.set-enabled', 'official.export-workflow', false],
     ['plugins.uninstall', 'official.export-workflow'],
+    ['dialog.open', { properties: ['openDirectory'] }],
+    ['dialog.open', { properties: ['openFile'] }],
+    ['dialog.open', { properties: ['openDirectory'] }],
   ])
 })

@@ -40,6 +40,8 @@ export type {
   HostPluginStatus,
   HostSettingsPageRoute,
   HostRenderedPluginPage,
+  HostToolEntry,
   HostBuiltinSettingsPageRoute,
+  HostToolPageRoute,
   HostWorkspacePageRoute,
 } from './pluginHostTypes'

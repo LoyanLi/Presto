@@ -20,10 +20,12 @@ import type {
   HostPluginSettingsEntry,
   HostRenderedPluginPage,
   HostSettingsPageRoute,
+  HostToolEntry,
+  HostToolPageRoute,
   HostWorkspacePageRoute,
 } from './pluginHostTypes'
 
-type HostPrimarySurface = Extract<HostShellViewId, 'home' | 'workflows' | 'automation' | 'runs'>
+type HostPrimarySurface = Extract<HostShellViewId, 'home' | 'workflows' | 'tools' | 'automation' | 'runs'>
 
 export interface HostHomeSurfaceProps {
   surface: HostPrimarySurface
@@ -33,12 +35,17 @@ export interface HostHomeSurfaceProps {
   connectionStatus: HostSidebarConnectionStatus
   locale: HostLocale
   pluginHomeEntries: readonly HostPluginHomeEntry[]
+  toolEntries: readonly HostToolEntry[]
   automationEntries: readonly HostAutomationEntry[]
   workspacePageRoute: HostWorkspacePageRoute | null
+  toolPageRoute: HostToolPageRoute | null
   activeWorkspacePage: HostRenderedPluginPage | null
+  activeToolPage: HostRenderedPluginPage | null
   workspaceSettingsEntry: HostPluginSettingsEntry | null
+  toolSettingsEntry: HostPluginSettingsEntry | null
   onOpenSettings(route?: HostSettingsPageRoute): void
   onOpenWorkspace(route: HostWorkspacePageRoute): void
+  onOpenTool(route: HostToolPageRoute): void
   onNavigate(surface: HostPrimarySurface): void
   onToggleSidebar(): void
 }
@@ -235,16 +242,23 @@ export function HostHomeSurface({
   connectionStatus,
   locale,
   pluginHomeEntries,
+  toolEntries,
   automationEntries,
   workspacePageRoute,
+  toolPageRoute,
   activeWorkspacePage,
+  activeToolPage,
   workspaceSettingsEntry,
+  toolSettingsEntry,
   onOpenSettings,
   onOpenWorkspace,
+  onOpenTool,
   onNavigate,
   onToggleSidebar,
 }: HostHomeSurfaceProps) {
-  const hasActiveWorkspace = surface === 'workflows' && workspacePageRoute !== null
+  const hasActiveSurfacePage =
+    (surface === 'workflows' && workspacePageRoute !== null) ||
+    (surface === 'tools' && toolPageRoute !== null)
 
   const renderHomeContent = (): ReactElement => (
     <>
@@ -362,6 +376,84 @@ export function HostHomeSurface({
     )
   }
 
+  const renderToolLibrary = (): ReactElement => {
+    if (toolPageRoute !== null) {
+      return (
+        <div style={workflowSurfaceStyle}>
+          <div style={titleBarStyle}>
+            <h1 style={titleStyle}>{activeToolPage?.title ?? 'Tool surface'}</h1>
+            {toolSettingsEntry ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  onOpenSettings({
+                    kind: 'plugin',
+                    pluginId: toolSettingsEntry.pluginId,
+                    pageId: toolSettingsEntry.pageId,
+                  })
+                }}
+              >
+                {translateHost(locale, 'home.pluginSettings')}
+              </Button>
+            ) : null}
+          </div>
+
+          {activeToolPage
+            ? activeToolPage.render()
+            : (
+              <EmptyState
+                title={translateHost(locale, 'home.toolUnavailable')}
+                description={translateHost(locale, 'home.toolUnavailable.body')}
+                style={summaryCardStyle}
+              />
+            )}
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <div style={titleBarStyle}>
+          <h1 style={titleStyle}>{translateHost(locale, 'home.toolLibrary')}</h1>
+        </div>
+
+        {toolEntries.length > 0 ? (
+          <div style={workflowGridStyle}>
+            {toolEntries.map((entry) => (
+              <div key={`${entry.pluginId}:${entry.pageId}`} style={workflowCardStyle}>
+                <div style={workflowMetaStyle}>
+                  <h3 style={workflowTitleStyle}>{entry.title}</h3>
+                  <p style={workflowDescriptionStyle}>{entry.description}</p>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      onOpenTool({
+                        pluginId: entry.pluginId,
+                        pageId: entry.pageId,
+                      })
+                    }}
+                  >
+                    {translateHost(locale, 'home.openTool')}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title={translateHost(locale, 'home.noTools')}
+            description={translateHost(locale, 'home.noTools.body')}
+            style={summaryCardStyle}
+          />
+        )}
+      </>
+    )
+  }
+
   const renderContent = (): ReactElement => {
     if (surface === 'workflows') {
       return renderWorkflowLibrary()
@@ -369,6 +461,10 @@ export function HostHomeSurface({
 
     if (surface === 'automation') {
       return <AutomationSurface locale={locale} automationEntries={automationEntries} />
+    }
+
+    if (surface === 'tools') {
+      return renderToolLibrary()
     }
 
     if (surface === 'runs') {
@@ -386,12 +482,14 @@ export function HostHomeSurface({
           collapsed={sidebarCollapsed}
           connectionStatus={connectionStatus}
           locale={locale}
-          reselectableRoutes={hasActiveWorkspace ? ['workflows'] : undefined}
+          reselectableRoutes={
+            hasActiveSurfacePage ? [surface === 'tools' ? 'tools' : 'workflows'] : undefined
+          }
           onSelect={onNavigate}
           onToggleCollapse={onToggleSidebar}
         />
         <main style={mainPaneStyle}>
-          <div style={hasActiveWorkspace ? workspaceContentStyle : contentStyle}>
+          <div style={hasActiveSurfacePage ? workspaceContentStyle : contentStyle}>
             {renderContent()}
           </div>
         </main>

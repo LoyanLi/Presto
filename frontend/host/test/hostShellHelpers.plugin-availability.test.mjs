@@ -108,3 +108,32 @@ test('isPluginAvailableForSnapshot keeps plugins available when daw support and 
     true,
   )
 })
+
+test('isPluginAvailableForSnapshot keeps tool plugins available even when snapshot gating would reject workflow plugins', async () => {
+  const { isPluginAvailableForSnapshot } = await loadHostShellHelpersModule()
+
+  assert.equal(
+    isPluginAvailableForSnapshot(
+      {
+        pluginId: 'installed.ec3-tools',
+        extensionType: 'tool',
+        displayName: 'EC3 Tools',
+        version: '1.0.0',
+        origin: 'installed',
+        status: 'ready',
+        enabled: true,
+        supportedDaws: ['logic'],
+        adapterModuleRequirements: [{ moduleId: 'ptsl', minVersion: '9999.0.0' }],
+        capabilityRequirements: [{ capabilityId: 'daw.export.start', minVersion: '9999.0.0' }],
+      },
+      {
+        targetDaw: 'pro_tools',
+        adapterVersion: '2025.10.0',
+        hostVersion: '0.3.7',
+        modules: [{ moduleId: 'ptsl', version: '2025.10.0' }],
+        capabilities: [{ capabilityId: 'daw.export.start', moduleId: 'ptsl', version: '2025.10.0' }],
+      },
+    ),
+    true,
+  )
+})

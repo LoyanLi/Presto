@@ -27,7 +27,8 @@ import {
   createAutomationRunnerContext,
   createHostPluginLogger,
   createHostPluginStorage,
-  createPluginPageHost,
+  createPluginToolPageHost,
+  createPluginWorkflowPageHost,
   type PluginHostRuntime,
 } from './pluginHostServices'
 import type {
@@ -70,6 +71,29 @@ export interface LoadHostPluginsInput {
   }
 }
 
+function resolveMountedPages(
+  mountedPages: MountedPluginPage[],
+  manifestPages: ReadonlyArray<{
+    pageId: string
+    title: string
+    mount: 'workspace' | 'tools'
+    componentExport: string
+  }> = [],
+  pluginId = '',
+): MountedPluginPage[] {
+  if (mountedPages.length > 0) {
+    return mountedPages
+  }
+
+  return manifestPages.map((page) => ({
+    pluginId,
+    pageId: page.pageId,
+    title: page.title,
+    mount: page.mount,
+    componentExport: page.componentExport,
+  }))
+}
+
 export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<LoadedHostPlugins> {
   const automationEntries: HostAutomationEntry[] = []
   const homeEntries: HostPluginHomeEntry[] = []
@@ -79,14 +103,24 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const pluginRecords = createPluginRecords(input.catalog.plugins)
   const storage = createHostPluginStorage()
   const logger = createHostPluginLogger()
-  const host = createPluginPageHost(input.runtime)
+  const workflowHost = createPluginWorkflowPageHost(input.runtime)
+  const toolHost = createPluginToolPageHost(input.runtime)
 
   for (const plugin of input.catalog.plugins) {
     if (plugin.enabled === false) {
       continue
     }
 
-    const mountedPages = mountPluginPages(plugin.manifest) as MountedPluginPage[]
+    const mountedPages = resolveMountedPages(
+      mountPluginPages(plugin.manifest) as MountedPluginPage[],
+      (plugin.manifest.pages ?? []) as ReadonlyArray<{
+        pageId: string
+        title: string
+        mount: 'workspace' | 'tools'
+        componentExport: string
+      }>,
+      plugin.pluginId,
+    )
     const loaded = await loadRendererPluginModule(plugin.entryPath)
     if (!loaded.ok || !loaded.module) {
       const reason = loaded.issue?.reason ?? 'module_import_failed'
@@ -183,7 +217,8 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         page,
         moduleNamespace: loaded.module,
         context,
-        host,
+        workflowHost,
+        toolHost,
         renderFailurePage: renderPluginLoadFailurePage,
       })
       pages.push(renderedPage.entry)

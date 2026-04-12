@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement } from 'react'
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
+import BuildOutlined from '@mui/icons-material/BuildOutlined'
 import CableOutlined from '@mui/icons-material/CableOutlined'
 import ChevronLeftOutlined from '@mui/icons-material/ChevronLeftOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
@@ -21,7 +22,7 @@ export interface HostSidebarConnectionStatus {
   statusLabel: string
 }
 
-export type HostPrimarySidebarRoute = 'home' | 'workflows' | 'automation' | 'runs' | 'settings'
+export type HostPrimarySidebarRoute = 'home' | 'workflows' | 'tools' | 'automation' | 'runs' | 'settings'
 
 const HOST_SIDEBAR_EXPANDED_WIDTH = 272
 const HOST_SIDEBAR_COLLAPSED_WIDTH = 72
@@ -260,6 +261,14 @@ export function HostPrimarySidebar({
           disabled={canReselect('workflows')}
           collapsed={collapsed}
           onClick={() => onSelect('workflows')}
+        />
+        <SidebarNavItem
+          label={translateHost(locale, 'sidebar.tools')}
+          icon={<BuildOutlined sx={{ fontSize: 24 }} />}
+          active={activeRoute === 'tools'}
+          disabled={canReselect('tools')}
+          collapsed={collapsed}
+          onClick={() => onSelect('tools')}
         />
         <SidebarNavItem
           label={translateHost(locale, 'sidebar.automation')}

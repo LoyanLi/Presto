@@ -16,6 +16,7 @@ import type { HostShellState } from './hostShellState'
 import {
   createHostMuiTheme,
   dawLabel,
+  findActiveToolPage,
   findActiveWorkspacePage,
   type LegacySettingsRouteInput,
 } from './hostShellHelpers'
@@ -26,6 +27,8 @@ import type {
   HostRenderedPluginPage,
   HostSettingsPageRoute,
   HostPluginSettingsEntry,
+  HostToolEntry,
+  HostToolPageRoute,
   HostWorkspacePageRoute,
 } from './pluginHostTypes'
 import { GeneralSettingsPage, type GeneralSettingsPageProps } from './settings/GeneralSettingsPage'
@@ -70,6 +73,7 @@ export interface HostShellAppProps {
   pluginManagerModel?: HostPluginManagerModel
   dawAdapterSnapshot?: DawAdapterSnapshot | null
   initialWorkspacePageRoute?: HostWorkspacePageRoute | null
+  initialToolPageRoute?: HostToolPageRoute | null
   initialSettingsPageRoute?: HostSettingsPageRoute | LegacySettingsRouteInput | null
   onInstallPluginDirectory?(): void | Promise<void>
   onInstallPluginZip?(): void | Promise<void>
@@ -91,6 +95,7 @@ export function HostShellApp({
   pluginManagerModel,
   dawAdapterSnapshot = null,
   initialWorkspacePageRoute = null,
+  initialToolPageRoute = null,
   initialSettingsPageRoute = null,
   onInstallPluginDirectory,
   onInstallPluginZip,
@@ -125,10 +130,12 @@ export function HostShellApp({
   const {
     surface,
     workspacePageRoute,
+    toolPageRoute,
     settingsRoute,
     canAccessDeveloper,
     setSurface,
     setWorkspacePageRoute,
+    setToolPageRoute,
     setSettingsRoute,
     openSettings,
     openPrimarySurface,
@@ -138,6 +145,7 @@ export function HostShellApp({
     preferences,
     smokeTarget,
     initialWorkspacePageRoute,
+    initialToolPageRoute,
     initialSettingsPageRoute,
   })
   const {
@@ -185,7 +193,17 @@ export function HostShellApp({
     liveDawAdapterSnapshot,
   })
 
-  const activeWorkspacePage = findActiveWorkspacePage(workspacePageRoute, filteredPluginPages)
+  const workspacePages = useMemo(
+    () => filteredPluginPages.filter((page) => page.mount === 'workspace'),
+    [filteredPluginPages],
+  )
+  const toolPages = useMemo(
+    () => filteredPluginPages.filter((page) => page.mount === 'tools'),
+    [filteredPluginPages],
+  )
+
+  const activeWorkspacePage = findActiveWorkspacePage(workspacePageRoute, workspacePages)
+  const activeToolPage = findActiveToolPage(toolPageRoute, toolPages)
 
   const activeSettingsEntry =
     settingsRoute.kind === 'plugin'
@@ -197,11 +215,34 @@ export function HostShellApp({
   const workspaceSettingsEntry: HostPluginSettingsEntry | null = workspacePageRoute
     ? pluginSettingsEntries.find((entry) => entry.pluginId === workspacePageRoute.pluginId) ?? null
     : null
+  const toolSettingsEntry: HostPluginSettingsEntry | null = toolPageRoute
+    ? pluginSettingsEntries.find((entry) => entry.pluginId === toolPageRoute.pluginId) ?? null
+    : null
 
-  const settingsReturnsToWorkspace =
+  const toolEntries: HostToolEntry[] = useMemo(() => {
+    const descriptionsByPluginId = new Map(
+      (filteredPluginManagerModel?.plugins ?? []).map((plugin) => [plugin.pluginId, plugin.description ?? '']),
+    )
+    return toolPages.map((page) => ({
+      pluginId: page.pluginId,
+      pageId: page.pageId,
+      title: page.title,
+      description: descriptionsByPluginId.get(page.pluginId) || page.title,
+      actionLabel: translateHost(resolvedLocale, 'home.openTool'),
+    }))
+  }, [filteredPluginManagerModel?.plugins, resolvedLocale, toolPages])
+
+  const settingsReturnSurface: 'workflows' | 'tools' | null =
     settingsRoute.kind === 'plugin' &&
     workspacePageRoute !== null &&
     settingsRoute.pluginId === workspacePageRoute.pluginId
+      ? 'workflows'
+      : settingsRoute.kind === 'plugin' &&
+          toolPageRoute !== null &&
+          settingsRoute.pluginId === toolPageRoute.pluginId
+        ? 'tools'
+        : null
+  const settingsReturnsToWorkspace = settingsReturnSurface !== null
 
   const builtinSettingsNav: readonly BuiltinSettingsEntry[] = [
     {
@@ -218,6 +259,11 @@ export function HostShellApp({
       pageId: 'automationExtensions',
       title: translateHost(resolvedLocale, 'settings.extensions.automation.title'),
       description: translateHost(resolvedLocale, 'settings.extensions.automation.body'),
+    },
+    {
+      pageId: 'toolExtensions',
+      title: translateHost(resolvedLocale, 'settings.extensions.tools.title'),
+      description: translateHost(resolvedLocale, 'settings.extensions.tools.body'),
     },
   ]
 
@@ -331,6 +377,20 @@ export function HostShellApp({
     />
   )
 
+  const toolExtensionsPage = (
+    <ExtensionsSettingsPage
+      locale={resolvedLocale}
+      extensionType="tool"
+      pluginManagerModel={filteredPluginManagerModel}
+      pluginSettingsEntries={pluginSettingsEntries}
+      onInstallPluginDirectory={onInstallPluginDirectory}
+      onInstallPluginZip={onInstallPluginZip}
+      onSetPluginEnabled={onSetPluginEnabled}
+      onUninstallPlugin={onUninstallPlugin}
+      onRefreshPlugins={onRefreshPlugins}
+    />
+  )
+
   const shouldRenderSettingsSurface = surface === 'settings' || (surface === 'developer' && !canAccessDeveloper)
 
   const settingsSurface = (
@@ -357,10 +417,11 @@ export function HostShellApp({
       onOpenDeveloper={() => setSurface('developer')}
       onNavigate={openPrimarySurface}
       onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
-      onBackToWorkspace={() => setSurface('home')}
+      onBackToWorkspace={() => setSurface(settingsReturnSurface ?? 'home')}
       generalPage={generalPage}
       workflowExtensionsPage={workflowExtensionsPage}
       automationExtensionsPage={automationExtensionsPage}
+      toolExtensionsPage={toolExtensionsPage}
     />
   )
 
@@ -390,14 +451,22 @@ export function HostShellApp({
               connectionStatus={sidebarConnectionStatus}
               locale={resolvedLocale}
               pluginHomeEntries={filteredPluginHomeEntries}
+              toolEntries={toolEntries}
               automationEntries={filteredAutomationEntries}
               workspacePageRoute={workspacePageRoute}
+              toolPageRoute={toolPageRoute}
               activeWorkspacePage={activeWorkspacePage}
+              activeToolPage={activeToolPage}
               workspaceSettingsEntry={workspaceSettingsEntry}
+              toolSettingsEntry={toolSettingsEntry}
               onOpenSettings={openSettings}
               onOpenWorkspace={(route) => {
                 setWorkspacePageRoute(route)
                 setSurface('workflows')
+              }}
+              onOpenTool={(route) => {
+                setToolPageRoute(route)
+                setSurface('tools')
               }}
               onNavigate={openPrimarySurface}
               onToggleSidebar={() => setSidebarCollapsed((current) => !current)}

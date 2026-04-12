@@ -81,6 +81,13 @@ function createPluginProps() {
         mount: 'workspace',
         render: () => React.createElement('div', null, 'Export Workflow Workspace Page'),
       },
+      {
+        pluginId: 'installed.audio-tools',
+        pageId: 'audio-tools.page.ec3',
+        title: 'EC3 Decode',
+        mount: 'tools',
+        render: () => React.createElement('div', null, 'EC3 Tool Page'),
+      },
     ],
     automationEntries: [
       {
@@ -123,6 +130,15 @@ function createPluginProps() {
           origin: 'official',
           status: 'ready',
           description: 'Split the selected stereo track into mono and keep the chosen channel.',
+        },
+        {
+          pluginId: 'installed.audio-tools',
+          extensionType: 'tool',
+          displayName: 'Audio Tools',
+          version: '1.0.0',
+          origin: 'installed',
+          status: 'ready',
+          description: 'Standalone host-side tools.',
         },
       ],
       issues: [],
@@ -171,6 +187,31 @@ function createPluginProps() {
                   kind: 'categoryList',
                   label: 'Categories',
                   path: 'categories',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          pluginId: 'installed.audio-tools',
+          extensionType: 'tool',
+          pageId: 'audio-tools.page.settings',
+          title: 'Audio Tools',
+          order: 60,
+          storageKey: 'tools.audio.settings',
+          defaults: {
+            autoOpenOutputFolder: true,
+          },
+          sections: [
+            {
+              sectionId: 'tools-behavior',
+              title: 'Tool Behavior',
+              fields: [
+                {
+                  fieldId: 'auto-open-output-folder',
+                  kind: 'toggle',
+                  label: 'Auto-open output folder',
+                  path: 'autoOpenOutputFolder',
                 },
               ],
             },
@@ -386,6 +427,28 @@ test('automation extensions settings page keeps full management controls and wor
   assert.match(markup, /Export Workflow/)
 })
 
+test('tool extensions settings page keeps extension management controls scoped to tool plugins', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...createPluginProps(),
+      initialSettingsPageRoute: {
+        kind: 'builtin',
+        pageId: 'toolExtensions',
+      },
+    }),
+  )
+
+  assert.match(markup, /Tool Extensions/)
+  assert.match(markup, /Tools/)
+  assert.match(markup, /Audio Tools/)
+  assert.match(markup, /Install Local Directory/)
+  assert.match(markup, /Install Local Zip/)
+})
+
 test('host shell wires automation extensions settings into the shared extension management callbacks', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
   const automationPageBlock = sliceAfterMatch(source, /const automationExtensionsPage = \(/, 1200)
@@ -395,6 +458,26 @@ test('host shell wires automation extensions settings into the shared extension 
   assert.match(automationPageBlock, /onInstallPluginZip=\{onInstallPluginZip\}/)
   assert.match(automationPageBlock, /onUninstallPlugin=\{onUninstallPlugin\}/)
   assert.match(automationPageBlock, /onRefreshPlugins=\{onRefreshPlugins\}/)
+})
+
+test('host shell wiring includes tools as a first-class surface and settings extension group', async () => {
+  const [shellSource, settingsSource, sidebarSource, homeSource] = await Promise.all([
+    readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/HostSettingsSurface.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/HostPrimarySidebar.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/HostHomeSurface.tsx'), 'utf8'),
+  ])
+
+  assert.match(shellSource, /pageId: 'toolExtensions'/)
+  assert.match(shellSource, /const toolExtensionsPage = \(/)
+  assert.match(shellSource, /extensionType="tool"/)
+  assert.match(shellSource, /toolExtensionsPage=\{toolExtensionsPage\}/)
+  assert.match(shellSource, /setSurface\('tools'\)/)
+  assert.match(settingsSource, /settingsRoute\.pageId === 'toolExtensions'/)
+  assert.match(settingsSource, /entry\.pageId === 'toolExtensions'/)
+  assert.match(sidebarSource, /translateHost\(locale, 'sidebar\.tools'\)/)
+  assert.match(homeSource, /if \(surface === 'tools'\)/)
+  assert.match(homeSource, /home\.toolLibrary/)
 })
 
 test('settings surface renders declarative workflow settings through shared host fields', async () => {

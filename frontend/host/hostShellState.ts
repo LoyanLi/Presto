@@ -1,4 +1,4 @@
-export type HostShellViewId = 'home' | 'workflows' | 'automation' | 'runs' | 'settings' | 'developer'
+export type HostShellViewId = 'home' | 'workflows' | 'tools' | 'automation' | 'runs' | 'settings' | 'developer'
 
 export interface HostShellState {
   shellViewId: HostShellViewId
@@ -7,6 +7,7 @@ export interface HostShellState {
 export function createHostShellState(shellViewId: HostShellViewId = 'home'): HostShellState {
   const normalizedShellViewId: HostShellViewId =
     shellViewId === 'workflows' ||
+    shellViewId === 'tools' ||
     shellViewId === 'automation' ||
     shellViewId === 'runs' ||
     shellViewId === 'settings' ||

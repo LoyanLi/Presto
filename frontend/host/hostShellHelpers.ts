@@ -10,6 +10,7 @@ import type {
   HostPluginSettingsEntry,
   HostRenderedPluginPage,
   HostSettingsPageRoute,
+  HostToolPageRoute,
   HostWorkspacePageRoute,
 } from './pluginHostTypes'
 
@@ -23,6 +24,7 @@ export const builtinSettingsPageIds = new Set<HostBuiltinSettingsPageId>([
   'general',
   'workflowExtensions',
   'automationExtensions',
+  'toolExtensions',
 ])
 
 export const defaultSettingsRoute: HostSettingsPageRoute = { kind: 'builtin', pageId: 'general' }
@@ -125,6 +127,10 @@ export function isPluginAvailableForSnapshot(
   plugin: HostPluginRecord,
   snapshot: DawAdapterSnapshot | null,
 ): boolean {
+  if (plugin.extensionType === 'tool') {
+    return true
+  }
+
   if (
     snapshot &&
     plugin.supportedDaws &&
@@ -325,6 +331,24 @@ export function findActiveWorkspacePage(
         page.mount === 'workspace' &&
         page.pluginId === workspacePageRoute.pluginId &&
         page.pageId === workspacePageRoute.pageId,
+    ) ?? null
+  )
+}
+
+export function findActiveToolPage(
+  toolPageRoute: HostToolPageRoute | null,
+  pluginPages: readonly HostRenderedPluginPage[],
+): HostRenderedPluginPage | null {
+  if (!toolPageRoute) {
+    return null
+  }
+
+  return (
+    pluginPages.find(
+      (page) =>
+        page.mount === 'tools' &&
+        page.pluginId === toolPageRoute.pluginId &&
+        page.pageId === toolPageRoute.pageId,
     ) ?? null
   )
 }

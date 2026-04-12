@@ -1,12 +1,13 @@
 import type {
   PluginAutomationRunnerContext,
   PluginLogger,
-  PluginPageHost,
+  PluginToolPageHost,
+  PluginWorkflowPageHost,
   PluginStorage,
 } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 
-export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> & Partial<Pick<PrestoRuntime, 'macAccessibility'>>
+export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> & Partial<Pick<PrestoRuntime, 'macAccessibility' | 'fs' | 'shell'>>
 
 type MacAccessibilityClient = NonNullable<PrestoRuntime['macAccessibility']>
 
@@ -41,6 +42,30 @@ const unavailableMacAccessibility: MacAccessibilityClient = {
 }
 
 const inMemoryStorage = new Map<string, string>()
+
+const unavailableToolFsHost: PluginToolPageHost['fs'] = {
+  async readFile() {
+    return null
+  },
+  async writeFile() {
+    return false
+  },
+  async exists() {
+    return false
+  },
+  async readdir() {
+    return []
+  },
+  async deleteFile() {
+    return false
+  },
+}
+
+const unavailableToolShellHost: PluginToolPageHost['shell'] = {
+  async openPath(path) {
+    return `shell runtime is unavailable in this host shell: ${path}`
+  },
+}
 
 export function createHostPluginStorage(): PluginStorage {
   const storageApi = typeof window !== 'undefined' ? window.localStorage : null
@@ -93,12 +118,67 @@ export function createHostPluginLogger(): PluginLogger {
   }
 }
 
-export function createPluginPageHost(runtime: PluginHostRuntime): PluginPageHost {
+export function createPluginWorkflowPageHost(runtime: PluginHostRuntime): PluginWorkflowPageHost {
   return {
     async pickFolder() {
-      return runtime.dialog.openFolder()
+      if (typeof runtime.dialog.openFolder === 'function') {
+        return runtime.dialog.openFolder()
+      }
+      if (typeof runtime.dialog.openDirectory === 'function') {
+        return runtime.dialog.openDirectory()
+      }
+      return {
+        canceled: true,
+        paths: [],
+      }
     },
   }
+}
+
+export function createPluginToolPageHost(runtime: PluginHostRuntime): PluginToolPageHost {
+  return {
+    dialog: {
+      async openFile() {
+        if (typeof runtime.dialog.openFile === 'function') {
+          return runtime.dialog.openFile()
+        }
+        return {
+          canceled: true,
+          paths: [],
+        }
+      },
+      async openDirectory() {
+        if (typeof runtime.dialog.openDirectory === 'function') {
+          return runtime.dialog.openDirectory()
+        }
+        if (typeof runtime.dialog.openFolder === 'function') {
+          return runtime.dialog.openFolder()
+        }
+        return {
+          canceled: true,
+          paths: [],
+        }
+      },
+    },
+    fs: runtime.fs
+      ? {
+          readFile: (path) => runtime.fs!.readFile(path),
+          writeFile: (path, content) => runtime.fs!.writeFile(path, content),
+          exists: (path) => runtime.fs!.exists(path),
+          readdir: (path) => runtime.fs!.readdir(path),
+          deleteFile: (path) => runtime.fs!.deleteFile(path),
+        }
+      : unavailableToolFsHost,
+    shell: runtime.shell
+      ? {
+          openPath: (path) => runtime.shell!.openPath(path),
+        }
+      : unavailableToolShellHost,
+  }
+}
+
+export function createPluginPageHost(runtime: PluginHostRuntime): PluginWorkflowPageHost {
+  return createPluginWorkflowPageHost(runtime)
 }
 
 export function createAutomationRunnerContext(

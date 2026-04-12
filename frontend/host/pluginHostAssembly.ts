@@ -1,9 +1,10 @@
 import React from 'react'
 
 import type {
-  PluginPageHost,
   PluginPageProps,
   PluginStorage,
+  PluginToolPageHost,
+  PluginWorkflowPageHost,
   WorkflowSettingsPageDefinition,
 } from '@presto/contracts'
 import type { PluginRuntimeIssue, PluginRuntimeListResult } from '@presto/sdk-runtime/clients/plugins'
@@ -22,7 +23,7 @@ export interface MountedPluginPage {
   pluginId: string
   pageId: string
   title: string
-  mount: 'workspace'
+  mount: 'workspace' | 'tools'
   componentExport: string
 }
 
@@ -133,10 +134,11 @@ export function createMountedPageEntry(input: {
   page: MountedPluginPage
   moduleNamespace: PluginModuleNamespace
   context: PluginPageProps['context']
-  host: PluginPageHost
+  workflowHost: PluginWorkflowPageHost
+  toolHost: PluginToolPageHost
   renderFailurePage(title: string, reason: string): () => React.ReactElement
 }): { entry: HostRenderedPluginPage; issueReason?: string } {
-  const { page, moduleNamespace, context, host, renderFailurePage } = input
+  const { page, moduleNamespace, context, workflowHost, toolHost, renderFailurePage } = input
   const pageComponent = moduleNamespace[page.componentExport]
   if (typeof pageComponent !== 'function') {
     const reason = `missing_page_export:${page.componentExport}`
@@ -153,6 +155,7 @@ export function createMountedPageEntry(input: {
   }
 
   const RenderPage = pageComponent as (props: PluginPageProps) => React.ReactElement
+  const host = page.mount === 'tools' ? toolHost : workflowHost
   return {
     entry: {
       pluginId: page.pluginId,
@@ -162,7 +165,7 @@ export function createMountedPageEntry(input: {
       render: () =>
         React.createElement(RenderPage, {
           context,
-          host,
+          host: host as unknown as PluginPageProps['host'],
           params: {},
           searchParams: new URLSearchParams(),
         }),

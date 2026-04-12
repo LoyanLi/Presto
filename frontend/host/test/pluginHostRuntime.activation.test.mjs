@@ -162,6 +162,60 @@ async function createAutomationPluginFixture(root) {
   }
 }
 
+async function createToolPluginFixture(root) {
+  const pluginRoot = path.join(root, 'installed.audio-tools')
+  const entryPath = path.join(pluginRoot, 'dist/index.mjs')
+  await mkdir(path.dirname(entryPath), { recursive: true })
+
+  const manifest = {
+    pluginId: 'installed.audio-tools',
+    extensionType: 'tool',
+    version: '1.0.0',
+    hostApiVersion: '0.1.0',
+    supportedDaws: ['pro_tools'],
+    uiRuntime: 'react18',
+    displayName: 'Audio Tools',
+    description: 'Standalone host-side utility pages.',
+    entry: 'dist/index.mjs',
+    pages: [
+      {
+        pageId: 'tools.page.ec3',
+        path: '/plugins/tools/ec3',
+        title: 'EC3 Decode',
+        mount: 'tools',
+        componentExport: 'Ec3ToolPage',
+      },
+    ],
+    requiredCapabilities: [],
+    adapterModuleRequirements: [],
+    capabilityRequirements: [],
+  }
+
+  await writeFile(
+    entryPath,
+    `
+      export const manifest = ${JSON.stringify(manifest, null, 2)}
+
+      export async function activate() {}
+
+      export function Ec3ToolPage() {
+        return null
+      }
+    `,
+  )
+
+  return {
+    pluginId: manifest.pluginId,
+    displayName: manifest.displayName,
+    version: manifest.version,
+    pluginRoot,
+    entryPath,
+    manifest,
+    settingsPages: [],
+    loadable: true,
+  }
+}
+
 test('loadHostPlugins keeps workflow plugins available when host only provides declared backend services', async (t) => {
   const { loadHostPlugins } = await loadPluginHostRuntime()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
@@ -332,6 +386,64 @@ test('loadHostPlugins injects page-scoped host folder picking into workflow page
   await assert.deepEqual(await renderedPage.props.host.pickFolder(), {
     canceled: false,
     paths: ['/Workflow/Exports'],
+  })
+})
+
+test('loadHostPlugins injects tool page host services and excludes tools from workflow home entries', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox)
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
+        openFile: async () => ({ canceled: false, paths: ['/input.wav'] }),
+        openDirectory: async () => ({ canceled: false, paths: ['/output'] }),
+      },
+      fs: {
+        readFile: async () => 'source',
+        writeFile: async () => true,
+        exists: async () => true,
+        readdir: async () => ['a.wav'],
+        deleteFile: async () => true,
+      },
+      shell: {
+        openPath: async () => '',
+        openExternal: async () => true,
+      },
+    },
+  })
+
+  assert.deepEqual(result.homeEntries, [])
+  assert.equal(result.pages.length, 1)
+  assert.equal(result.pages[0]?.mount, 'tools')
+  const renderedPage = result.pages[0]?.render()
+  assert.equal(typeof renderedPage?.props?.host?.dialog?.openFile, 'function')
+  assert.equal(typeof renderedPage?.props?.host?.dialog?.openDirectory, 'function')
+  assert.equal(typeof renderedPage?.props?.host?.fs?.readFile, 'function')
+  assert.equal(typeof renderedPage?.props?.host?.shell?.openPath, 'function')
+  await assert.deepEqual(await renderedPage?.props?.host?.dialog?.openFile(), {
+    canceled: false,
+    paths: ['/input.wav'],
+  })
+  await assert.deepEqual(await renderedPage?.props?.host?.dialog?.openDirectory(), {
+    canceled: false,
+    paths: ['/output'],
   })
 })
 

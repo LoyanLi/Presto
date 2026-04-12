@@ -44,6 +44,7 @@ export interface HostSettingsSurfaceProps {
   generalPage: ReactElement
   workflowExtensionsPage: ReactElement
   automationExtensionsPage: ReactElement
+  toolExtensionsPage: ReactElement
 }
 
 const appShellStyle = (sidebarCollapsed: boolean): CSSProperties => ({
@@ -210,6 +211,10 @@ function settingsDescription(locale: HostLocale, pageId: HostBuiltinSettingsPage
     return translateHost(locale, 'settings.extensions.automation.description')
   }
 
+  if (pageId === 'toolExtensions') {
+    return translateHost(locale, 'settings.extensions.tools.description')
+  }
+
   return translateHost(locale, 'sidebar.settings')
 }
 
@@ -252,19 +257,28 @@ export function HostSettingsSurface({
   generalPage,
   workflowExtensionsPage,
   automationExtensionsPage,
+  toolExtensionsPage,
 }: HostSettingsSurfaceProps) {
   const builtinSettingsNavItems = builtinSettingsNav.filter(
-    (entry) => entry.pageId !== 'workflowExtensions' && entry.pageId !== 'automationExtensions',
+    (entry) =>
+      entry.pageId !== 'workflowExtensions' &&
+      entry.pageId !== 'automationExtensions' &&
+      entry.pageId !== 'toolExtensions',
   )
   const extensionSettingsNavItems = builtinSettingsNav.filter(
-    (entry) => entry.pageId === 'workflowExtensions' || entry.pageId === 'automationExtensions',
+    (entry) =>
+      entry.pageId === 'workflowExtensions' ||
+      entry.pageId === 'automationExtensions' ||
+      entry.pageId === 'toolExtensions',
   )
   const showTopbarReturnAction = settingsRoute.kind === 'plugin' && settingsReturnsToWorkspace
   const hasPluginExtensions =
     extensionSettingsNavItems.length > 0 ||
     pluginSettingsEntries.length > 0 ||
     (settingsRoute.kind === 'builtin' &&
-      (settingsRoute.pageId === 'workflowExtensions' || settingsRoute.pageId === 'automationExtensions'))
+      (settingsRoute.pageId === 'workflowExtensions' ||
+        settingsRoute.pageId === 'automationExtensions' ||
+        settingsRoute.pageId === 'toolExtensions'))
 
   const renderSettingsContent = (): ReactElement => {
     if (settingsRoute.kind === 'plugin') {
@@ -290,6 +304,10 @@ export function HostSettingsSurface({
 
     if (settingsRoute.pageId === 'automationExtensions') {
       return automationExtensionsPage
+    }
+
+    if (settingsRoute.pageId === 'toolExtensions') {
+      return toolExtensionsPage
     }
 
     const entry = builtinSettingsNav.find((item) => item.pageId === settingsRoute.pageId)

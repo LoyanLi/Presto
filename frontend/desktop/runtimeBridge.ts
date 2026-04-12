@@ -11,7 +11,12 @@ import type {
   BackendStatus,
   DawAdapterSnapshot,
 } from '@presto/sdk-runtime/clients/backend'
-import type { DialogOpenFolderResult, DialogRuntimeClient } from '@presto/sdk-runtime/clients/dialog'
+import type {
+  DialogOpenDirectoryResult,
+  DialogOpenFileResult,
+  DialogOpenFolderResult,
+  DialogRuntimeClient,
+} from '@presto/sdk-runtime/clients/dialog'
 import type { FsRuntimeClient, FsStat } from '@presto/sdk-runtime/clients/fs'
 import type {
   MacAccessibilityPreflightResult,
@@ -138,6 +143,26 @@ export function createDesktopRuntimeBridge(
         properties: ['openDirectory'],
       })
       const result: DialogOpenFolderResult = {
+        canceled: response.canceled,
+        paths: response.filePaths,
+      }
+      return result
+    },
+    openFile: async () => {
+      const response = await invokeTyped<{ canceled: boolean; filePaths: string[] }>(invoke, operations.dialog.open, {
+        properties: ['openFile'],
+      })
+      const result: DialogOpenFileResult = {
+        canceled: response.canceled,
+        paths: response.filePaths,
+      }
+      return result
+    },
+    openDirectory: async () => {
+      const response = await invokeTyped<{ canceled: boolean; filePaths: string[] }>(invoke, operations.dialog.open, {
+        properties: ['openDirectory'],
+      })
+      const result: DialogOpenDirectoryResult = {
         canceled: response.canceled,
         paths: response.filePaths,
       }

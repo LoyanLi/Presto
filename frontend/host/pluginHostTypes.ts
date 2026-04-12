@@ -10,7 +10,7 @@ import type {
 
 export type HostPluginOrigin = 'official' | 'installed'
 export type HostPluginStatus = 'ready' | 'error' | 'disabled'
-export type HostExtensionType = 'workflow' | 'automation'
+export type HostExtensionType = 'workflow' | 'automation' | 'tool'
 
 export interface HostPluginHomeEntry {
   pluginId: string
@@ -36,10 +36,16 @@ export interface HostWorkspacePageRoute {
   pageId: string
 }
 
+export interface HostToolPageRoute {
+  pluginId: string
+  pageId: string
+}
+
 export type HostBuiltinSettingsPageId =
   | 'general'
   | 'workflowExtensions'
   | 'automationExtensions'
+  | 'toolExtensions'
 
 export interface HostBuiltinSettingsPageRoute {
   kind: 'builtin'
@@ -71,8 +77,16 @@ export interface HostRenderedPluginPage {
   pluginId: string
   pageId: string
   title: string
-  mount: 'workspace'
+  mount: 'workspace' | 'tools'
   render(): ReactElement
+}
+
+export interface HostToolEntry {
+  pluginId: string
+  pageId: string
+  title: string
+  description: string
+  actionLabel: string
 }
 
 export interface HostPluginRecord {
