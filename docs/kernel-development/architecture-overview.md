@@ -98,6 +98,7 @@ src-tauri/src/runtime.rs
 - 桌面打包路径会把 `PRESTO_APP_DATA_DIR` 注入后端，所以 backend config 会落到应用数据目录下的 `config.json`，不再只活在后端进程内存里。
 - Rust runtime 初始化时会先从 `<app data>/config.json` 读取 `hostPreferences.dawTarget`，用它给 backend supervisor 设定初始 `target_daw`，而不是只靠 Renderer 启动后再纠正。
 - `backend/presto/application/daw_runtime.py` 是当前多 DAW 扩展接缝；`target_daw` 会先解析运行时依赖，再进入 capability 执行链，但当前只实现了 `pro_tools` factory。
+- `0.3.x` 版本线当前只继续扩 `Pro Tools` 支持面，不会把 `logic`、`cubase`、`nuendo` 从 reserved 提升为 supported；其他 `DAW` 的真实落地从 `0.4.x` 再开始。
 - `packages/contracts-manifest/daw-targets.json` 现在是 DAW target 的唯一事实源；`scripts/generate-contracts.mjs` 会生成 `packages/contracts/src/generated/dawTargets.ts`、`backend/presto/domain/daw_targets_generated.py` 和 `src-tauri/src/runtime/daw_targets_generated.rs`。
 - Rust capability bridge 在 `/api/v1/capabilities/invoke` 非 `200` 时不会把后端错误压扁成 transport string，而是保留 `success / requestId / capability / error` 这套结构化 envelope，把 FastAPI 错误语义带回 Host。
 - 插件发现不再按“当前运行中的 DAW”裁掉已安装插件；Rust runtime 负责发现与校验，当前 DAW 下是否可用由 Host 层基于 `supportedDaws` 再做可用性判断。
@@ -107,6 +108,7 @@ src-tauri/src/runtime.rs
 - capability 是跨宿主、后端、插件的正式业务协议中心。
 - 插件不是宿主内任意脚本执行环境，而是 manifest 驱动的受限扩展模型。
 - 当前真实支持的 DAW 只有 `pro_tools`。
+- 如果在 `0.3.x` 里谈“完整覆盖 `PTSL`”，它只应该指 backend-private 的 `Pro Tools` 内部命令层，而不是 public capability 与 `PTSL` 一一对应。
 - 版本号的唯一手工源头现在是仓库根 `package.json`；`packages/contracts/src/version.ts` 和 `backend/presto/version.py` 都是同步生成的派生常量。
 
 ## 5. 建议从哪里读代码

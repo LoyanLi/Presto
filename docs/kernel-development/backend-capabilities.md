@@ -183,6 +183,13 @@
 
 - `target_daw` 当前实际只允许 `pro_tools`
 - `logic`、`cubase`、`nuendo` 当前只属于 `RESERVED_DAW_TARGETS`，不是已接通运行时
+- `0.3.x` 版本线当前只继续扩 `Pro Tools` 支持面，不新增任何非 `pro_tools` 的 supported target
+- 其他 `DAW` 的真正运行时接入从 `0.4.x` 再开始，而不是在 `0.3.x` 内边做 `PTSL` 扩面边插入新 target
 - HTTP 只是本地进程间通信载体，不是对外开放平台 API
 - 后端默认状态依赖本地 Python 和 Pro Tools 集成，不应被文档写成通用多 DAW 能力服务
 - 当前所谓“多 DAW 扩展”只成立在 runtime dependency resolver 这个接缝上，不能写成已经完成多 DAW 能力平台化。
+- 如果要在 `0.3.x` 里追求“完整覆盖 `PTSL`”，这个目标只能成立在 backend-private 的 `Pro Tools` 内部命令层，不应该把每个 `PTSL` 命令直接提升成 public capability。
+
+更完整的版本策略与 `PTSL` 覆盖边界说明见：
+
+- [Pro Tools PTSL 覆盖策略](protools-ptsl-coverage.md)

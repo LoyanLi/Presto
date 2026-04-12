@@ -8,6 +8,7 @@
 2. [桌面运行时](desktop-runtime.md)
 3. [后端能力层](backend-capabilities.md)
 4. [Contracts 与通信边界](contracts-and-communication.md)
+5. [Pro Tools PTSL 覆盖策略](protools-ptsl-coverage.md)
 
 ## 适用问题
 
@@ -15,3 +16,5 @@
 - Tauri、Rust runtime、FastAPI 之间如何连通
 - capability 是怎么注册、调用、校验和返回的
 - 哪些改动应该落在 `contracts`，哪些应该落在 `sdk-core` 或 `sdk-runtime`
+- `0.3.x` 为什么只继续扩 `Pro Tools`
+- `PTSL` 全覆盖在这个仓库里到底应该指内部命令层，还是 public capability 面
