@@ -49,10 +49,10 @@ export interface DeveloperCapabilityConsoleProps {
 const WRITE_STATUSES = new Set<CapabilityStatus>(['live'])
 const CORE_CONSOLE_CAPABILITY_ID_SET = new Set(CORE_CONSOLE_CAPABILITY_IDS)
 const CORE_IO_CAPABILITY_ID_SET = new Set<DeveloperCapabilityId>([
-  'import.run.start',
-  'export.range.set',
-  'export.start',
-  'export.direct.start',
+  'daw.import.run.start',
+  'daw.export.range.set',
+  'daw.export.start',
+  'daw.export.direct.start',
 ])
 const developerConsoleShellStyle: CSSProperties = {
   display: 'grid',
@@ -693,9 +693,9 @@ export function DeveloperCapabilityConsole({
         'system.health',
         'config.get',
         'daw.connection.getStatus',
-        'transport.getStatus',
-        'session.getInfo',
-        'track.list',
+        'daw.transport.getStatus',
+        'daw.session.getInfo',
+        'daw.track.list',
       ] as const) {
         if (cancelled) {
           return
@@ -709,84 +709,84 @@ export function DeveloperCapabilityConsole({
       await invoke('config.update', { config: configResult.config ?? {} })
       await invoke('daw.connection.connect', {})
       await invoke('daw.connection.getStatus')
-      await invoke('transport.getStatus')
-      const trackList = (await invoke('track.list')) as { tracks?: Array<{ name?: string }> }
+      await invoke('daw.transport.getStatus')
+      const trackList = (await invoke('daw.track.list')) as { tracks?: Array<{ name?: string }> }
       const trackName = pickPreferredTrackName(trackList.tracks)
       if (!trackName) {
         throw new Error('developer_write_smoke_no_track_name')
       }
-      await invoke('session.save')
-      await invoke('track.rename', {
+      await invoke('daw.session.save')
+      await invoke('daw.track.rename', {
         currentName: trackName,
         newName: trackName,
       })
-      await invoke('track.select', { trackName })
-      await invoke('track.color.apply', {
+      await invoke('daw.track.select', { trackName })
+      await invoke('daw.track.color.apply', {
         trackName,
         colorSlot: 1,
       })
-      await invoke('track.hidden.set', {
+      await invoke('daw.track.hidden.set', {
         trackNames: [trackName],
         enabled: false,
       })
-      await invoke('track.inactive.set', {
+      await invoke('daw.track.inactive.set', {
         trackNames: [trackName],
         enabled: false,
       })
-      await invoke('clip.selectAllOnTrack', { trackName })
-      await invoke('track.mute.set', {
+      await invoke('daw.clip.selectAllOnTrack', { trackName })
+      await invoke('daw.track.mute.set', {
         trackNames: [trackName],
         enabled: true,
       })
-      await invoke('track.solo.set', {
+      await invoke('daw.track.solo.set', {
         trackNames: [trackName],
         enabled: false,
       })
-      await invoke('transport.play')
-      await invoke('transport.stop')
-      await invoke('transport.record')
-      await invoke('transport.stop')
+      await invoke('daw.transport.play')
+      await invoke('daw.transport.stop')
+      await invoke('daw.transport.record')
+      await invoke('daw.transport.stop')
       await invoke('daw.connection.disconnect')
     }
 
     const runTrackWriteSmoke = async () => {
-      const trackList = (await invoke('track.list')) as { tracks?: Array<{ name?: string }> }
+      const trackList = (await invoke('daw.track.list')) as { tracks?: Array<{ name?: string }> }
       const trackName = pickPreferredTrackName(trackList.tracks)
       if (!trackName) {
         throw new Error('track_write_smoke_no_track_name')
       }
 
-      await invoke('track.color.apply', {
+      await invoke('daw.track.color.apply', {
         trackName,
         colorSlot: 1,
       })
     }
 
     const runStripSilenceSmoke = async () => {
-      const trackList = (await invoke('track.list')) as { tracks?: Array<{ name?: string }> }
+      const trackList = (await invoke('daw.track.list')) as { tracks?: Array<{ name?: string }> }
       const trackName = pickPreferredTrackName(trackList.tracks)
       if (!trackName) {
         throw new Error('strip_silence_smoke_no_track_name')
       }
 
-      await invoke('track.select', { trackName })
-      await invoke('clip.selectAllOnTrack', { trackName })
-      await invoke('stripSilence.open')
-      await invoke('stripSilence.execute', { trackName })
+      await invoke('daw.track.select', { trackName })
+      await invoke('daw.clip.selectAllOnTrack', { trackName })
+      await invoke('daw.stripSilence.open')
+      await invoke('daw.stripSilence.execute', { trackName })
     }
 
     const runCoreIoSmoke = async () => {
       const importFolder = smokeImportFolder || '/private/tmp/presto-core-io-import'
 
-      await invoke('export.range.set', {
+      await invoke('daw.export.range.set', {
         inTime: '00:00:00:00',
         outTime: '00:00:10:00',
       })
 
-      const importJobAccepted = (await invoke('import.run.start', {
+      const importJobAccepted = (await invoke('daw.import.run.start', {
         folderPaths: [importFolder],
       })) as { jobId?: string }
-      const exportJobAccepted = (await invoke('export.start', {
+      const exportJobAccepted = (await invoke('daw.export.start', {
         outputPath: '/private/tmp/presto-core-io-export',
         fileName: 'presto-core-io-smoke-main',
         fileType: 'WAV',
@@ -797,7 +797,7 @@ export function DeveloperCapabilityConsole({
           sampleRate: 48000,
         },
       })) as { jobId?: string }
-      const exportDirectJobAccepted = (await invoke('export.direct.start', {
+      const exportDirectJobAccepted = (await invoke('daw.export.direct.start', {
         outputPath: '/private/tmp/presto-core-io-export',
         fileName: 'presto-core-io-smoke-direct',
         fileType: 'WAV',

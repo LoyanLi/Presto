@@ -33,25 +33,25 @@ function createRunnerContext(overrides = {}) {
       track: {
         selection: {
           async get() {
-            calls.push({ type: 'track.selection.get' })
+            calls.push({ type: 'daw.track.selection.get' })
             const response = selectionResponses[Math.min(selectionIndex, selectionResponses.length - 1)]
             selectionIndex += 1
             return response
           },
         },
         async rename(request) {
-          calls.push({ type: 'track.rename', request })
+          calls.push({ type: 'daw.track.rename', request })
           return { trackName: request.newName }
         },
         hidden: {
           async set(request) {
-            calls.push({ type: 'track.hidden.set', request })
+            calls.push({ type: 'daw.track.hidden.set', request })
             return { updated: true, ...request }
           },
         },
         inactive: {
           async set(request) {
-            calls.push({ type: 'track.inactive.set', request })
+            calls.push({ type: 'daw.track.inactive.set', request })
             return { updated: true, ...request }
           },
         },
@@ -90,16 +90,16 @@ test('batch ara backup automation requires track hidden and inactive core capabi
   const pluginModule = await loadPluginModule()
 
   assert.deepEqual(pluginModule.manifest.requiredCapabilities, [
-    'track.selection.get',
-    'track.rename',
-    'track.hidden.set',
-    'track.inactive.set',
+    'daw.track.selection.get',
+    'daw.track.rename',
+    'daw.track.hidden.set',
+    'daw.track.inactive.set',
   ])
   assert.deepEqual(pluginModule.manifest.capabilityRequirements, [
-    { capabilityId: 'track.selection.get', minVersion: '2025.10.0' },
-    { capabilityId: 'track.rename', minVersion: '2025.10.0' },
-    { capabilityId: 'track.hidden.set', minVersion: '2025.10.0' },
-    { capabilityId: 'track.inactive.set', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.selection.get', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.rename', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.hidden.set', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.inactive.set', minVersion: '2025.10.0' },
   ])
 })
 
@@ -114,17 +114,17 @@ test('batch ara backup automation runner renames duplicated tracks to .bak befor
 
   assert.deepEqual(calls.map((call) => call.type), [
     'mac.preflight',
-    'track.selection.get',
+    'daw.track.selection.get',
     'mac.runScript',
-    'track.selection.get',
-    'track.rename',
-    'track.rename',
-    'track.hidden.set',
-    'track.inactive.set',
+    'daw.track.selection.get',
+    'daw.track.rename',
+    'daw.track.rename',
+    'daw.track.hidden.set',
+    'daw.track.inactive.set',
   ])
 
   assert.deepEqual(
-    calls.filter((call) => call.type === 'track.rename').map((call) => call.request),
+    calls.filter((call) => call.type === 'daw.track.rename').map((call) => call.request),
     [
       { currentName: 'Lead Vox.dup1', newName: 'Lead Vox.bak' },
       { currentName: 'Lead Vox Double.dup1', newName: 'Lead Vox Double.bak' },
@@ -200,18 +200,18 @@ test('batch ara backup automation respects backup hide and inactive toggles inde
   })
 
   assert.deepEqual(
-    calls.filter((call) => call.type === 'track.hidden.set'),
+    calls.filter((call) => call.type === 'daw.track.hidden.set'),
     [],
   )
   assert.deepEqual(
-    calls.filter((call) => call.type === 'track.rename').map((call) => call.request),
+    calls.filter((call) => call.type === 'daw.track.rename').map((call) => call.request),
     [
       { currentName: 'Lead Vox.dup1', newName: 'Lead Vox.bak' },
       { currentName: 'Lead Vox Double.dup1', newName: 'Lead Vox Double.bak' },
     ],
   )
   assert.deepEqual(
-    calls.filter((call) => call.type === 'track.inactive.set').map((call) => call.request),
+    calls.filter((call) => call.type === 'daw.track.inactive.set').map((call) => call.request),
     [{ trackNames: ['Lead Vox.bak', 'Lead Vox Double.bak'], enabled: true }],
   )
 })

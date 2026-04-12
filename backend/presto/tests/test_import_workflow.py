@@ -256,7 +256,7 @@ def _seed_running_job(app: object, *, job_id: str) -> None:
     services.job_manager.upsert(
         JobRecord(
             job_id=job_id,
-            capability="import.run.start",
+            capability="daw.import.run.start",
             target_daw="pro_tools",
             state="running",
             progress=JobProgress(phase="running", current=1, total=3, percent=33.3, message="Importing"),
@@ -333,7 +333,7 @@ def test_export_run_start_rejects_mp3_with_multiple_mix_sources(tmp_path: Path) 
                     "onlineExport": False,
                 },
             },
-            capability_id="export.run.start",
+            capability_id="daw.export.run.start",
         )
 
     assert exc_info.value.details["field"] == "exportSettings.mixSources"
@@ -637,11 +637,11 @@ def test_export_start_creates_job_and_marks_job_succeeded(tmp_path: Path) -> Non
                 "sampleRate": 48000,
             },
         },
-        capability_id="export.start",
+        capability_id="daw.export.start",
     )
 
     assert response["jobId"]
-    assert response["capability"] == "export.start"
+    assert response["capability"] == "daw.export.start"
     assert response["state"] == "queued"
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
     assert app.state.services.daw.export_mix_calls == [
@@ -701,10 +701,10 @@ def test_export_run_start_processes_snapshots_and_moves_files_to_output_path(tmp
         ],
     )
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
-    assert response["capability"] == "export.run.start"
+    assert response["capability"] == "daw.export.run.start"
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
 
     assert len(app.state.services.daw.export_mix_calls) == 2
@@ -778,7 +778,7 @@ def test_export_run_start_uses_file_level_progress_for_running_job_state(tmp_pat
         },
     }
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
     assert app.state.services.daw.export_progress_started_event.wait(timeout=2)
@@ -824,7 +824,7 @@ def test_export_run_start_records_mix_source_progress_metadata_on_success(tmp_pa
         },
     }
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
@@ -876,7 +876,7 @@ def test_export_run_start_keeps_overall_progress_monotonic_after_failed_file(tmp
         },
     }
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
     assert app.state.services.daw.export_progress_started_event.wait(timeout=2)
@@ -907,7 +907,7 @@ def test_export_run_start_marks_completed_with_errors_and_keeps_successful_expor
         ],
     )
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
@@ -939,7 +939,7 @@ def test_export_run_start_waits_for_bounced_file_to_appear(tmp_path: Path) -> No
         ],
     )
 
-    response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert response["jobId"]
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
@@ -954,7 +954,7 @@ def test_update_export_run_progress_promotes_job_to_running_state() -> None:
     app = _app_with_fake_daw()
     job = app.state.services.job_manager.create(
         JobsCreateRequest(
-            capability="export.run.start",
+            capability="daw.export.run.start",
             target_daw="pro_tools",
             state="queued",
         )
@@ -982,7 +982,7 @@ def test_update_export_run_progress_promotes_job_to_running_state() -> None:
     assert updated.started_at is not None
 
 
-@pytest.mark.parametrize("capability_id", ["export.start", "export.direct.start"])
+@pytest.mark.parametrize("capability_id", ["daw.export.start", "daw.export.direct.start"])
 def test_export_run_setup_errors_are_attributed_to_export_capability(capability_id: str) -> None:
     app = _app_without_daw()
 
@@ -1081,7 +1081,7 @@ def test_jobs_cancel_stops_running_export_before_completion(tmp_path: Path) -> N
             "fileType": "WAV",
             "offline": True,
         },
-        capability_id="export.start",
+        capability_id="daw.export.start",
     )
 
     assert start_response["jobId"]
@@ -1117,7 +1117,7 @@ def test_jobs_cancel_stops_running_export_workflow_before_completion(tmp_path: P
         ],
     )
 
-    start_response = start_export_run(app.state.services, payload, capability_id="export.run.start")
+    start_response = start_export_run(app.state.services, payload, capability_id="daw.export.run.start")
 
     assert start_response["jobId"]
     assert app.state.services.daw.export_started_event.wait(timeout=2)
@@ -1204,7 +1204,7 @@ def test_import_run_start_preserves_raw_code_and_raw_message_on_failure(tmp_path
             "rawCode": "PTSL_IMPORT_FAILED",
             "rawMessage": "Import failed.",
         },
-        capability="import.run.start",
+        capability="daw.import.run.start",
         adapter="pro_tools",
     )
     source_folder = _create_audio_source_folder(tmp_path, file_names=["snare.wav"])

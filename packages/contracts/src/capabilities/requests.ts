@@ -301,46 +301,46 @@ type CoreCapabilityRequestMap = {
   'daw.ptsl.catalog.list': DawPtslCatalogListRequest
   'daw.ptsl.command.describe': DawPtslCommandDescribeRequest
   'daw.ptsl.command.execute': DawPtslCommandExecuteRequest
-  'automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteRequest
-  'session.getInfo': SessionGetInfoRequest
-  'session.getLength': SessionGetLengthRequest
-  'session.save': SessionSaveRequest
-  'session.applySnapshot': SessionApplySnapshotRequest
-  'session.getSnapshotInfo': SessionGetSnapshotInfoRequest
-  'track.list': TrackListRequest
-  'track.listNames': TrackListNamesRequest
-  'track.selection.get': TrackSelectionGetRequest
-  'track.rename': TrackRenameRequest
-  'track.select': TrackSelectRequest
-  'track.color.apply': TrackColorApplyRequest
-  'track.pan.set': TrackPanSetRequest
-  'track.mute.set': TrackMuteSetRequest
-  'track.solo.set': TrackSoloSetRequest
-  'track.hidden.set': TrackHiddenSetRequest
-  'track.inactive.set': TrackInactiveSetRequest
-  'track.recordEnable.set': TrackRecordEnableSetRequest
-  'track.recordSafe.set': TrackRecordSafeSetRequest
-  'track.inputMonitor.set': TrackInputMonitorSetRequest
-  'track.online.set': TrackOnlineSetRequest
-  'track.frozen.set': TrackFrozenSetRequest
-  'track.open.set': TrackOpenSetRequest
-  'clip.selectAllOnTrack': ClipSelectAllOnTrackRequest
-  'transport.play': TransportPlayRequest
-  'transport.stop': TransportStopRequest
-  'transport.record': TransportRecordRequest
-  'transport.getStatus': TransportGetStatusRequest
+  'daw.automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteRequest
+  'daw.session.getInfo': SessionGetInfoRequest
+  'daw.session.getLength': SessionGetLengthRequest
+  'daw.session.save': SessionSaveRequest
+  'daw.session.applySnapshot': SessionApplySnapshotRequest
+  'daw.session.getSnapshotInfo': SessionGetSnapshotInfoRequest
+  'daw.track.list': TrackListRequest
+  'daw.track.listNames': TrackListNamesRequest
+  'daw.track.selection.get': TrackSelectionGetRequest
+  'daw.track.rename': TrackRenameRequest
+  'daw.track.select': TrackSelectRequest
+  'daw.track.color.apply': TrackColorApplyRequest
+  'daw.track.pan.set': TrackPanSetRequest
+  'daw.track.mute.set': TrackMuteSetRequest
+  'daw.track.solo.set': TrackSoloSetRequest
+  'daw.track.hidden.set': TrackHiddenSetRequest
+  'daw.track.inactive.set': TrackInactiveSetRequest
+  'daw.track.recordEnable.set': TrackRecordEnableSetRequest
+  'daw.track.recordSafe.set': TrackRecordSafeSetRequest
+  'daw.track.inputMonitor.set': TrackInputMonitorSetRequest
+  'daw.track.online.set': TrackOnlineSetRequest
+  'daw.track.frozen.set': TrackFrozenSetRequest
+  'daw.track.open.set': TrackOpenSetRequest
+  'daw.clip.selectAllOnTrack': ClipSelectAllOnTrackRequest
+  'daw.transport.play': TransportPlayRequest
+  'daw.transport.stop': TransportStopRequest
+  'daw.transport.record': TransportRecordRequest
+  'daw.transport.getStatus': TransportGetStatusRequest
   'workflow.run.start': WorkflowRunStartRequest
-  'import.analyze': ImportAnalyzeRequest
-  'import.cache.save': ImportCacheSaveRequest
-  'import.planRunItems': ImportPlanRunItemsRequest
-  'import.run.start': ImportRunStartRequest
-  'stripSilence.open': StripSilenceOpenRequest
-  'stripSilence.execute': StripSilenceExecuteRequest
-  'export.range.set': ExportRangeSetRequest
-  'export.start': ExportStartRequest
-  'export.direct.start': ExportDirectStartRequest
-  'export.run.start': ExportRunStartRequest
-  'export.mixWithSource': ExportMixWithSourceRequest
+  'daw.import.analyze': ImportAnalyzeRequest
+  'daw.import.cache.save': ImportCacheSaveRequest
+  'daw.import.planRunItems': ImportPlanRunItemsRequest
+  'daw.import.run.start': ImportRunStartRequest
+  'daw.stripSilence.open': StripSilenceOpenRequest
+  'daw.stripSilence.execute': StripSilenceExecuteRequest
+  'daw.export.range.set': ExportRangeSetRequest
+  'daw.export.start': ExportStartRequest
+  'daw.export.direct.start': ExportDirectStartRequest
+  'daw.export.run.start': ExportRunStartRequest
+  'daw.export.mixWithSource': ExportMixWithSourceRequest
   'jobs.create': JobsCreateRequest
   'jobs.update': JobsUpdateRequest
   'jobs.get': JobsGetRequest

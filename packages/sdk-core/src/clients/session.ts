@@ -38,24 +38,24 @@ const invokeCapability = async <TRequest, TResponse>(
 
 export const createSessionClient = (context: PrestoClientAssemblyContext): SessionClient => ({
   getInfo: () =>
-    invokeCapability<SessionGetInfoRequest, SessionGetInfoResponse>(context, 'session.getInfo', {}),
+    invokeCapability<SessionGetInfoRequest, SessionGetInfoResponse>(context, 'daw.session.getInfo', {}),
   getLength: () =>
     invokeCapability<SessionGetLengthRequest, SessionGetLengthResponse>(
       context,
-      'session.getLength',
+      'daw.session.getLength',
       {},
     ),
-  save: () => invokeCapability<SessionSaveRequest, SessionSaveResponse>(context, 'session.save', {}),
+  save: () => invokeCapability<SessionSaveRequest, SessionSaveResponse>(context, 'daw.session.save', {}),
   applySnapshot: (request: SessionApplySnapshotRequest) =>
     invokeCapability<SessionApplySnapshotRequest, SessionApplySnapshotResponse>(
       context,
-      'session.applySnapshot',
+      'daw.session.applySnapshot',
       request,
     ),
   getSnapshotInfo: (request: SessionGetSnapshotInfoRequest) =>
     invokeCapability<SessionGetSnapshotInfoRequest, SessionGetSnapshotInfoResponse>(
       context,
-      'session.getSnapshotInfo',
+      'daw.session.getSnapshotInfo',
       request,
     ),
 })

@@ -35,13 +35,13 @@ export const manifest = {
       ],
     },
   ],
-  requiredCapabilities: ['track.selection.get', 'track.rename', 'track.hidden.set', 'track.inactive.set'],
+  requiredCapabilities: ['daw.track.selection.get', 'daw.track.rename', 'daw.track.hidden.set', 'daw.track.inactive.set'],
   adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
   capabilityRequirements: [
-    { capabilityId: 'track.selection.get', minVersion: '2025.10.0' },
-    { capabilityId: 'track.rename', minVersion: '2025.10.0' },
-    { capabilityId: 'track.hidden.set', minVersion: '2025.10.0' },
-    { capabilityId: 'track.inactive.set', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.selection.get', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.rename', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.hidden.set', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.track.inactive.set', minVersion: '2025.10.0' },
   ],
 }
 

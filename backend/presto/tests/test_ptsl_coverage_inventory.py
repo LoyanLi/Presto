@@ -61,12 +61,12 @@ def test_report_ptsl_coverage_generates_machine_readable_inventory() -> None:
     assert all(not capability_id.startswith("daw.ptsl.") for capability_id in report["generatedPublicPtslSemanticCapabilityIds"])
     assert report["canonicalPublicCapabilityCoverageCount"] == 16
     assert len(report["canonicalPublicCapabilityIdsCoveringPtsl"]) == 16
-    assert "track.list" in report["canonicalPublicCapabilityIdsCoveringPtsl"]
-    assert "track.mute.set" in report["canonicalPublicCapabilityIdsCoveringPtsl"]
+    assert "daw.track.list" in report["canonicalPublicCapabilityIdsCoveringPtsl"]
+    assert "daw.track.mute.set" in report["canonicalPublicCapabilityIdsCoveringPtsl"]
     assert report["publicPtslSemanticCapabilityCount"] == 159
     assert len(report["publicPtslSemanticCapabilityIds"]) == 159
     assert "daw.sessionFile.createSession" in report["publicPtslSemanticCapabilityIds"]
-    assert "track.list" in report["publicPtslSemanticCapabilityIds"]
+    assert "daw.track.list" in report["publicPtslSemanticCapabilityIds"]
     assert report["catalogReachableViaPublicSemanticCapabilityCount"] == 159
     assert report["catalogUnreachableViaPublicSemanticCapability"] == []
     assert report["catalogReachableViaInternalCapabilityCount"] == 159

@@ -56,7 +56,7 @@ def cancel_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any])
     result = ctx.jobs.cancel(job_id)
     ctx.job_handle_registry.cancel(job_id)
     job = ctx.jobs.get(job_id)
-    if job.capability in {"export.start", "export.direct.start", "export.run.start"}:
+    if job.capability in {"daw.export.start", "daw.export.direct.start", "daw.export.run.start"}:
         cancel_export = getattr(ctx.daw, "cancel_export", None) if ctx.daw is not None else None
         if callable(cancel_export):
             try:

@@ -112,6 +112,21 @@ test('public capability manifest entries declare canonical source and field supp
   assert.deepEqual(missingMetadata, [])
 })
 
+test('public DAW capability ids use a unified daw namespace', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
+  )
+
+  const hostRoots = new Set(['system', 'config', 'jobs', 'workflow'])
+  const legacyIds = manifest
+    .filter((capability) => capability.visibility === 'public')
+    .map((capability) => capability.id)
+    .filter((capabilityId) => !capabilityId.startsWith('daw.'))
+    .filter((capabilityId) => !hostRoots.has(capabilityId.split('.')[0]))
+
+  assert.deepEqual(legacyIds, [])
+})
+
 test('capability manifest entries declare workflow portability and per-daw implementations explicitly', async () => {
   const manifest = JSON.parse(
     await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
@@ -123,12 +138,12 @@ test('capability manifest entries declare workflow portability and per-daw imple
 
   assert.deepEqual(missingMetadata, [])
 
-  const trackMute = manifest.find((capability) => capability.id === 'track.mute.set')
+  const trackMute = manifest.find((capability) => capability.id === 'daw.track.mute.set')
   assert.equal(trackMute?.workflowScope, 'shared')
   assert.equal(trackMute?.portability, 'canonical')
   assert.deepEqual(trackMute?.implementations?.pro_tools, {
     kind: 'handler',
-    handler: 'track.mute.set',
+    handler: 'daw.track.mute.set',
   })
 
   const ptslExecute = manifest.find((capability) => capability.id === 'daw.ptsl.command.execute')
@@ -139,12 +154,12 @@ test('capability manifest entries declare workflow portability and per-daw imple
     handler: 'daw.ptsl.command.execute',
   })
 
-  const stripSilenceExecuteViaUi = manifest.find((capability) => capability.id === 'stripSilence.executeViaUi')
+  const stripSilenceExecuteViaUi = manifest.find((capability) => capability.id === 'daw.stripSilence.executeViaUi')
   assert.equal(stripSilenceExecuteViaUi?.workflowScope, 'internal')
   assert.equal(stripSilenceExecuteViaUi?.portability, 'daw_specific')
   assert.deepEqual(stripSilenceExecuteViaUi?.implementations?.pro_tools, {
     kind: 'ui_automation',
-    handler: 'stripSilence.executeViaUi',
+    handler: 'daw.stripSilence.executeViaUi',
   })
 })
 
@@ -168,9 +183,9 @@ test('track inactive capability keeps its own handler in the manifest', async ()
     await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
   )
 
-  const definition = manifest.find((capability) => capability.id === 'track.inactive.set')
+  const definition = manifest.find((capability) => capability.id === 'daw.track.inactive.set')
 
-  assert.equal(definition?.handler, 'track.inactive.set')
+  assert.equal(definition?.handler, 'daw.track.inactive.set')
 })
 
 test('generate-contracts requires manifest canonical metadata instead of backfilling defaults', async () => {

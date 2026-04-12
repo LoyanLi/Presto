@@ -36,19 +36,19 @@ const invokeCapability = async <TRequest, TResponse>(
 
 export const createTransportClient = (context: PrestoClientAssemblyContext): TransportClient => ({
   play: () =>
-    invokeCapability<TransportPlayRequest, TransportPlayResponse>(context, 'transport.play', {}),
+    invokeCapability<TransportPlayRequest, TransportPlayResponse>(context, 'daw.transport.play', {}),
   stop: () =>
-    invokeCapability<TransportStopRequest, TransportStopResponse>(context, 'transport.stop', {}),
+    invokeCapability<TransportStopRequest, TransportStopResponse>(context, 'daw.transport.stop', {}),
   record: () =>
     invokeCapability<TransportRecordRequest, TransportRecordResponse>(
       context,
-      'transport.record',
+      'daw.transport.record',
       {},
     ),
   getStatus: () =>
     invokeCapability<TransportGetStatusRequest, TransportGetStatusResponse>(
       context,
-      'transport.getStatus',
+      'daw.transport.getStatus',
       {},
     ),
 })

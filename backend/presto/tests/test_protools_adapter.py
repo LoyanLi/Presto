@@ -569,7 +569,7 @@ def test_set_track_pan_rejects_out_of_range_values() -> None:
 
     exc = exc_info.value
     assert exc.code == "TRACK_PAN_VALUE_INVALID"
-    assert exc.capability == "track.pan.set"
+    assert exc.capability == "daw.track.pan.set"
     assert exc.details["track_name"] == "Kick"
     assert exc.details["value"] == 1.25
     assert engine.command_calls == []
@@ -592,7 +592,7 @@ def test_apply_track_color_requires_success_count_confirmation() -> None:
 
     exc = exc_info.value
     assert exc.code == "SET_TRACK_COLOR_FAILED"
-    assert exc.capability == "track.color.apply"
+    assert exc.capability == "daw.track.color.apply"
     assert exc.details["command_name"] == "CId_SetTrackColor"
     assert exc.details["track_name"] == "Kick"
     assert exc.details["color_slot"] == 5
@@ -615,7 +615,7 @@ def test_apply_track_color_rebinds_ptsl_failure_to_track_color_capability() -> N
 
     exc = exc_info.value
     assert exc.code == "SET_TRACK_COLOR_FAILED"
-    assert exc.capability == "track.color.apply"
+    assert exc.capability == "daw.track.color.apply"
     assert exc.details["track_name"] == "Kick"
     assert exc.details["color_slot"] == 9
 
@@ -648,7 +648,7 @@ def test_list_export_mix_sources_rebinds_ptsl_failure_to_export_capability() -> 
 
     exc = exc_info.value
     assert exc.code == "EXPORT_MIX_SOURCE_LIST_FAILED"
-    assert exc.capability == "export.mixWithSource"
+    assert exc.capability == "daw.export.mixWithSource"
     assert exc.details["source_type"] == "bus"
 
 def test_rename_track_uses_engine_rename() -> None:
@@ -950,7 +950,7 @@ def test_export_mix_with_progress_rebinds_export_mix_failures_and_includes_task_
         raise PrestoError(
             "EXPORT_MIX_FAILED",
             "send failed",
-            capability="export.start",
+            capability="daw.export.start",
             adapter="pro_tools",
             details={"exception_type": "RuntimeError"},
         )
@@ -967,6 +967,6 @@ def test_export_mix_with_progress_rebinds_export_mix_failures_and_includes_task_
 
     exc = exc_info.value
     assert exc.code == "EXPORT_MIX_FAILED"
-    assert exc.capability == "export.start"
+    assert exc.capability == "daw.export.start"
     assert exc.details["task_id"] == "task-export-send-failed"
     assert exc.details["exception_type"] == "RuntimeError"

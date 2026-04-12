@@ -100,11 +100,11 @@ def _open_strip_silence_payload(
 
 
 def open_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    return _open_strip_silence_payload(ctx, payload, capability_id="stripSilence.open")
+    return _open_strip_silence_payload(ctx, payload, capability_id="daw.stripSilence.open")
 
 
 def open_strip_silence_via_ui_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    return _open_strip_silence_payload(ctx, payload, capability_id="stripSilence.openViaUi")
+    return _open_strip_silence_payload(ctx, payload, capability_id="daw.stripSilence.openViaUi")
 
 
 def _execute_strip_silence_payload(
@@ -134,11 +134,11 @@ def _execute_strip_silence_payload(
 
 
 def execute_strip_silence_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    return _execute_strip_silence_payload(ctx, payload, capability_id="stripSilence.execute")
+    return _execute_strip_silence_payload(ctx, payload, capability_id="daw.stripSilence.execute")
 
 
 def execute_strip_silence_via_ui_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    return _execute_strip_silence_payload(ctx, payload, capability_id="stripSilence.executeViaUi")
+    return _execute_strip_silence_payload(ctx, payload, capability_id="daw.stripSilence.executeViaUi")
 
 
 def automation_runtime_error(
@@ -237,7 +237,7 @@ def resolve_split_mono_tracks(
             "Failed to identify split mono tracks after running automation.",
             source="runtime",
             retryable=False,
-            capability="automation.splitStereoToMono.execute",
+            capability="daw.automation.splitStereoToMono.execute",
             adapter="pro_tools",
             details={
                 "rawCode": "AUTOMATION_TRACK_DISCOVERY_FAILED",
@@ -257,10 +257,10 @@ def split_stereo_to_mono_execute_payload(ctx: CapabilityExecutionContext, payloa
         raise validation_error(
             "keepChannel must be either left or right.",
             field="keepChannel",
-            capability="automation.splitStereoToMono.execute",
+            capability="daw.automation.splitStereoToMono.execute",
         )
 
-    capability_id = "automation.splitStereoToMono.execute"
+    capability_id = "daw.automation.splitStereoToMono.execute"
     daw = ensure_daw_connected(ctx, capability_id, {}, raise_on_error=True)
     mac_automation = get_mac_automation(ctx, capability_id)
     daw_ui_profile = get_daw_ui_profile(ctx, capability_id)

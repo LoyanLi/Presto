@@ -31,7 +31,7 @@ test('validateCapabilityPayloadForDaw rejects unsupported request fields before 
     () =>
       validateCapabilityPayloadForDaw(
         {
-          id: 'track.recordEnable.set',
+          id: 'daw.track.recordEnable.set',
           canonicalSource: 'pro_tools',
           fieldSupport: {
             pro_tools: {

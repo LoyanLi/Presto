@@ -55,13 +55,13 @@ const createStripSilenceClient = (context: PrestoClientAssemblyContext): StripSi
   open: () =>
     invokeCapability<StripSilenceOpenRequest, StripSilenceOpenResponse>(
       context,
-      'stripSilence.open',
+      'daw.stripSilence.open',
       {},
     ),
   execute: (request: StripSilenceExecuteRequest) =>
     invokeCapability<StripSilenceExecuteRequest, StripSilenceExecuteResponse>(
       context,
-      'stripSilence.execute',
+      'daw.stripSilence.execute',
       request,
     ),
 })

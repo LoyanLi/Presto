@@ -296,11 +296,11 @@ test('workflow definition batches post-import operations in the same order shown
   assert.equal(definition.steps[3]?.foreach?.as, 'item')
   assert.equal(definition.steps[4]?.foreach?.as, 'item')
   assert.deepEqual(renameSteps.map((step) => step.stepId), ['rename_track'])
-  assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['track.rename'])
+  assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['daw.track.rename'])
   assert.deepEqual(colorSteps.map((step) => step.stepId), ['apply_color'])
-  assert.deepEqual(colorSteps.map((step) => step.usesCapability), ['track.color.apply'])
+  assert.deepEqual(colorSteps.map((step) => step.usesCapability), ['daw.track.color.apply'])
   assert.deepEqual(stripSteps.map((step) => step.stepId), ['select_track', 'select_clips', 'strip_silence'])
-  assert.deepEqual(stripSteps.map((step) => step.usesCapability), ['track.select', 'clip.selectAllOnTrack', 'stripSilence.execute'])
+  assert.deepEqual(stripSteps.map((step) => step.usesCapability), ['daw.track.select', 'daw.clip.selectAllOnTrack', 'daw.stripSilence.execute'])
 })
 
 test('dist modules resolve React through a plugin-local shared helper', async () => {

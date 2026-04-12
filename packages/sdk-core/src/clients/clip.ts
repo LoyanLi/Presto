@@ -32,7 +32,7 @@ export const createClipClient = (context: PrestoClientAssemblyContext): ClipClie
   selectAllOnTrack: (request: ClipSelectAllOnTrackRequest) =>
     invokeCapability<ClipSelectAllOnTrackRequest, ClipSelectAllOnTrackResponse>(
       context,
-      'clip.selectAllOnTrack',
+      'daw.clip.selectAllOnTrack',
       request,
     ),
 })

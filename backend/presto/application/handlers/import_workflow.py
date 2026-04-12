@@ -695,7 +695,7 @@ def _run_import_job(
                 "DAW adapter is not configured.",
                 source="runtime",
                 retryable=False,
-                capability="import.run.start",
+                capability="daw.import.run.start",
                 adapter=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
                 details={
                     "rawCode": "DAW_UNAVAILABLE",
@@ -710,7 +710,7 @@ def _run_import_job(
                 "DAW adapter does not implement import_audio_file.",
                 source="runtime",
                 retryable=False,
-                capability="import.run.start",
+                capability="daw.import.run.start",
                 adapter=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
                 details={
                     "rawCode": "IMPORT_UNAVAILABLE",
@@ -779,7 +779,7 @@ def _run_import_job(
         )
     except Exception as exc:
         job = _clone_job(services.job_manager.get(job_id))
-        error = _normalize_run_error(services, exc, capability_id="import.run.start")
+        error = _normalize_run_error(services, exc, capability_id="daw.import.run.start")
         _set_job_failed(services, job, error=error)
     finally:
         _run_handles_pop(services, job_id)
@@ -1082,7 +1082,7 @@ def _apply_snapshot_states(daw: object, snapshot: dict[str, Any]) -> None:
             "DAW adapter does not implement snapshot application dependencies.",
             source="runtime",
             retryable=False,
-            capability="export.run.start",
+            capability="daw.export.run.start",
             adapter=str(DEFAULT_DAW_TARGET),
             details={
                 "rawCode": "SNAPSHOT_APPLY_UNAVAILABLE",
@@ -1194,7 +1194,7 @@ def _run_export_workflow_job(
                 "DAW adapter is not configured.",
                 source="runtime",
                 retryable=False,
-                capability="export.run.start",
+                capability="daw.export.run.start",
                 adapter=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
                 details={
                     "rawCode": "DAW_UNAVAILABLE",
@@ -1210,7 +1210,7 @@ def _run_export_workflow_job(
                 "DAW adapter does not implement export_mix_with_progress.",
                 source="runtime",
                 retryable=False,
-                capability="export.run.start",
+                capability="daw.export.run.start",
                 adapter=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
                 details={
                     "rawCode": "EXPORT_UNAVAILABLE",
@@ -1223,7 +1223,7 @@ def _run_export_workflow_job(
                 "DAW adapter does not implement get_session_info.",
                 source="runtime",
                 retryable=False,
-                capability="export.run.start",
+                capability="daw.export.run.start",
                 adapter=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
                 details={
                     "rawCode": "SESSION_INFO_UNAVAILABLE",
@@ -1632,7 +1632,7 @@ def _run_export_workflow_job(
         )
     except Exception as exc:
         job = _clone_job(services.job_manager.get(job_id))
-        error = _normalize_run_error(services, exc, capability_id="export.run.start")
+        error = _normalize_run_error(services, exc, capability_id="daw.export.run.start")
         _set_job_failed(
             services,
             job,
@@ -1744,7 +1744,7 @@ def _run_export_job(
 
 def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, capability_id: str) -> dict[str, Any]:
     _ensure_run_daw_connected(services, payload, capability_id=capability_id)
-    if capability_id == "export.run.start":
+    if capability_id == "daw.export.run.start":
         request = _normalize_export_run_request(payload)
         job = JobRecord(
             job_id=f"export-{uuid4().hex[:12]}",
@@ -1834,13 +1834,13 @@ def start_export_run_payload(
 
 
 def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:
-    _ensure_run_daw_connected(services, payload, capability_id="import.run.start")
+    _ensure_run_daw_connected(services, payload, capability_id="daw.import.run.start")
     folder_paths = _resolve_import_folder_paths(payload)
     file_paths = _resolve_import_ordered_file_paths(payload, folder_paths)
     normalized_folder_paths = [str(folder_path.resolve()) for folder_path in folder_paths]
     job = JobRecord(
         job_id=f"import-{uuid4().hex[:12]}",
-        capability="import.run.start",
+        capability="daw.import.run.start",
         target_daw=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
         state="queued",
         progress=JobProgress(phase="queued", current=0, total=max(len(file_paths), 1), percent=0.0, message="Import run queued."),
@@ -1859,11 +1859,11 @@ def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> d
     _run_handles_set(
         services,
         job.job_id,
-        ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability="import.run.start"),
+        ThreadedJobHandle(cancel_event=cancel_event, worker=worker, capability="daw.import.run.start"),
     )
     worker.start()
 
-    return {"jobId": job.job_id, "capability": "import.run.start", "state": "queued"}
+    return {"jobId": job.job_id, "capability": "daw.import.run.start", "state": "queued"}
 
 
 def start_import_run_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1881,7 +1881,7 @@ def cancel_job_run(services: "ServiceContainer", job_id: str) -> None:
     _request_cancel(services, job_id)
     job = _clone_job(services.job_manager.get(job_id))
     capability_id = job.capability
-    if capability_id in {"export.start", "export.direct.start", "export.run.start"}:
+    if capability_id in {"daw.export.start", "daw.export.direct.start", "daw.export.run.start"}:
         daw = getattr(services, "daw", None)
         cancel_export = getattr(daw, "cancel_export", None) if daw is not None else None
         if callable(cancel_export):
@@ -1889,7 +1889,7 @@ def cancel_job_run(services: "ServiceContainer", job_id: str) -> None:
                 cancel_export()
             except Exception:
                 pass
-    if capability_id == "import.run.start":
+    if capability_id == "daw.import.run.start":
         cancel_import_run(services, job_id)
         return
     if job.state in {"queued", "running", "cancelled"}:

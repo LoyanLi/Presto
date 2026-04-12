@@ -41,17 +41,17 @@ export const createExportClient = (context: PrestoClientAssemblyContext): Export
     set: (request: ExportRangeSetRequest) =>
       invokeCapability<ExportRangeSetRequest, ExportRangeSetResponse>(
         context,
-        'export.range.set',
+        'daw.export.range.set',
         request,
       ),
   },
   start: (request: ExportStartRequest) =>
-    invokeCapability<ExportStartRequest, ExportStartResponse>(context, 'export.start', request),
+    invokeCapability<ExportStartRequest, ExportStartResponse>(context, 'daw.export.start', request),
   direct: {
     start: (request: ExportDirectStartRequest) =>
       invokeCapability<ExportDirectStartRequest, ExportDirectStartResponse>(
         context,
-        'export.direct.start',
+        'daw.export.direct.start',
         request,
       ),
   },
@@ -59,7 +59,7 @@ export const createExportClient = (context: PrestoClientAssemblyContext): Export
     list: (request: ExportMixWithSourceRequest) =>
       invokeCapability<ExportMixWithSourceRequest, ExportMixWithSourceResponse>(
         context,
-        'export.mixWithSource',
+        'daw.export.mixWithSource',
         request,
       ),
   },
@@ -67,7 +67,7 @@ export const createExportClient = (context: PrestoClientAssemblyContext): Export
     start: (request: ExportRunStartRequest) =>
       invokeCapability<ExportRunStartRequest, ExportRunStartResponse>(
         context,
-        'export.run.start',
+        'daw.export.run.start',
         request,
       ),
   },

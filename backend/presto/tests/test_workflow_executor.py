@@ -84,7 +84,7 @@ def test_workflow_run_start_executes_declarative_steps_and_exposes_terminal_job_
             "steps": [
                 {
                     "stepId": "rename_track",
-                    "usesCapability": "track.rename",
+                    "usesCapability": "daw.track.rename",
                     "input": {
                         "currentName": {"$ref": "input.sourceTrackName"},
                         "newName": {"$ref": "input.targetTrackName"},
@@ -93,12 +93,12 @@ def test_workflow_run_start_executes_declarative_steps_and_exposes_terminal_job_
                 },
                 {
                     "stepId": "save_session",
-                    "usesCapability": "session.save",
+                    "usesCapability": "daw.session.save",
                     "input": {},
                 },
             ],
         },
-        "allowedCapabilities": ["track.rename", "session.save"],
+        "allowedCapabilities": ["daw.track.rename", "daw.session.save"],
         "input": {
             "sourceTrackName": "Lead Vox RAW",
             "targetTrackName": "Lead Vox",
@@ -180,7 +180,7 @@ def test_workflow_run_start_rejects_steps_outside_allowed_capabilities() -> None
             "steps": [
                 {
                     "stepId": "rename_track",
-                    "usesCapability": "track.rename",
+                    "usesCapability": "daw.track.rename",
                     "input": {
                         "currentName": "Lead Vox RAW",
                         "newName": "Lead Vox",
@@ -188,12 +188,12 @@ def test_workflow_run_start_rejects_steps_outside_allowed_capabilities() -> None
                 },
                 {
                     "stepId": "save_session",
-                    "usesCapability": "session.save",
+                    "usesCapability": "daw.session.save",
                     "input": {},
                 },
             ],
         },
-        "allowedCapabilities": ["track.rename"],
+        "allowedCapabilities": ["daw.track.rename"],
         "input": {},
     }
 
@@ -202,7 +202,7 @@ def test_workflow_run_start_rejects_steps_outside_allowed_capabilities() -> None
     except Exception as error:
         assert getattr(error, "code", None) == "VALIDATION_ERROR"
         assert getattr(error, "details", {}).get("field") == "allowedCapabilities"
-        assert "session.save" in str(error)
+        assert "daw.session.save" in str(error)
     else:
         raise AssertionError("workflow.run.start should reject undeclared workflow capabilities")
 
@@ -225,7 +225,7 @@ def test_workflow_run_start_mirrors_child_job_progress_while_awaiting_import(tmp
             "steps": [
                 {
                     "stepId": "import_files",
-                    "usesCapability": "import.run.start",
+                    "usesCapability": "daw.import.run.start",
                     "awaitJob": True,
                     "input": {
                         "folderPaths": {
@@ -239,7 +239,7 @@ def test_workflow_run_start_mirrors_child_job_progress_while_awaiting_import(tmp
                 }
             ],
         },
-        "allowedCapabilities": ["import.run.start"],
+        "allowedCapabilities": ["daw.import.run.start"],
         "input": {
             "folderPaths": [str(tmp_path)],
             "orderedFilePaths": [str(first_file), str(second_file)],
@@ -295,7 +295,7 @@ def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_f
             "steps": [
                 {
                     "stepId": "import",
-                    "usesCapability": "import.run.start",
+                    "usesCapability": "daw.import.run.start",
                     "awaitJob": True,
                     "input": {
                         "folderPaths": {"$ref": "input.folderPaths"},
@@ -312,7 +312,7 @@ def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_f
                     "steps": [
                         {
                             "stepId": "rename_track",
-                            "usesCapability": "track.rename",
+                            "usesCapability": "daw.track.rename",
                             "input": {
                                 "currentName": {"$ref": "item.currentName"},
                                 "newName": {"$ref": "item.newName"},
@@ -322,7 +322,7 @@ def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_f
                 },
             ],
         },
-        "allowedCapabilities": ["import.run.start", "track.rename"],
+        "allowedCapabilities": ["daw.import.run.start", "daw.track.rename"],
         "input": {
             "folderPaths": [str(tmp_path)],
             "orderedFilePaths": [str(first_file), str(second_file)],

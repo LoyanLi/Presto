@@ -5,7 +5,7 @@
   "steps": [
     {
       "stepId": "run_export",
-      "usesCapability": "export.run.start",
+      "usesCapability": "daw.export.run.start",
       "awaitJob": true,
       "input": {
         "snapshots": {

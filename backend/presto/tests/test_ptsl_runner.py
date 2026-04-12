@@ -53,7 +53,7 @@ def test_runner_uses_raw_run_command_for_cataloged_commands_even_when_py_ptsl_wr
         engine,
         "CId_SelectTracksByName",
         {"track_names": ["Kick"], "selection_mode": "SM_Replace"},
-        capability="track.select",
+        capability="daw.track.select",
     )
 
     assert response == {"ok": True}
@@ -83,7 +83,7 @@ def test_runner_normalizes_declared_response_messages_to_dicts() -> None:
         ]
     )
 
-    response = runner.run(engine, "CId_GetTransportState", {}, capability="transport.getStatus")
+    response = runner.run(engine, "CId_GetTransportState", {}, capability="daw.transport.getStatus")
 
     assert response == {
         "current_setting": "TS_TransportRecording",
@@ -97,7 +97,7 @@ def test_runner_rejects_unknown_command_names() -> None:
     runner = _runner([])
 
     with pytest.raises(PrestoError) as exc_info:
-        runner.run(FakeEngine(), "CId_DoesNotExist", {}, capability="track.list")
+        runner.run(FakeEngine(), "CId_DoesNotExist", {}, capability="daw.track.list")
 
     assert exc_info.value.code == "PTSL_COMMAND_UNAVAILABLE"
 
@@ -122,7 +122,7 @@ def test_runner_rejects_unknown_request_fields() -> None:
             FakeEngine(),
             "CId_SelectTracksByName",
             {"track_names": ["Kick"], "selection_mode": "SM_Replace", "unknown": True},
-            capability="track.select",
+            capability="daw.track.select",
         )
 
     assert exc_info.value.code == "PTSL_REQUEST_INVALID"
@@ -151,7 +151,7 @@ def test_runner_enforces_catalog_introduced_version_by_default() -> None:
             engine,
             "CId_SetTrackRecordEnableState",
             {"track_names": ["Kick"], "enabled": True},
-            capability="track.recordEnable.set",
+            capability="daw.track.recordEnable.set",
         )
 
     assert exc_info.value.code == "PTSL_VERSION_UNSUPPORTED"
@@ -179,7 +179,7 @@ def test_runner_allows_call_site_to_strengthen_minimum_host_version() -> None:
             engine,
             "CId_SetTrackRecordEnableState",
             {"track_names": ["Kick"], "enabled": True},
-            capability="track.recordEnable.set",
+            capability="daw.track.recordEnable.set",
             minimum_host_version="2025.10.0",
         )
 
@@ -212,7 +212,7 @@ def test_runner_normalizes_get_track_list_empty_object_response() -> None:
         engine,
         "CId_GetTrackList",
         {"page_limit": 1000, "pagination_request": {"limit": 1000, "offset": 0}},
-        capability="track.list",
+        capability="daw.track.list",
     )
 
     assert response == {"track_list": []}
@@ -262,7 +262,7 @@ def test_runner_ignores_unknown_response_fields_while_preserving_declared_track_
         engine,
         "CId_GetTrackList",
         {"page_limit": 1000, "pagination_request": {"limit": 1000, "offset": 0}},
-        capability="track.list",
+        capability="daw.track.list",
     )
 
     assert response["track_list"] == [
@@ -324,7 +324,7 @@ def test_runner_normalizes_get_playback_mode_string_enums() -> None:
         ]
     )
 
-    response = runner.run(engine, "CId_GetPlaybackMode", {}, capability="transport.getStatus")
+    response = runner.run(engine, "CId_GetPlaybackMode", {}, capability="daw.transport.getStatus")
 
     assert response == {
         "current_settings": ["PM_Normal"],
@@ -386,7 +386,7 @@ def test_runner_rejects_invalid_declared_response_shapes() -> None:
     )
 
     with pytest.raises(PrestoError) as exc_info:
-        runner.run(engine, "CId_GetExportMixSourceList", {"type": "EMSType_Output"}, capability="export.mixWithSource")
+        runner.run(engine, "CId_GetExportMixSourceList", {"type": "EMSType_Output"}, capability="daw.export.mixWithSource")
 
     assert exc_info.value.code == "PTSL_RESPONSE_INVALID"
 
@@ -411,7 +411,7 @@ def test_runner_omits_serializer_injected_mutually_exclusive_empty_fields_from_r
         engine,
         "CId_SetTrackColor",
         {"track_names": ["Kick"], "color_index": 5},
-        capability="track.color.apply",
+        capability="daw.track.color.apply",
     )
 
     assert response == {"success_count": 1}
@@ -443,7 +443,7 @@ def test_runner_preserves_explicit_default_like_request_values_supplied_by_calle
         engine,
         "CId_SetTrackRecordEnableState",
         {"track_names": ["Kick"], "enabled": False},
-        capability="track.recordEnable.set",
+        capability="daw.track.recordEnable.set",
     )
 
     assert response == {"success_count": 1}

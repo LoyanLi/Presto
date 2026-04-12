@@ -26,7 +26,7 @@ def _batch_track_toggle_payload(
 
 
 def track_list_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.list"
+    capability_id = "daw.track.list"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     tracks = daw.list_tracks()
     return {
@@ -35,7 +35,7 @@ def track_list_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any])
 
 
 def track_list_names_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.listNames"
+    capability_id = "daw.track.listNames"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     names = daw.list_track_names()
     return {
@@ -44,7 +44,7 @@ def track_list_names_payload(ctx: CapabilityExecutionContext, payload: dict[str,
 
 
 def track_select_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.select"
+    capability_id = "daw.track.select"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     track_names = [str(name) for name in payload.get("trackNames", []) if str(name).strip()]
     if track_names:
@@ -57,7 +57,7 @@ def track_select_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any
 
 
 def track_selection_get_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.selection.get"
+    capability_id = "daw.track.selection.get"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     names = daw.get_selected_track_names()
     return {
@@ -66,7 +66,7 @@ def track_selection_get_payload(ctx: CapabilityExecutionContext, payload: dict[s
 
 
 def track_color_apply_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.color.apply"
+    capability_id = "daw.track.color.apply"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     track_name = str(payload.get("trackName", ""))
     color_slot = payload.get("colorSlot")
@@ -79,7 +79,7 @@ def track_color_apply_payload(ctx: CapabilityExecutionContext, payload: dict[str
 
 
 def track_pan_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.pan.set"
+    capability_id = "daw.track.pan.set"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     track_name = str(payload.get("trackName", ""))
     value = float(payload.get("value", 0.0))
@@ -92,7 +92,7 @@ def track_pan_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, An
 
 
 def track_rename_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    capability_id = "track.rename"
+    capability_id = "daw.track.rename"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
     current_name = str(payload.get("currentName", ""))
     new_name = str(payload.get("newName", ""))
@@ -107,7 +107,7 @@ def track_mute_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, A
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.mute.set",
+        capability_id="daw.track.mute.set",
         method_name="set_track_mute_state_batch",
     )
 
@@ -116,7 +116,7 @@ def track_solo_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, A
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.solo.set",
+        capability_id="daw.track.solo.set",
         method_name="set_track_solo_state_batch",
     )
 
@@ -125,7 +125,7 @@ def track_hidden_set_payload(ctx: CapabilityExecutionContext, payload: dict[str,
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.hidden.set",
+        capability_id="daw.track.hidden.set",
         method_name="set_track_hidden_state_batch",
     )
 
@@ -134,7 +134,7 @@ def track_inactive_set_payload(ctx: CapabilityExecutionContext, payload: dict[st
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.inactive.set",
+        capability_id="daw.track.inactive.set",
         method_name="set_track_inactive_state_batch",
     )
 
@@ -143,7 +143,7 @@ def track_record_enable_set_payload(ctx: CapabilityExecutionContext, payload: di
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.recordEnable.set",
+        capability_id="daw.track.recordEnable.set",
         method_name="set_track_record_enable_state_batch",
     )
 
@@ -152,7 +152,7 @@ def track_record_safe_set_payload(ctx: CapabilityExecutionContext, payload: dict
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.recordSafe.set",
+        capability_id="daw.track.recordSafe.set",
         method_name="set_track_record_safe_state_batch",
     )
 
@@ -161,7 +161,7 @@ def track_input_monitor_set_payload(ctx: CapabilityExecutionContext, payload: di
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.inputMonitor.set",
+        capability_id="daw.track.inputMonitor.set",
         method_name="set_track_input_monitor_state_batch",
     )
 
@@ -170,7 +170,7 @@ def track_online_set_payload(ctx: CapabilityExecutionContext, payload: dict[str,
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.online.set",
+        capability_id="daw.track.online.set",
         method_name="set_track_online_state_batch",
     )
 
@@ -179,7 +179,7 @@ def track_frozen_set_payload(ctx: CapabilityExecutionContext, payload: dict[str,
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.frozen.set",
+        capability_id="daw.track.frozen.set",
         method_name="set_track_frozen_state_batch",
     )
 
@@ -188,6 +188,6 @@ def track_open_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, A
     return _batch_track_toggle_payload(
         ctx,
         payload,
-        capability_id="track.open.set",
+        capability_id="daw.track.open.set",
         method_name="set_track_open_state_batch",
     )

@@ -33,7 +33,7 @@ export const createAutomationClient = (context: PrestoClientAssemblyContext): Au
     execute: (request: AutomationSplitStereoToMonoExecuteRequest = {}) =>
       invokeCapability<AutomationSplitStereoToMonoExecuteRequest, AutomationSplitStereoToMonoExecuteResponse>(
         context,
-        'automation.splitStereoToMono.execute',
+        'daw.automation.splitStereoToMono.execute',
         request,
       ),
   },

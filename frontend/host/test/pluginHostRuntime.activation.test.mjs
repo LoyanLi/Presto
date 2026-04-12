@@ -52,7 +52,7 @@ async function createWorkflowPluginFixture(root) {
         componentExport: 'ExportWorkflowPage',
       },
     ],
-    requiredCapabilities: ['export.run.start'],
+    requiredCapabilities: ['daw.export.run.start'],
     adapterModuleRequirements: [],
     capabilityRequirements: [],
   }
@@ -126,7 +126,7 @@ async function createAutomationPluginFixture(root) {
         ],
       },
     ],
-    requiredCapabilities: ['track.selection.get'],
+    requiredCapabilities: ['daw.track.selection.get'],
     adapterModuleRequirements: [],
     capabilityRequirements: [],
   }

@@ -36,14 +36,14 @@ export const createImportClient = (context: PrestoClientAssemblyContext): Import
   analyze: (request: ImportAnalyzeRequest) =>
     invokeCapability<ImportAnalyzeRequest, ImportAnalyzeResponse>(
       context,
-      'import.analyze',
+      'daw.import.analyze',
       request,
     ),
   cache: {
     save: (request: ImportCacheSaveRequest) =>
       invokeCapability<ImportCacheSaveRequest, ImportCacheSaveResponse>(
         context,
-        'import.cache.save',
+        'daw.import.cache.save',
         request,
       ),
   },
@@ -51,7 +51,7 @@ export const createImportClient = (context: PrestoClientAssemblyContext): Import
     start: (request: ImportRunStartRequest) =>
       invokeCapability<ImportRunStartRequest, ImportRunStartResponse>(
         context,
-        'import.run.start',
+        'daw.import.run.start',
         request,
       ),
   },

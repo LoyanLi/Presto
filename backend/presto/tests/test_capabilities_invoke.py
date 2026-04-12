@@ -676,7 +676,7 @@ def test_invoke_daw_adapter_get_snapshot_returns_capability_snapshot() -> None:
     assert "connection" in module_ids
     assert response.data["capabilities"]
     capability_ids = {item["capabilityId"] for item in response.data["capabilities"]}
-    assert "export.mixWithSource" in capability_ids
+    assert "daw.export.mixWithSource" in capability_ids
     assert response.data["capabilities"][0]["capabilityId"]
     assert response.data["capabilities"][0]["moduleId"]
     assert response.data["capabilities"][0]["version"]
@@ -771,7 +771,7 @@ def test_invoke_session_get_info_returns_session_payload() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-4",
-            capability="session.getInfo",
+            capability="daw.session.getInfo",
             payload={},
         ),
     )
@@ -797,7 +797,7 @@ def test_invoke_session_get_length_returns_seconds() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-4b",
-            capability="session.getLength",
+            capability="daw.session.getLength",
             payload={},
         ),
     )
@@ -816,7 +816,7 @@ def test_invoke_track_list_returns_minimum_track_fields() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5",
-            capability="track.list",
+            capability="daw.track.list",
             payload={},
         ),
     )
@@ -844,7 +844,7 @@ def test_invoke_track_list_names_returns_names_only() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5b",
-            capability="track.listNames",
+            capability="daw.track.listNames",
             payload={},
         ),
     )
@@ -863,7 +863,7 @@ def test_invoke_track_select_returns_selected_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5c",
-            capability="track.select",
+            capability="daw.track.select",
             payload={"trackName": "Snare"},
         ),
     )
@@ -883,7 +883,7 @@ def test_invoke_track_select_accepts_multiple_track_names() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5c-batch",
-            capability="track.select",
+            capability="daw.track.select",
             payload={"trackNames": ["Kick", "Piano"]},
         ),
     )
@@ -904,7 +904,7 @@ def test_invoke_track_selection_get_returns_selected_track_names() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5c-selection",
-            capability="track.selection.get",
+            capability="daw.track.selection.get",
             payload={},
         ),
     )
@@ -923,7 +923,7 @@ def test_invoke_track_color_apply_returns_applied_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d",
-            capability="track.color.apply",
+            capability="daw.track.color.apply",
             payload={"trackName": "Kick", "colorSlot": 7},
         ),
     )
@@ -945,7 +945,7 @@ def test_invoke_track_pan_set_returns_updated_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d-pan",
-            capability="track.pan.set",
+            capability="daw.track.pan.set",
             payload={"trackName": "Kick", "value": 0},
         ),
     )
@@ -967,7 +967,7 @@ def test_invoke_strip_silence_open_runs_preflight_and_window_script() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d-open",
-            capability="stripSilence.open",
+            capability="daw.stripSilence.open",
             payload={},
         ),
     )
@@ -986,7 +986,7 @@ def test_invoke_strip_silence_execute_runs_preflight_and_execute_script() -> Non
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d-execute",
-            capability="stripSilence.execute",
+            capability="daw.stripSilence.execute",
             payload={"trackName": "Kick", "profile": {"thresholdDb": -40}},
         ),
     )
@@ -1019,7 +1019,7 @@ def test_invoke_strip_silence_execute_wraps_automation_failures_as_presto_error(
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-5d-execute-error",
-                capability="stripSilence.execute",
+                capability="daw.stripSilence.execute",
                 payload={"trackName": "Kick", "profile": {"thresholdDb": -40}},
             ),
         )
@@ -1056,13 +1056,13 @@ def test_invoke_strip_silence_open_via_ui_preserves_alias_capability_on_failure(
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-5d-open-via-ui-error",
-                capability="stripSilence.openViaUi",
+                capability="daw.stripSilence.openViaUi",
                 payload={},
             ),
         )
 
     assert exc_info.value.code == "UI_ACTION_FAILED"
-    assert exc_info.value.capability == "stripSilence.openViaUi"
+    assert exc_info.value.capability == "daw.stripSilence.openViaUi"
 
 
 def test_invoke_strip_silence_execute_via_ui_preserves_alias_capability_on_failure() -> None:
@@ -1087,13 +1087,13 @@ def test_invoke_strip_silence_execute_via_ui_preserves_alias_capability_on_failu
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-5d-execute-via-ui-error",
-                capability="stripSilence.executeViaUi",
+                capability="daw.stripSilence.executeViaUi",
                 payload={"trackName": "Kick"},
             ),
         )
 
     assert exc_info.value.code == "UI_ACTION_FAILED"
-    assert exc_info.value.capability == "stripSilence.executeViaUi"
+    assert exc_info.value.capability == "daw.stripSilence.executeViaUi"
 
 
 def test_invoke_split_stereo_to_mono_execute_runs_dedicated_automation_flow() -> None:
@@ -1105,7 +1105,7 @@ def test_invoke_split_stereo_to_mono_execute_runs_dedicated_automation_flow() ->
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-automation-split",
-            capability="automation.splitStereoToMono.execute",
+            capability="daw.automation.splitStereoToMono.execute",
             payload={"keepChannel": "left"},
         ),
     )
@@ -1145,7 +1145,7 @@ def test_invoke_split_stereo_to_mono_execute_can_keep_right_channel() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-automation-split-right",
-            capability="automation.splitStereoToMono.execute",
+            capability="daw.automation.splitStereoToMono.execute",
             payload={"keepChannel": "right"},
         ),
     )
@@ -1180,13 +1180,13 @@ def test_invoke_split_stereo_to_mono_execute_rejects_non_stereo_selection() -> N
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-automation-split-mono",
-                capability="automation.splitStereoToMono.execute",
+                capability="daw.automation.splitStereoToMono.execute",
                 payload={"keepChannel": "left"},
             ),
         )
 
     assert exc_info.value.code == "TRACK_SELECTION_INVALID"
-    assert exc_info.value.capability == "automation.splitStereoToMono.execute"
+    assert exc_info.value.capability == "daw.automation.splitStereoToMono.execute"
 
 
 def test_invoke_split_stereo_to_mono_execute_runs_batch_flow_for_multiple_selected_stereo_tracks() -> None:
@@ -1198,7 +1198,7 @@ def test_invoke_split_stereo_to_mono_execute_runs_batch_flow_for_multiple_select
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-automation-split-multi",
-            capability="automation.splitStereoToMono.execute",
+            capability="daw.automation.splitStereoToMono.execute",
             payload={"keepChannel": "left"},
         ),
     )
@@ -1238,7 +1238,7 @@ def test_invoke_transport_play_returns_started_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d1",
-            capability="transport.play",
+            capability="daw.transport.play",
             payload={},
         ),
     )
@@ -1257,7 +1257,7 @@ def test_invoke_transport_stop_returns_stopped_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d2",
-            capability="transport.stop",
+            capability="daw.transport.stop",
             payload={},
         ),
     )
@@ -1275,7 +1275,7 @@ def test_invoke_transport_record_returns_recording_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d3",
-            capability="transport.record",
+            capability="daw.transport.record",
             payload={},
         ),
     )
@@ -1294,7 +1294,7 @@ def test_invoke_transport_get_status_returns_transport_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5d4",
-            capability="transport.getStatus",
+            capability="daw.transport.getStatus",
             payload={},
         ),
     )
@@ -1317,7 +1317,7 @@ def test_invoke_session_save_returns_saved_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5e",
-            capability="session.save",
+            capability="daw.session.save",
             payload={},
         ),
     )
@@ -1356,13 +1356,13 @@ def test_invoke_import_run_start_returns_job_for_core_io_import(tmp_path: Path) 
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-import-run-start",
-            capability="import.run.start",
+            capability="daw.import.run.start",
             payload={"folderPaths": [str(source_folder)]},
         ),
     )
 
     assert response.success is True
-    assert response.data["capability"] == "import.run.start"
+    assert response.data["capability"] == "daw.import.run.start"
     assert response.data["state"] == "queued"
     assert response.data["jobId"]
 
@@ -1375,7 +1375,7 @@ def test_invoke_export_range_set_returns_normalized_selection() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-export-range-set",
-            capability="export.range.set",
+            capability="daw.export.range.set",
             payload={"inTime": "00:00:01:00", "outTime": "00:00:05:00"},
         ),
     )
@@ -1398,7 +1398,7 @@ def test_invoke_export_mix_with_source_returns_source_list() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-export-mix-with-source",
-            capability="export.mixWithSource",
+            capability="daw.export.mixWithSource",
             payload={"sourceType": "output"},
         ),
     )
@@ -1419,7 +1419,7 @@ def test_invoke_export_start_runs_export_mix_with_default_physical_output_source
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-export-start",
-            capability="export.start",
+            capability="daw.export.start",
             payload={
                 "outputPath": "/Users/test/Exports",
                 "fileName": "mix-print",
@@ -1435,7 +1435,7 @@ def test_invoke_export_start_runs_export_mix_with_default_physical_output_source
     )
 
     assert response.success is True
-    assert response.data["capability"] == "export.start"
+    assert response.data["capability"] == "daw.export.start"
     assert response.data["state"] == "queued"
     assert response.data["jobId"]
 
@@ -1448,7 +1448,7 @@ def test_invoke_export_direct_start_also_routes_to_export_mix() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-export-direct-start",
-            capability="export.direct.start",
+            capability="daw.export.direct.start",
             payload={
                 "outputPath": "/Users/test/Exports",
                 "fileName": "clip-print",
@@ -1464,7 +1464,7 @@ def test_invoke_export_direct_start_also_routes_to_export_mix() -> None:
     )
 
     assert response.success is True
-    assert response.data["capability"] == "export.direct.start"
+    assert response.data["capability"] == "daw.export.direct.start"
     assert response.data["state"] == "queued"
     assert response.data["jobId"]
 
@@ -1477,7 +1477,7 @@ def test_invoke_export_run_start_returns_job_for_snapshot_batch_export() -> None
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-export-run-start",
-            capability="export.run.start",
+            capability="daw.export.run.start",
             payload={
                 "snapshots": [
                     {
@@ -1504,7 +1504,7 @@ def test_invoke_export_run_start_returns_job_for_snapshot_batch_export() -> None
     )
 
     assert response.success is True
-    assert response.data["capability"] == "export.run.start"
+    assert response.data["capability"] == "daw.export.run.start"
     assert response.data["state"] == "queued"
     assert response.data["jobId"]
 
@@ -1518,7 +1518,7 @@ def test_invoke_export_run_start_rejects_mp3_when_multiple_mix_sources_are_selec
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-export-run-start-mp3-multi",
-                capability="export.run.start",
+                capability="daw.export.run.start",
                 payload={
                     "snapshots": [
                         {
@@ -1735,7 +1735,7 @@ def test_invoke_session_get_snapshot_info_returns_snapshot_statistics() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5f",
-            capability="session.getSnapshotInfo",
+            capability="daw.session.getSnapshotInfo",
             payload={"snapshot": snapshot},
         ),
     )
@@ -1760,7 +1760,7 @@ def test_invoke_session_apply_snapshot_returns_counts() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5g",
-            capability="session.applySnapshot",
+            capability="daw.session.applySnapshot",
             payload={
                 "snapshot": {
                     "name": "Verse A",
@@ -1792,7 +1792,7 @@ def test_invoke_track_rename_returns_renamed_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5h",
-            capability="track.rename",
+            capability="daw.track.rename",
             payload={"currentName": "Kick", "newName": "Kick In"},
         ),
     )
@@ -1813,7 +1813,7 @@ def test_invoke_track_mute_and_solo_set_return_updated_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5i",
-            capability="track.mute.set",
+            capability="daw.track.mute.set",
             payload={"trackNames": ["Kick", "Snare"], "enabled": True},
         ),
     )
@@ -1821,7 +1821,7 @@ def test_invoke_track_mute_and_solo_set_return_updated_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5j",
-            capability="track.solo.set",
+            capability="daw.track.solo.set",
             payload={"trackNames": ["Bass"], "enabled": False},
         ),
     )
@@ -1852,7 +1852,7 @@ def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5ja",
-            capability="track.hidden.set",
+            capability="daw.track.hidden.set",
             payload={"trackNames": ["Kick", "Snare"], "enabled": True},
         ),
     )
@@ -1860,7 +1860,7 @@ def test_invoke_track_hidden_and_inactive_set_return_updated_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5jb",
-            capability="track.inactive.set",
+            capability="daw.track.inactive.set",
             payload={"trackNames": ["Bass"], "enabled": False},
         ),
     )
@@ -1892,7 +1892,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-1",
-                capability="track.recordEnable.set",
+                capability="daw.track.recordEnable.set",
                 payload={"trackNames": ["Kick"], "enabled": True},
             ),
         ),
@@ -1900,7 +1900,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-2",
-                capability="track.recordSafe.set",
+                capability="daw.track.recordSafe.set",
                 payload={"trackNames": ["Snare"], "enabled": False},
             ),
         ),
@@ -1908,7 +1908,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-3",
-                capability="track.inputMonitor.set",
+                capability="daw.track.inputMonitor.set",
                 payload={"trackNames": ["Bass"], "enabled": True},
             ),
         ),
@@ -1916,7 +1916,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-4",
-                capability="track.online.set",
+                capability="daw.track.online.set",
                 payload={"trackNames": ["Lead Vox"], "enabled": False},
             ),
         ),
@@ -1924,7 +1924,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-5",
-                capability="track.frozen.set",
+                capability="daw.track.frozen.set",
                 payload={"trackNames": ["Pad"], "enabled": True},
             ),
         ),
@@ -1932,7 +1932,7 @@ def test_invoke_new_track_toggle_capabilities_return_updated_shape() -> None:
             request,
             CapabilityInvokeRequestSchema(
                 requestId="req-track-6",
-                capability="track.open.set",
+                capability="daw.track.open.set",
                 payload={"trackNames": ["FX"], "enabled": False},
             ),
         ),
@@ -1955,17 +1955,17 @@ def test_capabilities_routes_expose_canonical_metadata() -> None:
     request = DummyRequest(app=app)
 
     list_response = list_capabilities(request)
-    detail_response = get_capability("track.mute.set", request)
+    detail_response = get_capability("daw.track.mute.set", request)
 
     capability_ids = {capability.id for capability in list_response.capabilities}
-    assert "track.mute.set" in capability_ids
+    assert "daw.track.mute.set" in capability_ids
     assert detail_response.capability.canonical_source == "pro_tools"
     assert "pro_tools" in detail_response.capability.field_support
     assert detail_response.capability.field_support["pro_tools"].request_fields == ["trackNames", "enabled"]
     assert detail_response.capability.workflow_scope == "shared"
     assert detail_response.capability.portability == "canonical"
     assert detail_response.capability.implementations["pro_tools"].kind == "handler"
-    assert detail_response.capability.implementations["pro_tools"].handler == "track.mute.set"
+    assert detail_response.capability.implementations["pro_tools"].handler == "daw.track.mute.set"
 
 
 def test_capabilities_routes_hide_internal_ptsl_capabilities_from_public_listing() -> None:
@@ -2096,7 +2096,7 @@ def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:
         request,
         CapabilityInvokeRequestSchema(
             requestId="req-5k",
-            capability="clip.selectAllOnTrack",
+            capability="daw.clip.selectAllOnTrack",
             payload={"trackName": "Kick"},
         ),
     )

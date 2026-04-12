@@ -55,10 +55,10 @@
   "requiredCapabilities": [
     "workflow.run.start",
     "daw.connection.getStatus",
-    "session.getInfo",
-    "track.list",
-    "export.mixWithSource",
-    "export.run.start",
+    "daw.session.getInfo",
+    "daw.track.list",
+    "daw.export.mixWithSource",
+    "daw.export.run.start",
     "jobs.get",
     "jobs.cancel"
   ],
@@ -72,10 +72,10 @@
   "capabilityRequirements": [
     { "capabilityId": "workflow.run.start", "minVersion": "2025.10.0" },
     { "capabilityId": "daw.connection.getStatus", "minVersion": "2025.10.0" },
-    { "capabilityId": "session.getInfo", "minVersion": "2025.10.0" },
-    { "capabilityId": "track.list", "minVersion": "2025.10.0" },
-    { "capabilityId": "export.mixWithSource", "minVersion": "2025.10.0" },
-    { "capabilityId": "export.run.start", "minVersion": "2025.10.0" },
+    { "capabilityId": "daw.session.getInfo", "minVersion": "2025.10.0" },
+    { "capabilityId": "daw.track.list", "minVersion": "2025.10.0" },
+    { "capabilityId": "daw.export.mixWithSource", "minVersion": "2025.10.0" },
+    { "capabilityId": "daw.export.run.start", "minVersion": "2025.10.0" },
     { "capabilityId": "jobs.get", "minVersion": "2025.10.0" },
     { "capabilityId": "jobs.cancel", "minVersion": "2025.10.0" }
   ]

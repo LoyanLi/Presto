@@ -5,7 +5,7 @@
   "steps": [
     {
       "stepId": "import_files",
-      "usesCapability": "import.run.start",
+      "usesCapability": "daw.import.run.start",
       "awaitJob": true,
       "input": {
         "folderPaths": {
@@ -19,7 +19,7 @@
     },
     {
       "stepId": "plan_items",
-      "usesCapability": "import.planRunItems",
+      "usesCapability": "daw.import.planRunItems",
       "input": {
         "rows": {
           "$ref": "input.rows"
@@ -47,7 +47,7 @@
       "steps": [
         {
           "stepId": "rename_track",
-          "usesCapability": "track.rename",
+          "usesCapability": "daw.track.rename",
           "input": {
             "currentName": {
               "$ref": "item.currentTrackName"
@@ -70,7 +70,7 @@
       "steps": [
         {
           "stepId": "apply_color",
-          "usesCapability": "track.color.apply",
+          "usesCapability": "daw.track.color.apply",
           "when": {
             "$ref": "item.shouldApplyColor",
             "equals": true
@@ -97,7 +97,7 @@
       "steps": [
         {
           "stepId": "select_track",
-          "usesCapability": "track.select",
+          "usesCapability": "daw.track.select",
           "when": {
             "$ref": "item.stripAfterImport",
             "equals": true
@@ -110,7 +110,7 @@
         },
         {
           "stepId": "select_clips",
-          "usesCapability": "clip.selectAllOnTrack",
+          "usesCapability": "daw.clip.selectAllOnTrack",
           "when": {
             "$ref": "item.stripAfterImport",
             "equals": true
@@ -123,7 +123,7 @@
         },
         {
           "stepId": "strip_silence",
-          "usesCapability": "stripSilence.execute",
+          "usesCapability": "daw.stripSilence.execute",
           "when": {
             "$ref": "item.stripAfterImport",
             "equals": true
@@ -141,7 +141,7 @@
     },
     {
       "stepId": "save_session",
-      "usesCapability": "session.save",
+      "usesCapability": "daw.session.save",
       "when": {
         "$ref": "input.ui.autoSaveSession",
         "equals": true

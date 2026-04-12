@@ -1127,7 +1127,7 @@ mod tests {
                 "inputSchemaId": "plugin.workflow.example.input.v1",
                 "steps": [{
                     "stepId": "rename",
-                    "usesCapability": "track.rename",
+                    "usesCapability": "daw.track.rename",
                     "input": {
                         "trackNames": ["DX"],
                         "newName": "VO"
@@ -1167,7 +1167,7 @@ mod tests {
             Ok(_) => panic!("expected manifest validation failure"),
             Err(error) => assert_eq!(
                 error,
-                "manifest_validation:workflowDefinition:uses_capability_not_declared:track.rename"
+                "manifest_validation:workflowDefinition:uses_capability_not_declared:daw.track.rename"
             ),
         }
     }

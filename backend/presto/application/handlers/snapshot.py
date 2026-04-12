@@ -83,7 +83,7 @@ def snapshot_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "snapshot is required.",
             source="capability",
             retryable=False,
-            capability="session.applySnapshot",
+            capability="daw.session.applySnapshot",
             details={
                 "rawCode": "VALIDATION_ERROR",
                 "rawMessage": "snapshot is required.",
@@ -126,7 +126,7 @@ def get_snapshot_info_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_snapshot_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
-    daw = ensure_daw_connected(ctx, "session.applySnapshot", payload, raise_on_error=True)
+    daw = ensure_daw_connected(ctx, "daw.session.applySnapshot", payload, raise_on_error=True)
     snapshot = snapshot_payload(payload)
     track_states = snapshot.get("trackStates")
     normalized_track_states = track_states if isinstance(track_states, list) else []

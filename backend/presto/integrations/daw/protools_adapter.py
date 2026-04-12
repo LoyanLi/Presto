@@ -245,7 +245,7 @@ class ProToolsDawAdapter:
         self._run_ptsl_command(
             command_name="CId_SaveSession",
             payload={},
-            capability="session.save",
+            capability="daw.session.save",
             unavailable_code="SAVE_SESSION_UNAVAILABLE",
             unavailable_message="Pro Tools session save is unavailable on the current engine.",
             failed_code="SAVE_SESSION_FAILED",
@@ -286,7 +286,7 @@ class ProToolsDawAdapter:
                 engine,
                 "CId_GetSessionPath",
                 {},
-                capability="session.getInfo",
+                capability="daw.session.getInfo",
             )
             session_path = self._string_or_empty(self._record_get(self._record_get(response, "session_path"), "path"))
         except Exception as exc:
@@ -302,7 +302,7 @@ class ProToolsDawAdapter:
                     exception_type=type(exc).__name__,
                     raw_exception=str(exc) or None,
                 ),
-                capability="session.getInfo",
+                capability="daw.session.getInfo",
                 adapter="pro_tools",
             ) from exc
 
@@ -313,7 +313,7 @@ class ProToolsDawAdapter:
                 source="runtime",
                 retryable=False,
                 details={"address": self.address},
-                capability="session.getInfo",
+                capability="daw.session.getInfo",
                 adapter="pro_tools",
             )
         return session_path
@@ -350,7 +350,7 @@ class ProToolsDawAdapter:
                     "Pro Tools session length is unavailable on the current engine.",
                     address=self.address,
                 ),
-                capability="session.getLength",
+                capability="daw.session.getLength",
                 adapter="pro_tools",
             )
 
@@ -372,7 +372,7 @@ class ProToolsDawAdapter:
                     exception_type=type(exc).__name__,
                     raw_exception=str(exc) or None,
                 ),
-                capability="session.getLength",
+                capability="daw.session.getLength",
                 adapter="pro_tools",
             ) from exc
 
@@ -521,7 +521,7 @@ class ProToolsDawAdapter:
         response = self._run_ptsl_command(
             command_name="CId_GetTransportState",
             payload={},
-            capability="transport.getStatus",
+            capability="daw.transport.getStatus",
             unavailable_code="TRANSPORT_STATUS_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot read transport state.",
             failed_code="TRANSPORT_STATUS_FAILED",
@@ -544,9 +544,9 @@ class ProToolsDawAdapter:
         self._run_transport_command(
             "CId_SetPlaybackMode",
             {"playback_mode": getattr(pt, "PM_Normal", 0)},
-            capability_id="transport.play",
+            capability_id="daw.transport.play",
         )
-        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.play")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="daw.transport.play")
 
     def stop(self) -> None:
         engine = self._require_engine()
@@ -554,7 +554,7 @@ class ProToolsDawAdapter:
         if not status.is_playing and not status.is_recording:
             return
 
-        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.stop")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="daw.transport.stop")
 
     def record(self) -> None:
         engine = self._require_engine()
@@ -568,9 +568,9 @@ class ProToolsDawAdapter:
                 "record_mode": getattr(pt, "RM_Normal", 0),
                 "record_arm_transport": True,
             },
-            capability_id="transport.record",
+            capability_id="daw.transport.record",
         )
-        self._run_transport_command("CId_TogglePlayState", {}, capability_id="transport.record")
+        self._run_transport_command("CId_TogglePlayState", {}, capability_id="daw.transport.record")
 
     def import_audio_file(self, path: str) -> str:
         imported = self.import_audio_files([path])
@@ -586,7 +586,7 @@ class ProToolsDawAdapter:
                     address=self.address,
                     file_path=path,
                 ),
-                capability="import.run.start",
+                capability="daw.import.run.start",
                 adapter="pro_tools",
             )
         return imported[0]
@@ -623,7 +623,7 @@ class ProToolsDawAdapter:
                         exception_type=type(exc).__name__,
                         raw_exception=str(exc) or None,
                     ),
-                    capability="import.run.start",
+                    capability="daw.import.run.start",
                     adapter="pro_tools",
                 ) from exc
             try:
@@ -649,7 +649,7 @@ class ProToolsDawAdapter:
                             exception_type=type(convert_exc).__name__,
                             raw_exception=str(convert_exc) or None,
                         ),
-                        capability="import.run.start",
+                        capability="daw.import.run.start",
                         adapter="pro_tools",
                     ) from convert_exc
 
@@ -679,7 +679,7 @@ class ProToolsDawAdapter:
                     file_paths=file_paths,
                     detected_tracks=new_tracks or None,
                 ),
-                capability="import.run.start",
+                capability="daw.import.run.start",
                 adapter="pro_tools",
             )
         return new_tracks
@@ -694,7 +694,7 @@ class ProToolsDawAdapter:
         self._run_ptsl_command(
             command_name="CId_SetTimelineSelection",
             payload=request,
-            capability="export.range.set",
+            capability="daw.export.range.set",
             unavailable_code="TIMELINE_SELECTION_UNAVAILABLE",
             unavailable_message="Pro Tools timeline selection API is unavailable on the current engine.",
             failed_code="TIMELINE_SELECTION_SET_FAILED",
@@ -704,7 +704,7 @@ class ProToolsDawAdapter:
         selection = self._run_ptsl_command(
             command_name="CId_GetTimelineSelection",
             payload={"location_type": "TLType_TimeCode"},
-            capability="export.range.set",
+            capability="daw.export.range.set",
             unavailable_code="TIMELINE_SELECTION_UNAVAILABLE",
             unavailable_message="Pro Tools timeline selection API is unavailable on the current engine.",
             failed_code="TIMELINE_SELECTION_SET_FAILED",
@@ -718,7 +718,7 @@ class ProToolsDawAdapter:
         self._run_ptsl_command(
             command_name="CId_ExportMix",
             payload=request,
-            capability="export.start",
+            capability="daw.export.start",
             unavailable_code="EXPORT_MIX_UNAVAILABLE",
             unavailable_message="Pro Tools export mix API is unavailable on the current engine.",
             failed_code="EXPORT_MIX_FAILED",
@@ -736,7 +736,7 @@ class ProToolsDawAdapter:
         if on_progress is not None and not callable(on_progress):
             raise PrestoValidationError(
                 "on_progress must be callable.",
-                capability="export.start",
+                capability="daw.export.start",
                 details=self._raw_error_details("VALIDATION_ERROR", "on_progress must be callable.", field="on_progress"),
             )
         progress_callback = on_progress if callable(on_progress) else None
@@ -780,7 +780,7 @@ class ProToolsDawAdapter:
         self.ensure_session_open()
         resolved_source_type_name = self._resolve_export_mix_source_type_name(
             source_type,
-            capability="export.mixWithSource",
+            capability="daw.export.mixWithSource",
             field="sourceType",
         )
         request = {
@@ -789,7 +789,7 @@ class ProToolsDawAdapter:
         response = self._run_ptsl_command(
             command_name="CId_GetExportMixSourceList",
             payload=request,
-            capability="export.mixWithSource",
+            capability="daw.export.mixWithSource",
             unavailable_code="EXPORT_MIX_SOURCE_LIST_UNAVAILABLE",
             unavailable_message="Pro Tools export mix source list API is unavailable on the current engine.",
             failed_code="EXPORT_MIX_SOURCE_LIST_FAILED",
@@ -811,7 +811,7 @@ class ProToolsDawAdapter:
                     source_type=str(source_type),
                     response=response,
                 ),
-                capability="export.mixWithSource",
+                capability="daw.export.mixWithSource",
                 adapter="pro_tools",
             )
 
@@ -831,7 +831,7 @@ class ProToolsDawAdapter:
                     "TRACK_NAME_REQUIRED",
                     "Track name is required before renaming a track.",
                 ),
-                capability="track.rename",
+                capability="daw.track.rename",
                 adapter="pro_tools",
             )
         if not next_name:
@@ -845,7 +845,7 @@ class ProToolsDawAdapter:
                     "New track name is required before renaming a track.",
                     track_name=current_name,
                 ),
-                capability="track.rename",
+                capability="daw.track.rename",
                 adapter="pro_tools",
             )
 
@@ -855,7 +855,7 @@ class ProToolsDawAdapter:
                 "current_name": current_name,
                 "new_name": next_name,
             },
-            capability="track.rename",
+            capability="daw.track.rename",
             unavailable_code="RENAME_TRACK_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot rename tracks.",
             failed_code="RENAME_TRACK_FAILED",
@@ -880,7 +880,7 @@ class ProToolsDawAdapter:
                     "TRACK_NAME_REQUIRED",
                     "At least one track name is required before selecting tracks.",
                 ),
-                capability="track.select",
+                capability="daw.track.select",
                 adapter="pro_tools",
             )
 
@@ -890,7 +890,7 @@ class ProToolsDawAdapter:
                 "track_names": normalized_track_names,
                 "selection_mode": "SM_Replace",
             },
-            capability="track.select",
+            capability="daw.track.select",
             unavailable_code="TRACK_SELECT_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot select tracks by name.",
             failed_code="SELECT_TRACK_FAILED",
@@ -912,7 +912,7 @@ class ProToolsDawAdapter:
                     track_names=normalized_track_names,
                     selected_tracks=sorted(selected_tracks) or None,
                 ),
-                capability="track.select",
+                capability="daw.track.select",
                 adapter="pro_tools",
             )
 
@@ -929,7 +929,7 @@ class ProToolsDawAdapter:
                     "TRACK_NAME_REQUIRED",
                     "Track name is required before applying color.",
                 ),
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             )
 
@@ -941,7 +941,7 @@ class ProToolsDawAdapter:
         response = self._run_ptsl_command(
             command_name="CId_SetTrackColor",
             payload=request,
-            capability="track.color.apply",
+            capability="daw.track.color.apply",
             unavailable_code="SET_TRACK_COLOR_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot set track color.",
             failed_code="SET_TRACK_COLOR_FAILED",
@@ -968,7 +968,7 @@ class ProToolsDawAdapter:
                     command_name="CId_SetTrackColor",
                     raw_response=repr(response),
                 ),
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             )
 
@@ -987,7 +987,7 @@ class ProToolsDawAdapter:
                     command_name="CId_SetTrackColor",
                     raw_response=repr(response),
                 ),
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             )
 
@@ -1004,7 +1004,7 @@ class ProToolsDawAdapter:
                     "TRACK_NAME_REQUIRED",
                     "Track name is required before updating pan.",
                 ),
-                capability="track.pan.set",
+                capability="daw.track.pan.set",
                 adapter="pro_tools",
             )
 
@@ -1024,7 +1024,7 @@ class ProToolsDawAdapter:
                     exception_type=type(exc).__name__,
                     raw_exception=str(exc) or None,
                 ),
-                capability="track.pan.set",
+                capability="daw.track.pan.set",
                 adapter="pro_tools",
             ) from exc
 
@@ -1040,7 +1040,7 @@ class ProToolsDawAdapter:
                     track_name=normalized_track_name,
                     value=normalized_pan,
                 ),
-                capability="track.pan.set",
+                capability="daw.track.pan.set",
                 adapter="pro_tools",
             )
 
@@ -1068,7 +1068,7 @@ class ProToolsDawAdapter:
         self._run_ptsl_command(
             command_name="CId_SetTrackControlBreakpoints",
             payload=request,
-            capability="track.pan.set",
+            capability="daw.track.pan.set",
             unavailable_code="TRACK_PAN_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot set pan.",
             failed_code="TRACK_PAN_SET_FAILED",
@@ -1096,14 +1096,14 @@ class ProToolsDawAdapter:
                     "TRACK_NAME_REQUIRED",
                     "Track name is required before selecting clips on a track.",
                 ),
-                capability="clip.selectAllOnTrack",
+                capability="daw.clip.selectAllOnTrack",
                 adapter="pro_tools",
             )
 
         self._run_ptsl_command(
             command_name="CId_SelectAllClipsOnTrack",
             payload={"track_name": normalized_track_name},
-            capability="clip.selectAllOnTrack",
+            capability="daw.clip.selectAllOnTrack",
             unavailable_code="CLIP_SELECTION_UNAVAILABLE",
             unavailable_message="The current Pro Tools engine cannot select all clips on a track.",
             failed_code="SELECT_CLIPS_FAILED",
@@ -1116,7 +1116,7 @@ class ProToolsDawAdapter:
 
     def set_track_mute_state_batch(self, track_names: list[str], muted: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.mute.set",
+            capability="daw.track.mute.set",
             command_name="CId_SetTrackMuteState",
             track_names=track_names,
             enabled=muted,
@@ -1131,7 +1131,7 @@ class ProToolsDawAdapter:
 
     def set_track_solo_state_batch(self, track_names: list[str], soloed: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.solo.set",
+            capability="daw.track.solo.set",
             command_name="CId_SetTrackSoloState",
             track_names=track_names,
             enabled=soloed,
@@ -1146,7 +1146,7 @@ class ProToolsDawAdapter:
 
     def set_track_hidden_state_batch(self, track_names: list[str], hidden: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.hidden.set",
+            capability="daw.track.hidden.set",
             command_name="CId_SetTrackHiddenState",
             track_names=track_names,
             enabled=hidden,
@@ -1161,7 +1161,7 @@ class ProToolsDawAdapter:
 
     def set_track_inactive_state_batch(self, track_names: list[str], inactive: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.inactive.set",
+            capability="daw.track.inactive.set",
             command_name="CId_SetTrackInactiveState",
             track_names=track_names,
             enabled=inactive,
@@ -1173,7 +1173,7 @@ class ProToolsDawAdapter:
 
     def set_track_record_enable_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.recordEnable.set",
+            capability="daw.track.recordEnable.set",
             command_name="CId_SetTrackRecordEnableState",
             track_names=track_names,
             enabled=enabled,
@@ -1185,7 +1185,7 @@ class ProToolsDawAdapter:
 
     def set_track_record_safe_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.recordSafe.set",
+            capability="daw.track.recordSafe.set",
             command_name="CId_SetTrackRecordSafeEnableState",
             track_names=track_names,
             enabled=enabled,
@@ -1197,7 +1197,7 @@ class ProToolsDawAdapter:
 
     def set_track_input_monitor_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.inputMonitor.set",
+            capability="daw.track.inputMonitor.set",
             command_name="CId_SetTrackInputMonitorState",
             track_names=track_names,
             enabled=enabled,
@@ -1209,7 +1209,7 @@ class ProToolsDawAdapter:
 
     def set_track_online_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.online.set",
+            capability="daw.track.online.set",
             command_name="CId_SetTrackOnlineState",
             track_names=track_names,
             enabled=enabled,
@@ -1221,7 +1221,7 @@ class ProToolsDawAdapter:
 
     def set_track_frozen_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.frozen.set",
+            capability="daw.track.frozen.set",
             command_name="CId_SetTrackFrozenState",
             track_names=track_names,
             enabled=enabled,
@@ -1233,7 +1233,7 @@ class ProToolsDawAdapter:
 
     def set_track_open_state_batch(self, track_names: list[str], enabled: bool) -> None:
         self._set_track_toggle_state_batch(
-            capability="track.open.set",
+            capability="daw.track.open.set",
             command_name="CId_SetTrackOpenState",
             track_names=track_names,
             enabled=enabled,
@@ -1361,7 +1361,7 @@ class ProToolsDawAdapter:
                 "Pro Tools track list API is unavailable on the current engine.",
                 address=self.address,
             ),
-            capability="track.list",
+            capability="daw.track.list",
             adapter="pro_tools",
         )
 
@@ -1380,7 +1380,7 @@ class ProToolsDawAdapter:
                         "offset": offset,
                     },
                 },
-                capability="track.list",
+                capability="daw.track.list",
                 unavailable_code="TRACK_LIST_UNAVAILABLE",
                 unavailable_message="Pro Tools track list API is unavailable on the current engine.",
                 failed_code="TRACK_LIST_FAILED",
@@ -1402,7 +1402,7 @@ class ProToolsDawAdapter:
                         offset=offset,
                         response=response,
                     ),
-                    capability="track.list",
+                    capability="daw.track.list",
                     adapter="pro_tools",
                 )
             tracks.extend(list(chunk))
@@ -1439,7 +1439,7 @@ class ProToolsDawAdapter:
             engine=engine,
             command_name="CId_Import",
             payload=request,
-            capability="import.run.start",
+            capability="daw.import.run.start",
             unavailable_code="IMPORT_UNAVAILABLE",
             unavailable_message="Pro Tools import API is unavailable on the current engine.",
             failed_code="IMPORT_FAILED",
@@ -1467,7 +1467,7 @@ class ProToolsDawAdapter:
             f"PTSL import {requested} operation is not available in current py-ptsl build.",
             source="runtime",
             retryable=False,
-            capability="import.run.start",
+            capability="daw.import.run.start",
             adapter="pro_tools",
         )
 
@@ -1501,7 +1501,7 @@ class ProToolsDawAdapter:
                     "Color slot must be an integer.",
                     color_slot=color_slot,
                 ),
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             ) from exc
 
@@ -1516,7 +1516,7 @@ class ProToolsDawAdapter:
                     "Color slot must be 1 or greater.",
                     color_slot=slot,
                 ),
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             )
 
@@ -1621,34 +1621,34 @@ class ProToolsDawAdapter:
     def _build_export_mix_audio_info(self, payload: dict[str, Any]) -> Any:
         return pt.EM_AudioInfo(
             compression_type=getattr(pt, "CT_PCM", 1),
-            export_format=self._resolve_export_format(payload.get("audio_format"), capability="export.start", field="audio.format"),
-            bit_depth=self._resolve_bit_depth_enum(payload.get("bit_depth"), capability="export.start", field="audio.bitDepth"),
-            sample_rate=self._resolve_sample_rate(payload.get("sample_rate"), capability="export.start", field="audio.sampleRate"),
+            export_format=self._resolve_export_format(payload.get("audio_format"), capability="daw.export.start", field="audio.format"),
+            bit_depth=self._resolve_bit_depth_enum(payload.get("bit_depth"), capability="daw.export.start", field="audio.bitDepth"),
+            sample_rate=self._resolve_sample_rate(payload.get("sample_rate"), capability="daw.export.start", field="audio.sampleRate"),
             pad_to_frame_boundary=self._bool_to_triple_bool(
                 payload.get("pad_to_frame_boundary", False),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.padToFrameBoundary",
             ),
             delivery_format=self._resolve_delivery_format(
                 payload.get("delivery_format", "single_file"),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.deliveryFormat",
             ),
         )
 
     def _build_export_mix_request_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        file_name = self._require_non_empty_text(payload.get("file_name"), field="fileName", capability="export.start")
-        output_path = self._require_non_empty_text(payload.get("output_path"), field="outputPath", capability="export.start")
+        file_name = self._require_non_empty_text(payload.get("file_name"), field="fileName", capability="daw.export.start")
+        output_path = self._require_non_empty_text(payload.get("output_path"), field="outputPath", capability="daw.export.start")
         source_type = payload.get("source_type", "physical_out")
-        source_name = self._require_non_empty_text(payload.get("source_name", "Out 1-2"), field="source.name", capability="export.start")
+        source_name = self._require_non_empty_text(payload.get("source_name", "Out 1-2"), field="source.name", capability="daw.export.start")
         file_destination = str(payload.get("file_destination", "directory") or "directory").strip().lower().replace("-", "_")
 
         return {
             "file_name": file_name,
-            "file_type": self._resolve_export_mix_file_type(payload.get("file_type"), capability="export.start", field="fileType"),
+            "file_type": self._resolve_export_mix_file_type(payload.get("file_type"), capability="daw.export.start", field="fileType"),
             "mix_source_list": [
                 {
-                    "source_type": self._resolve_export_mix_source_type(source_type, capability="export.start", field="source.type"),
+                    "source_type": self._resolve_export_mix_source_type(source_type, capability="daw.export.start", field="source.type"),
                     "name": source_name,
                 }
             ],
@@ -1656,7 +1656,7 @@ class ProToolsDawAdapter:
             "video_info": {
                 "include_video": self._bool_to_triple_bool(
                     payload.get("include_video", False),
-                    capability="export.start",
+                    capability="daw.export.start",
                     field="video.includeVideo",
                 )
             },
@@ -1666,7 +1666,7 @@ class ProToolsDawAdapter:
                 import_after_bounce=payload.get("import_after_bounce", False),
             ),
             "dolby_atmos_info": {},
-            "offline_bounce": self._bool_to_triple_bool(payload.get("offline", True), capability="export.start", field="offline"),
+            "offline_bounce": self._bool_to_triple_bool(payload.get("offline", True), capability="daw.export.start", field="offline"),
         }
 
     def _build_export_mix_audio_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1674,27 +1674,27 @@ class ProToolsDawAdapter:
             "compression_type": int(getattr(pt, "CT_PCM", 1)),
             "export_format": self._resolve_export_format(
                 payload.get("audio_format", "interleaved"),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.format",
             ),
             "bit_depth": self._resolve_bit_depth_enum(
                 payload.get("bit_depth", 24),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.bitDepth",
             ),
             "sample_rate": self._resolve_sample_rate(
                 payload.get("sample_rate", 48000),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.sampleRate",
             ),
             "pad_to_frame_boundary": self._bool_to_triple_bool(
                 payload.get("pad_to_frame_boundary", False),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.padToFrameBoundary",
             ),
             "delivery_format": self._resolve_delivery_format(
                 payload.get("delivery_format", "single_file"),
-                capability="export.start",
+                capability="daw.export.start",
                 field="audio.deliveryFormat",
             ),
         }
@@ -1711,7 +1711,7 @@ class ProToolsDawAdapter:
                 "file_destination": int(getattr(pt, "EM_FD_SessionFolder", 2)),
                 "import_after_bounce": self._bool_to_triple_bool(
                     import_after_bounce,
-                    capability="export.start",
+                    capability="daw.export.start",
                     field="importAfterBounce",
                 ),
             }
@@ -1721,7 +1721,7 @@ class ProToolsDawAdapter:
             "directory": self._posix_directory_to_hfs(output_path),
             "import_after_bounce": self._bool_to_triple_bool(
                 import_after_bounce,
-                capability="export.start",
+                capability="daw.export.start",
                 field="importAfterBounce",
             ),
         }
@@ -1867,7 +1867,7 @@ class ProToolsDawAdapter:
                 source="runtime",
                 retryable=False,
                 details={"exception_type": type(exc).__name__},
-                capability="track.color.apply",
+                capability="daw.track.color.apply",
                 adapter="pro_tools",
             ) from exc
 

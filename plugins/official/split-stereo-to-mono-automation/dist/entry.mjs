@@ -32,9 +32,9 @@ export const manifest = {
       ],
     },
   ],
-  requiredCapabilities: ['automation.splitStereoToMono.execute'],
+  requiredCapabilities: ['daw.automation.splitStereoToMono.execute'],
   adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
-  capabilityRequirements: [{ capabilityId: 'automation.splitStereoToMono.execute', minVersion: '2025.10.0' }],
+  capabilityRequirements: [{ capabilityId: 'daw.automation.splitStereoToMono.execute', minVersion: '2025.10.0' }],
 }
 
 let activePluginId = ''

@@ -333,7 +333,7 @@ export interface ImportPlanRunItemsResponse {
 
 export interface ImportRunStartResponse {
   jobId: JobAcceptedResponse['jobId']
-  capability: 'import.run.start'
+  capability: 'daw.import.run.start'
   state: JobAcceptedResponse['state']
 }
 
@@ -346,19 +346,19 @@ export interface ExportRangeSetResponse {
 
 export interface ExportStartResponse {
   jobId: JobAcceptedResponse['jobId']
-  capability: 'export.start'
+  capability: 'daw.export.start'
   state: JobAcceptedResponse['state']
 }
 
 export interface ExportDirectStartResponse {
   jobId: JobAcceptedResponse['jobId']
-  capability: 'export.direct.start'
+  capability: 'daw.export.direct.start'
   state: JobAcceptedResponse['state']
 }
 
 export interface ExportRunStartResponse {
   jobId: JobAcceptedResponse['jobId']
-  capability: 'export.run.start'
+  capability: 'daw.export.run.start'
   state: JobAcceptedResponse['state']
 }
 
@@ -398,45 +398,45 @@ type CoreCapabilityResponseMap = {
   'daw.ptsl.catalog.list': DawPtslCatalogListResponse
   'daw.ptsl.command.describe': DawPtslCommandDescribeResponse
   'daw.ptsl.command.execute': DawPtslCommandExecuteResponse
-  'automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteResponse
-  'session.getInfo': SessionGetInfoResponse
-  'session.getLength': SessionGetLengthResponse
-  'session.save': SessionSaveResponse
-  'session.applySnapshot': SessionApplySnapshotResponse
-  'session.getSnapshotInfo': SessionGetSnapshotInfoResponse
-  'track.list': TrackListResponse
-  'track.listNames': TrackListNamesResponse
-  'track.selection.get': TrackSelectionGetResponse
-  'track.rename': TrackRenameResponse
-  'track.select': TrackSelectResponse
-  'track.color.apply': TrackColorApplyResponse
-  'track.pan.set': TrackPanSetResponse
-  'track.mute.set': TrackMuteSetResponse
-  'track.solo.set': TrackSoloSetResponse
-  'track.hidden.set': TrackHiddenSetResponse
-  'track.inactive.set': TrackInactiveSetResponse
-  'track.recordEnable.set': TrackRecordEnableSetResponse
-  'track.recordSafe.set': TrackRecordSafeSetResponse
-  'track.inputMonitor.set': TrackInputMonitorSetResponse
-  'track.online.set': TrackOnlineSetResponse
-  'track.frozen.set': TrackFrozenSetResponse
-  'track.open.set': TrackOpenSetResponse
-  'clip.selectAllOnTrack': ClipSelectAllOnTrackResponse
-  'transport.play': TransportPlayResponse
-  'transport.stop': TransportStopResponse
-  'transport.record': TransportRecordResponse
-  'transport.getStatus': TransportGetStatusResponse
+  'daw.automation.splitStereoToMono.execute': AutomationSplitStereoToMonoExecuteResponse
+  'daw.session.getInfo': SessionGetInfoResponse
+  'daw.session.getLength': SessionGetLengthResponse
+  'daw.session.save': SessionSaveResponse
+  'daw.session.applySnapshot': SessionApplySnapshotResponse
+  'daw.session.getSnapshotInfo': SessionGetSnapshotInfoResponse
+  'daw.track.list': TrackListResponse
+  'daw.track.listNames': TrackListNamesResponse
+  'daw.track.selection.get': TrackSelectionGetResponse
+  'daw.track.rename': TrackRenameResponse
+  'daw.track.select': TrackSelectResponse
+  'daw.track.color.apply': TrackColorApplyResponse
+  'daw.track.pan.set': TrackPanSetResponse
+  'daw.track.mute.set': TrackMuteSetResponse
+  'daw.track.solo.set': TrackSoloSetResponse
+  'daw.track.hidden.set': TrackHiddenSetResponse
+  'daw.track.inactive.set': TrackInactiveSetResponse
+  'daw.track.recordEnable.set': TrackRecordEnableSetResponse
+  'daw.track.recordSafe.set': TrackRecordSafeSetResponse
+  'daw.track.inputMonitor.set': TrackInputMonitorSetResponse
+  'daw.track.online.set': TrackOnlineSetResponse
+  'daw.track.frozen.set': TrackFrozenSetResponse
+  'daw.track.open.set': TrackOpenSetResponse
+  'daw.clip.selectAllOnTrack': ClipSelectAllOnTrackResponse
+  'daw.transport.play': TransportPlayResponse
+  'daw.transport.stop': TransportStopResponse
+  'daw.transport.record': TransportRecordResponse
+  'daw.transport.getStatus': TransportGetStatusResponse
   'workflow.run.start': WorkflowRunStartResponse
-  'import.analyze': ImportAnalyzeResponse
-  'import.cache.save': ImportCacheSaveResponse
-  'import.planRunItems': ImportPlanRunItemsResponse
-  'import.run.start': ImportRunStartResponse
-  'stripSilence.open': StripSilenceOpenResponse
-  'stripSilence.execute': StripSilenceExecuteResponse
-  'export.range.set': ExportRangeSetResponse
-  'export.start': ExportStartResponse
-  'export.direct.start': ExportDirectStartResponse
-  'export.run.start': ExportRunStartResponse
+  'daw.import.analyze': ImportAnalyzeResponse
+  'daw.import.cache.save': ImportCacheSaveResponse
+  'daw.import.planRunItems': ImportPlanRunItemsResponse
+  'daw.import.run.start': ImportRunStartResponse
+  'daw.stripSilence.open': StripSilenceOpenResponse
+  'daw.stripSilence.execute': StripSilenceExecuteResponse
+  'daw.export.range.set': ExportRangeSetResponse
+  'daw.export.start': ExportStartResponse
+  'daw.export.direct.start': ExportDirectStartResponse
+  'daw.export.run.start': ExportRunStartResponse
   'jobs.create': JobsCreateResponse
   'jobs.update': JobsUpdateResponse
   'jobs.get': JobsGetResponse

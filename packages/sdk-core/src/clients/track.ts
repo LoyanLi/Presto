@@ -62,75 +62,75 @@ const invokeCapability = async <TRequest, TResponse>(
 
 export const createTrackClient = (context: PrestoClientAssemblyContext): TrackClient => ({
   list: () =>
-    invokeCapability<TrackListRequest, TrackListResponse>(context, 'track.list', {}),
+    invokeCapability<TrackListRequest, TrackListResponse>(context, 'daw.track.list', {}),
   listNames: () =>
     invokeCapability<TrackListNamesRequest, TrackListNamesResponse>(
       context,
-      'track.listNames',
+      'daw.track.listNames',
       {},
     ),
   selection: {
     get: () =>
       invokeCapability<TrackSelectionGetRequest, TrackSelectionGetResponse>(
         context,
-        'track.selection.get',
+        'daw.track.selection.get',
         {},
       ),
   },
   rename: (request: TrackRenameRequest) =>
-    invokeCapability<TrackRenameRequest, TrackRenameResponse>(context, 'track.rename', request),
+    invokeCapability<TrackRenameRequest, TrackRenameResponse>(context, 'daw.track.rename', request),
   select: (request: TrackSelectRequest) =>
-    invokeCapability<TrackSelectRequest, TrackSelectResponse>(context, 'track.select', request),
+    invokeCapability<TrackSelectRequest, TrackSelectResponse>(context, 'daw.track.select', request),
   color: {
     apply: (request: TrackColorApplyRequest) =>
       invokeCapability<TrackColorApplyRequest, TrackColorApplyResponse>(
         context,
-        'track.color.apply',
+        'daw.track.color.apply',
         request,
       ),
   },
   pan: {
     set: (request: TrackPanSetRequest) =>
-      invokeCapability<TrackPanSetRequest, TrackPanSetResponse>(context, 'track.pan.set', request),
+      invokeCapability<TrackPanSetRequest, TrackPanSetResponse>(context, 'daw.track.pan.set', request),
   },
   mute: {
     set: (request: TrackMuteSetRequest) =>
-      invokeCapability<TrackMuteSetRequest, TrackMuteSetResponse>(context, 'track.mute.set', request),
+      invokeCapability<TrackMuteSetRequest, TrackMuteSetResponse>(context, 'daw.track.mute.set', request),
   },
   solo: {
     set: (request: TrackSoloSetRequest) =>
-      invokeCapability<TrackSoloSetRequest, TrackSoloSetResponse>(context, 'track.solo.set', request),
+      invokeCapability<TrackSoloSetRequest, TrackSoloSetResponse>(context, 'daw.track.solo.set', request),
   },
   hidden: {
     set: (request: TrackHiddenSetRequest) =>
-      invokeCapability<TrackHiddenSetRequest, TrackHiddenSetResponse>(context, 'track.hidden.set', request),
+      invokeCapability<TrackHiddenSetRequest, TrackHiddenSetResponse>(context, 'daw.track.hidden.set', request),
   },
   inactive: {
     set: (request: TrackInactiveSetRequest) =>
-      invokeCapability<TrackInactiveSetRequest, TrackInactiveSetResponse>(context, 'track.inactive.set', request),
+      invokeCapability<TrackInactiveSetRequest, TrackInactiveSetResponse>(context, 'daw.track.inactive.set', request),
   },
   recordEnable: {
     set: (request: TrackRecordEnableSetRequest) =>
-      invokeCapability<TrackRecordEnableSetRequest, TrackRecordEnableSetResponse>(context, 'track.recordEnable.set', request),
+      invokeCapability<TrackRecordEnableSetRequest, TrackRecordEnableSetResponse>(context, 'daw.track.recordEnable.set', request),
   },
   recordSafe: {
     set: (request: TrackRecordSafeSetRequest) =>
-      invokeCapability<TrackRecordSafeSetRequest, TrackRecordSafeSetResponse>(context, 'track.recordSafe.set', request),
+      invokeCapability<TrackRecordSafeSetRequest, TrackRecordSafeSetResponse>(context, 'daw.track.recordSafe.set', request),
   },
   inputMonitor: {
     set: (request: TrackInputMonitorSetRequest) =>
-      invokeCapability<TrackInputMonitorSetRequest, TrackInputMonitorSetResponse>(context, 'track.inputMonitor.set', request),
+      invokeCapability<TrackInputMonitorSetRequest, TrackInputMonitorSetResponse>(context, 'daw.track.inputMonitor.set', request),
   },
   online: {
     set: (request: TrackOnlineSetRequest) =>
-      invokeCapability<TrackOnlineSetRequest, TrackOnlineSetResponse>(context, 'track.online.set', request),
+      invokeCapability<TrackOnlineSetRequest, TrackOnlineSetResponse>(context, 'daw.track.online.set', request),
   },
   frozen: {
     set: (request: TrackFrozenSetRequest) =>
-      invokeCapability<TrackFrozenSetRequest, TrackFrozenSetResponse>(context, 'track.frozen.set', request),
+      invokeCapability<TrackFrozenSetRequest, TrackFrozenSetResponse>(context, 'daw.track.frozen.set', request),
   },
   open: {
     set: (request: TrackOpenSetRequest) =>
-      invokeCapability<TrackOpenSetRequest, TrackOpenSetResponse>(context, 'track.open.set', request),
+      invokeCapability<TrackOpenSetRequest, TrackOpenSetResponse>(context, 'daw.track.open.set', request),
   },
 })

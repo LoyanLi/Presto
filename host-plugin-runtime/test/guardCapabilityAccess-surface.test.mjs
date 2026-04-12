@@ -71,83 +71,83 @@ function createPrestoFixture(invocations) {
     },
     session: {
       async getInfo() {
-        invocations.push({ method: 'session.getInfo' })
+        invocations.push({ method: 'daw.session.getInfo' })
         return { ok: true }
       },
       async getLength() {
-        invocations.push({ method: 'session.getLength' })
+        invocations.push({ method: 'daw.session.getLength' })
         return { ok: true }
       },
       async save() {
-        invocations.push({ method: 'session.save' })
+        invocations.push({ method: 'daw.session.save' })
         return { ok: true }
       },
       async applySnapshot(request) {
-        invocations.push({ method: 'session.applySnapshot', request })
+        invocations.push({ method: 'daw.session.applySnapshot', request })
         return { ok: true }
       },
       async getSnapshotInfo(request) {
-        invocations.push({ method: 'session.getSnapshotInfo', request })
+        invocations.push({ method: 'daw.session.getSnapshotInfo', request })
         return { ok: true }
       },
     },
     track: {
       async list() {
-        invocations.push({ method: 'track.list' })
+        invocations.push({ method: 'daw.track.list' })
         return { tracks: [] }
       },
       async listNames() {
-        invocations.push({ method: 'track.listNames' })
+        invocations.push({ method: 'daw.track.listNames' })
         return { names: [] }
       },
       async rename(request) {
-        invocations.push({ method: 'track.rename', request })
+        invocations.push({ method: 'daw.track.rename', request })
         return { ok: true }
       },
       async select(request) {
-        invocations.push({ method: 'track.select', request })
+        invocations.push({ method: 'daw.track.select', request })
         return { ok: true }
       },
       color: {
         async apply(request) {
-          invocations.push({ method: 'track.color.apply', request })
+          invocations.push({ method: 'daw.track.color.apply', request })
           return { ok: true }
         },
       },
       mute: {
         async set(request) {
-          invocations.push({ method: 'track.mute.set', request })
+          invocations.push({ method: 'daw.track.mute.set', request })
           return { ok: true }
         },
       },
       solo: {
         async set(request) {
-          invocations.push({ method: 'track.solo.set', request })
+          invocations.push({ method: 'daw.track.solo.set', request })
           return { ok: true }
         },
       },
     },
     clip: {
       async selectAllOnTrack(request) {
-        invocations.push({ method: 'clip.selectAllOnTrack', request })
+        invocations.push({ method: 'daw.clip.selectAllOnTrack', request })
         return { ok: true }
       },
     },
     transport: {
       async play() {
-        invocations.push({ method: 'transport.play' })
+        invocations.push({ method: 'daw.transport.play' })
         return { ok: true }
       },
       async stop() {
-        invocations.push({ method: 'transport.stop' })
+        invocations.push({ method: 'daw.transport.stop' })
         return { ok: true }
       },
       async record() {
-        invocations.push({ method: 'transport.record' })
+        invocations.push({ method: 'daw.transport.record' })
         return { ok: true }
       },
       async getStatus() {
-        invocations.push({ method: 'transport.getStatus' })
+        invocations.push({ method: 'daw.transport.getStatus' })
         return { ok: true }
       },
     },
@@ -161,46 +161,46 @@ function createPrestoFixture(invocations) {
     },
     import: {
       async analyze(request) {
-        invocations.push({ method: 'import.analyze', request })
+        invocations.push({ method: 'daw.import.analyze', request })
         return { rows: [], folderSummaries: [] }
       },
       cache: {
         async save(request) {
-          invocations.push({ method: 'import.cache.save', request })
+          invocations.push({ method: 'daw.import.cache.save', request })
           return { ok: true, saved: true }
         },
       },
       run: {
         async start(request) {
-          invocations.push({ method: 'import.run.start', request })
+          invocations.push({ method: 'daw.import.run.start', request })
           return { ok: true }
         },
       },
     },
     stripSilence: {
       async open() {
-        invocations.push({ method: 'stripSilence.open' })
+        invocations.push({ method: 'daw.stripSilence.open' })
         return { ok: true }
       },
       async execute(request) {
-        invocations.push({ method: 'stripSilence.execute', request })
+        invocations.push({ method: 'daw.stripSilence.execute', request })
         return { ok: true }
       },
     },
     export: {
       range: {
         async set(request) {
-          invocations.push({ method: 'export.range.set', request })
+          invocations.push({ method: 'daw.export.range.set', request })
           return { ok: true }
         },
       },
       async start(request) {
-        invocations.push({ method: 'export.start', request })
+        invocations.push({ method: 'daw.export.start', request })
         return { ok: true }
       },
       direct: {
         async start(request) {
-          invocations.push({ method: 'export.direct.start', request })
+          invocations.push({ method: 'daw.export.direct.start', request })
           return { ok: true }
         },
       },
@@ -212,7 +212,7 @@ function createPrestoFixture(invocations) {
       },
       run: {
         async start(request) {
-          invocations.push({ method: 'export.run.start', request })
+          invocations.push({ method: 'daw.export.run.start', request })
           return { ok: true }
         },
       },
@@ -252,7 +252,7 @@ test('guardCapabilityAccess exposes current clip/import/export surfaces and remo
   const presto = createPrestoFixture(invocations)
   const manifest = {
     pluginId: 'plugin.guard.surface',
-    requiredCapabilities: ['clip.selectAllOnTrack', 'import.run.start', 'export.mixWithSource', 'export.run.start', 'jobs.create', 'jobs.update'],
+    requiredCapabilities: ['daw.clip.selectAllOnTrack', 'daw.import.run.start', 'daw.export.mixWithSource', 'daw.export.run.start', 'jobs.create', 'jobs.update'],
   }
 
   const guarded = guardCapabilityAccess(presto, manifest)
@@ -271,10 +271,10 @@ test('guardCapabilityAccess exposes current clip/import/export surfaces and remo
   await guarded.jobs.update({ jobId: 'job-1', state: 'running' })
 
   assert.deepEqual(invocations, [
-    { method: 'clip.selectAllOnTrack', request: { trackName: 'Vox' } },
-    { method: 'import.run.start', request: { folderPaths: ['/tmp/import'] } },
+    { method: 'daw.clip.selectAllOnTrack', request: { trackName: 'Vox' } },
+    { method: 'daw.import.run.start', request: { folderPaths: ['/tmp/import'] } },
     { method: 'export.mixSource.list', request: { sourceType: 'output' } },
-    { method: 'export.run.start', request: { snapshotIds: ['snapshot-1'], exportSettings: { output_path: '/tmp/out' } } },
+    { method: 'daw.export.run.start', request: { snapshotIds: ['snapshot-1'], exportSettings: { output_path: '/tmp/out' } } },
     { method: 'jobs.create', request: { capability: 'jobs.get', targetDaw: 'pro_tools' } },
     { method: 'jobs.update', request: { jobId: 'job-1', state: 'running' } },
   ])
@@ -314,7 +314,7 @@ test('guardCapabilityAccess still denies undeclared current capabilities', async
   const presto = createPrestoFixture([])
   const manifest = {
     pluginId: 'plugin.guard.denied',
-    requiredCapabilities: ['import.run.start'],
+    requiredCapabilities: ['daw.import.run.start'],
   }
 
   const guarded = guardCapabilityAccess(presto, manifest)
@@ -324,7 +324,7 @@ test('guardCapabilityAccess still denies undeclared current capabilities', async
       error instanceof Error &&
       error.name === 'PluginPermissionError' &&
       error.code === 'PLUGIN_PERMISSION_DENIED' &&
-      String(error.message).includes('clip.selectAllOnTrack()'),
+      String(error.message).includes('daw.clip.selectAllOnTrack()'),
   )
 })
 
@@ -335,7 +335,7 @@ test('guardCapabilityAccess does not require unrelated presto services for decla
     export: {
       run: {
         async start(request) {
-          invocations.push({ method: 'export.run.start', request })
+          invocations.push({ method: 'daw.export.run.start', request })
           return { ok: true }
         },
       },
@@ -349,7 +349,7 @@ test('guardCapabilityAccess does not require unrelated presto services for decla
   }
   const manifest = {
     pluginId: 'plugin.guard.minimal-services',
-    requiredCapabilities: ['export.run.start', 'jobs.get'],
+    requiredCapabilities: ['daw.export.run.start', 'jobs.get'],
   }
 
   const guarded = guardCapabilityAccess(presto, manifest)
@@ -357,7 +357,7 @@ test('guardCapabilityAccess does not require unrelated presto services for decla
   await guarded.jobs.get('job-1')
 
   assert.deepEqual(invocations, [
-    { method: 'export.run.start', request: { snapshots: [], export_settings: { output_path: '/tmp/out' } } },
+    { method: 'daw.export.run.start', request: { snapshots: [], export_settings: { output_path: '/tmp/out' } } },
     { method: 'jobs.get', jobId: 'job-1' },
   ])
 })
@@ -368,7 +368,7 @@ test('guardCapabilityAccess exposes backend import analyze and cache save capabi
   const presto = createPrestoFixture(invocations)
   const manifest = {
     pluginId: 'plugin.guard.import-backend',
-    requiredCapabilities: ['import.analyze', 'import.cache.save'],
+    requiredCapabilities: ['daw.import.analyze', 'daw.import.cache.save'],
   }
 
   const guarded = guardCapabilityAccess(presto, manifest)
@@ -376,7 +376,7 @@ test('guardCapabilityAccess exposes backend import analyze and cache save capabi
   await guarded.import.cache.save({ folderPath: '/tmp/import', payload: { version: 1 } })
 
   assert.deepEqual(invocations, [
-    { method: 'import.analyze', request: { folderPaths: ['/tmp/import'], categories: [] } },
-    { method: 'import.cache.save', request: { folderPath: '/tmp/import', payload: { version: 1 } } },
+    { method: 'daw.import.analyze', request: { folderPaths: ['/tmp/import'], categories: [] } },
+    { method: 'daw.import.cache.save', request: { folderPath: '/tmp/import', payload: { version: 1 } } },
   ])
 })
