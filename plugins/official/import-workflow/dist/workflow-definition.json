@@ -11,6 +11,9 @@
         "folderPaths": {
           "$ref": "input.sourceFolders"
         },
+        "importMode": {
+          "$ref": "input.ui.importAudioMode"
+        },
         "orderedFilePaths": {
           "$ref": "input.orderedFilePaths"
         }
@@ -32,6 +35,9 @@
         },
         "stripAfterImport": {
           "$ref": "input.ui.stripAfterImport"
+        },
+        "fadeAfterStrip": {
+          "$ref": "input.ui.fadeAfterStrip"
         }
       },
       "saveAs": "planned"
@@ -134,6 +140,59 @@
             },
             "profile": {
               "$ref": "input.silenceProfile"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepId": "fade",
+      "foreach": {
+        "items": {
+          "$ref": "planned.items"
+        },
+        "as": "item"
+      },
+      "steps": [
+        {
+          "stepId": "select_track",
+          "usesCapability": "daw.track.select",
+          "when": {
+            "$ref": "item.fadeAfterStrip",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "select_clips",
+          "usesCapability": "daw.clip.selectAllOnTrack",
+          "when": {
+            "$ref": "item.fadeAfterStrip",
+            "equals": true
+          },
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "fade_clips",
+          "usesCapability": "daw.editing.createFadesBasedOnPreset",
+          "when": {
+            "$ref": "item.fadeAfterStrip",
+            "equals": true
+          },
+          "input": {
+            "fade_preset_name": {
+              "$ref": "input.ui.fadePresetName"
+            },
+            "auto_adjust_bounds": {
+              "$ref": "input.ui.fadeAutoAdjustBounds"
             }
           }
         }

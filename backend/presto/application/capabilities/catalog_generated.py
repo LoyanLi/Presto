@@ -819,7 +819,7 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         supported_daws=("pro_tools",),
         canonical_source="pro_tools",
         field_support={
-            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+            "pro_tools": CapabilityFieldSupport(request_fields=("rows", "categories", "importedTrackNames", "stripAfterImport", "fadeAfterStrip"), response_fields=("items",)),
         },
         implementations={
             "pro_tools": CapabilityImplementation(kind="handler", handler="daw.import.planRunItems"),
@@ -840,7 +840,7 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         supported_daws=("pro_tools",),
         canonical_source="pro_tools",
         field_support={
-            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=()),
+            "pro_tools": CapabilityFieldSupport(request_fields=("folderPaths", "orderedFilePaths", "importMode", "host", "port", "timeoutSeconds"), response_fields=("jobId", "capability", "state")),
         },
         implementations={
             "pro_tools": CapabilityImplementation(kind="handler", handler="daw.import.run.start"),
@@ -1344,7 +1344,7 @@ DEFAULT_CAPABILITY_DEFINITIONS = (
         supported_daws=("pro_tools",),
         canonical_source="pro_tools",
         field_support={
-            "pro_tools": CapabilityFieldSupport(request_fields=(), response_fields=("command", "result")),
+            "pro_tools": CapabilityFieldSupport(request_fields=("fade_preset_name", "auto_adjust_bounds"), response_fields=("command", "result")),
         },
         implementations={
             "pro_tools": CapabilityImplementation(kind="ptsl_command", command="CId_CreateFadesBasedOnPreset"),

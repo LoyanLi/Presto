@@ -29,7 +29,7 @@ class FakeDawAdapter:
         self.connect_calls = 0
         self.connection_host: str | None = None
         self.connection_port: int | None = None
-        self.import_calls: list[list[str]] = []
+        self.import_calls: list[dict[str, object]] = []
         self.timeline_selection = ("00:00:00:00", "00:00:00:00")
         self.timeline_selection_calls: list[dict[str, object]] = []
         self.export_mix_calls: list[dict[str, object]] = []
@@ -160,9 +160,13 @@ class FakeDawAdapter:
     def get_session_length(self) -> float:
         return 183.5
 
-    def import_audio_files(self, paths: list[str]) -> list[str]:
-        self.import_calls.append(list(paths))
+    def import_audio_files(self, paths: list[str], import_mode: str = "copy") -> list[str]:
+        self.import_calls.append({"paths": list(paths), "importMode": import_mode})
         return [Path(path).stem for path in paths]
+
+    def import_audio_file(self, path: str, import_mode: str = "copy") -> str:
+        self.import_calls.append({"paths": [path], "importMode": import_mode})
+        return Path(path).stem
 
     def set_timeline_selection(self, **kwargs) -> tuple[str, str]:
         self.timeline_selection_calls.append(dict(kwargs))
@@ -2060,14 +2064,39 @@ def test_invoke_public_ptsl_semantic_capability_dispatches_to_bound_command() ->
     assert app.state.services.daw.ptsl_execute_calls == [("CId_CreateSession", {"session_name": "Test Session"}, None)]
 
 
+def test_invoke_create_fades_semantic_capability_omits_blank_preset_name() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-ptsl-fade-last-used",
+            capability="daw.editing.createFadesBasedOnPreset",
+            payload={"fade_preset_name": "   ", "auto_adjust_bounds": True},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data["command"]["commandName"] == "CId_CreateFadesBasedOnPreset"
+    assert response.data["result"] == {"echo": {"auto_adjust_bounds": True}, "minimumHostVersion": None}
+    assert app.state.services.daw.ptsl_execute_calls == [
+        ("CId_CreateFadesBasedOnPreset", {"auto_adjust_bounds": True}, None)
+    ]
+
+
 def test_every_public_ptsl_semantic_capability_dispatches_to_its_catalog_command() -> None:
     app = _app_with_fake_daw()
     request = DummyRequest(app=app)
     generated_entries = [entry for entry in list_commands() if is_generated_semantic_command(entry)]
+    expected_calls: list[tuple[str, dict[str, object], None]] = []
 
     for index, entry in enumerate(generated_entries, start=1):
         capability_id = semantic_capability_id(entry)
-        payload = {"probe": entry.command_name, "sequence": index}
+        if entry.command_name == "CId_CreateFadesBasedOnPreset":
+            payload = {"fade_preset_name": f"Preset {index}", "auto_adjust_bounds": True}
+        else:
+            payload = {"probe": entry.command_name, "sequence": index}
         response = invoke_capability(
             request,
             CapabilityInvokeRequestSchema(
@@ -2081,11 +2110,9 @@ def test_every_public_ptsl_semantic_capability_dispatches_to_its_catalog_command
         assert response.capability == capability_id
         assert response.data["command"]["commandName"] == entry.command_name
         assert response.data["result"] == {"echo": payload, "minimumHostVersion": None}
+        expected_calls.append((entry.command_name, payload, None))
 
-    assert app.state.services.daw.ptsl_execute_calls == [
-        (entry.command_name, {"probe": entry.command_name, "sequence": index}, None)
-        for index, entry in enumerate(generated_entries, start=1)
-    ]
+    assert app.state.services.daw.ptsl_execute_calls == expected_calls
 
 
 def test_invoke_clip_select_all_on_track_returns_selected_shape() -> None:

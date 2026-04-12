@@ -42,7 +42,8 @@ class WorkflowExecutorFakeDaw:
     def apply_track_color(self, track_name: str, color_slot: int) -> None:
         self.colors.append((track_name, color_slot))
 
-    def import_audio_file(self, path: str) -> str:
+    def import_audio_file(self, path: str, import_mode: str = "copy") -> str:
+        _ = import_mode
         self.imported_paths.append(path)
         if self.block_after_import_count is not None and len(self.imported_paths) > self.block_after_import_count:
             self.import_release_event.wait(timeout=5)

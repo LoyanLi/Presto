@@ -66,10 +66,38 @@ export const manifest = {
           title: 'Run defaults',
           fields: [
             {
+              fieldId: 'ui-import-audio-mode',
+              kind: 'select',
+              label: 'Import audio mode',
+              path: 'ui.importAudioMode',
+              options: [
+                { value: 'copy', label: 'Copy audio into session' },
+                { value: 'link', label: 'Link to source media' },
+              ],
+            },
+            {
               fieldId: 'ui-strip-after-import',
               kind: 'toggle',
               label: 'Apply Strip Silence after import',
               path: 'ui.stripAfterImport',
+            },
+            {
+              fieldId: 'ui-fade-after-strip',
+              kind: 'toggle',
+              label: 'Apply fades after Strip Silence',
+              path: 'ui.fadeAfterStrip',
+            },
+            {
+              fieldId: 'ui-fade-preset-name',
+              kind: 'text',
+              label: 'Fade preset name',
+              path: 'ui.fadePresetName',
+            },
+            {
+              fieldId: 'ui-fade-auto-adjust-bounds',
+              kind: 'toggle',
+              label: 'Auto-adjust fade bounds',
+              path: 'ui.fadeAutoAdjustBounds',
             },
             { fieldId: 'ui-auto-save', kind: 'toggle', label: 'Save session after run', path: 'ui.autoSaveSession' },
             {
@@ -104,6 +132,7 @@ export const manifest = {
     'daw.clip.selectAllOnTrack',
     'daw.stripSilence.open',
     'daw.stripSilence.execute',
+    'daw.editing.createFadesBasedOnPreset',
     'daw.session.save',
   ],
   adapterModuleRequirements: [
@@ -129,6 +158,7 @@ export const manifest = {
     { capabilityId: 'daw.clip.selectAllOnTrack', minVersion: '2025.10.0' },
     { capabilityId: 'daw.stripSilence.open', minVersion: '2025.10.0' },
     { capabilityId: 'daw.stripSilence.execute', minVersion: '2025.10.0' },
+    { capabilityId: 'daw.editing.createFadesBasedOnPreset', minVersion: '2025.10.0' },
     { capabilityId: 'daw.session.save', minVersion: '2025.10.0' },
   ],
 }

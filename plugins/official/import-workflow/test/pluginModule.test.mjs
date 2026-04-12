@@ -287,20 +287,31 @@ test('workflow definition batches post-import operations in the same order shown
   const renameSteps = definition.steps[2]?.steps ?? []
   const colorSteps = definition.steps[3]?.steps ?? []
   const stripSteps = definition.steps[4]?.steps ?? []
+  const fadeSteps = definition.steps[5]?.steps ?? []
 
   assert.deepEqual(
     definition.steps.map((step) => step.stepId),
-    ['import_files', 'plan_items', 'rename', 'color', 'strip', 'save_session'],
+    ['import_files', 'plan_items', 'rename', 'color', 'strip', 'fade', 'save_session'],
   )
   assert.equal(definition.steps[2]?.foreach?.as, 'item')
   assert.equal(definition.steps[3]?.foreach?.as, 'item')
   assert.equal(definition.steps[4]?.foreach?.as, 'item')
+  assert.equal(definition.steps[5]?.foreach?.as, 'item')
+  assert.deepEqual(Object.keys(definition.steps[0]?.input ?? {}).sort(), ['folderPaths', 'importMode', 'orderedFilePaths'])
   assert.deepEqual(renameSteps.map((step) => step.stepId), ['rename_track'])
   assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['daw.track.rename'])
   assert.deepEqual(colorSteps.map((step) => step.stepId), ['apply_color'])
   assert.deepEqual(colorSteps.map((step) => step.usesCapability), ['daw.track.color.apply'])
   assert.deepEqual(stripSteps.map((step) => step.stepId), ['select_track', 'select_clips', 'strip_silence'])
-  assert.deepEqual(stripSteps.map((step) => step.usesCapability), ['daw.track.select', 'daw.clip.selectAllOnTrack', 'daw.stripSilence.execute'])
+  assert.deepEqual(
+    stripSteps.map((step) => step.usesCapability),
+    ['daw.track.select', 'daw.clip.selectAllOnTrack', 'daw.stripSilence.execute'],
+  )
+  assert.deepEqual(fadeSteps.map((step) => step.stepId), ['select_track', 'select_clips', 'fade_clips'])
+  assert.deepEqual(
+    fadeSteps.map((step) => step.usesCapability),
+    ['daw.track.select', 'daw.clip.selectAllOnTrack', 'daw.editing.createFadesBasedOnPreset'],
+  )
 })
 
 test('dist modules resolve React through a plugin-local shared helper', async () => {
@@ -338,7 +349,177 @@ test('settings schema stays declarative and keeps the implemented import control
   assert.equal(settingsPage.sections[2]?.fields[0]?.path, 'categories')
   assert.equal(settingsPage.sections[0]?.fields.some((field) => field.path === 'aiConfig.prompt'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.analyzeCacheEnabled'), true)
+  assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.importAudioMode'), true)
+  assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadeAfterStrip'), true)
+  assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadePresetName'), true)
+  assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadeAutoAdjustBounds'), true)
   assert.equal(settingsPage.sections.flatMap((section) => section.fields).some((field) => field.path === 'silenceProfile.thresholdDb'), false)
+})
+
+test('main page passes import mode and fade options into workflow run input', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [
+        { id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' },
+      ],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'link',
+        fadeAfterStrip: true,
+        fadePresetName: 'Short Vocal Fade',
+        fadeAutoAdjustBounds: false,
+      },
+    },
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick In',
+        finalName: 'Kick In',
+        status: 'ready',
+        errorMessage: null,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    4: 3,
+    5: false,
+  })
+  const payloads = []
+  const testContext = createPluginContext()
+  testContext.presto.track.listNames = async () => ({ names: [] })
+  testContext.presto.workflow.run.start = async (payload) => {
+    payloads.push(payload)
+    return { jobId: 'job-run-options', capability: 'workflow.run.start', state: 'queued' }
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: {
+        ...testContext,
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const runButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Run import',
+    )
+
+    assert.ok(runButton, 'expected import step 3 to render a Run import action')
+
+    runButton.props.onClick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.equal(payloads.length, 1)
+    assert.deepEqual(payloads[0]?.input?.ui, {
+      analyzeCacheEnabled: true,
+      stripAfterImport: true,
+      autoSaveSession: true,
+      importAudioMode: 'link',
+      fadeAfterStrip: true,
+      fadePresetName: 'Short Vocal Fade',
+      fadeAutoAdjustBounds: false,
+    })
+  } finally {
+    restore()
+  }
+})
+
+test('main page allows workflow start when fade is enabled without a preset name', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [
+        { id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' },
+      ],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'copy',
+        fadeAfterStrip: true,
+        fadePresetName: '',
+        fadeAutoAdjustBounds: true,
+      },
+    },
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick In',
+        finalName: 'Kick In',
+        status: 'ready',
+        errorMessage: null,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    4: 3,
+    5: false,
+  })
+  let runCalls = 0
+  const testContext = createPluginContext()
+  testContext.presto.workflow.run.start = async () => {
+    runCalls += 1
+    return { jobId: 'should-not-run', capability: 'workflow.run.start', state: 'queued' }
+  }
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: testContext,
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const runButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Run import',
+    )
+
+    assert.ok(runButton, 'expected import step 3 to render a Run import action')
+
+    runButton.props.onClick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    assert.equal(runCalls, 1)
+    assert.equal(
+      stateUpdates.some((update) => update.index === 7 && update.value === 'Fade preset name is required when post-strip fade is enabled.'),
+      false,
+    )
+  } finally {
+    restore()
+  }
 })
 
 test('main page does not render a plugin logs panel', async () => {

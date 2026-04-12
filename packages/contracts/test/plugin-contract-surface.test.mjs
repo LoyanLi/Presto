@@ -178,6 +178,32 @@ test('generated capability registry includes full vendor-neutral public daw sema
   assert.match(source, /implementations: \{\"pro_tools\":\{\"kind\":\"ptsl_command\",\"command\":\"CId_CreateSession\"\}\} as const/)
 })
 
+test('import workflow capability metadata declares import mode and fade coverage explicitly', async () => {
+  const manifest = JSON.parse(
+    await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
+  )
+  const responsesSource = await readFile(path.join(repoRoot, 'packages/contracts/src/capabilities/responses.ts'), 'utf8')
+  const registrySource = await readFile(path.join(repoRoot, 'packages/contracts/src/generated/capabilityRegistry.ts'), 'utf8')
+
+  const planRunItems = manifest.find((capability) => capability.id === 'daw.import.planRunItems')
+  assert.deepEqual(planRunItems?.fieldSupport?.pro_tools, {
+    requestFields: ['rows', 'categories', 'importedTrackNames', 'stripAfterImport', 'fadeAfterStrip'],
+    responseFields: ['items'],
+  })
+
+  const importRunStart = manifest.find((capability) => capability.id === 'daw.import.run.start')
+  assert.deepEqual(importRunStart?.fieldSupport?.pro_tools, {
+    requestFields: ['folderPaths', 'orderedFilePaths', 'importMode', 'host', 'port', 'timeoutSeconds'],
+    responseFields: ['jobId', 'capability', 'state'],
+  })
+
+  assert.match(responsesSource, /fadeAfterStrip:\s*boolean/)
+  assert.match(
+    registrySource,
+    /id: 'daw\.editing\.createFadesBasedOnPreset'[\s\S]*?fieldSupport: \{"pro_tools":\{"requestFields":\["fade_preset_name","auto_adjust_bounds"\],"responseFields":\["command","result"\]\}\} as const,/,
+  )
+})
+
 test('track inactive capability keeps its own handler in the manifest', async () => {
   const manifest = JSON.parse(
     await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),

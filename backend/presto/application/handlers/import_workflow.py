@@ -149,6 +149,13 @@ def _resolve_import_ordered_file_paths(payload: dict[str, Any], folder_paths: li
     return normalized
 
 
+def _resolve_import_mode(payload: dict[str, Any]) -> str:
+    normalized = str(payload.get("importMode", "copy") or "copy").strip().lower()
+    if normalized not in {"copy", "link"}:
+        raise _validation_error("importMode must be either 'copy' or 'link'.", field="importMode")
+    return normalized
+
+
 def _resolve_source_folders(payload: dict[str, Any]) -> list[Path]:
     if "items" in payload:
         raise _validation_error("sourceFolders is required.", field="sourceFolders")
@@ -471,6 +478,7 @@ def plan_import_run_items(services: "ServiceContainer", payload: dict[str, Any])
         color_slot_by_category_id[category_id] = int(color_slot) if isinstance(color_slot, int) else None
 
     strip_after_import = bool(payload.get("stripAfterImport", False))
+    fade_after_strip = bool(payload.get("fadeAfterStrip", False))
     items: list[dict[str, Any]] = []
     for index, row in enumerate(rows_payload):
         if not isinstance(row, dict):
@@ -490,6 +498,7 @@ def plan_import_run_items(services: "ServiceContainer", payload: dict[str, Any])
                 "colorSlot": color_slot,
                 "shouldApplyColor": color_slot is not None,
                 "stripAfterImport": strip_after_import,
+                "fadeAfterStrip": strip_after_import and fade_after_strip,
             }
         )
 
@@ -685,6 +694,7 @@ def _run_import_job(
     services: "ServiceContainer",
     job_id: str,
     file_paths: list[str],
+    import_mode: str,
     cancel_event: threading.Event,
 ) -> None:
     try:
@@ -748,7 +758,7 @@ def _run_import_job(
                     _set_job_cancelled(services, job, message="Import run cancelled.")
                     return
 
-            imported_track_name = str(import_audio_file(file_path) or "").strip()
+            imported_track_name = str(import_audio_file(file_path, import_mode=import_mode) or "").strip()
             imported_track_names.append(imported_track_name)
 
             if _should_cancel(services, job, cancel_event):
@@ -772,6 +782,7 @@ def _run_import_job(
             result={
                 "folderPaths": job.result.get("folderPaths", []),
                 "orderedFilePaths": file_paths,
+                "importMode": import_mode,
                 "importedTrackNames": imported_track_names,
                 "successCount": len(imported_track_names),
                 "failedCount": 0,
@@ -1837,6 +1848,7 @@ def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> d
     _ensure_run_daw_connected(services, payload, capability_id="daw.import.run.start")
     folder_paths = _resolve_import_folder_paths(payload)
     file_paths = _resolve_import_ordered_file_paths(payload, folder_paths)
+    import_mode = _resolve_import_mode(payload)
     normalized_folder_paths = [str(folder_path.resolve()) for folder_path in folder_paths]
     job = JobRecord(
         job_id=f"import-{uuid4().hex[:12]}",
@@ -1844,7 +1856,7 @@ def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> d
         target_daw=str(getattr(services, "target_daw", DEFAULT_DAW_TARGET)),
         state="queued",
         progress=JobProgress(phase="queued", current=0, total=max(len(file_paths), 1), percent=0.0, message="Import run queued."),
-        result={"folderPaths": normalized_folder_paths, "orderedFilePaths": file_paths},
+        result={"folderPaths": normalized_folder_paths, "orderedFilePaths": file_paths, "importMode": import_mode},
         created_at=_utc_now(),
     )
     _upsert_job(services, job)
@@ -1852,7 +1864,7 @@ def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> d
     cancel_event = threading.Event()
     worker = threading.Thread(
         target=_run_import_job,
-        args=(services, job.job_id, file_paths, cancel_event),
+        args=(services, job.job_id, file_paths, import_mode, cancel_event),
         name=f"presto-import-run-{job.job_id}",
         daemon=True,
     )

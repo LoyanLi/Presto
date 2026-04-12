@@ -168,11 +168,13 @@ export interface ImportPlanRunItemsRequest {
   }>
   importedTrackNames: string[]
   stripAfterImport?: boolean
+  fadeAfterStrip?: boolean
 }
 
 export interface ImportRunStartRequest {
   folderPaths: string[]
   orderedFilePaths?: string[]
+  importMode?: 'copy' | 'link'
   host?: string
   port?: number
   timeoutSeconds?: number

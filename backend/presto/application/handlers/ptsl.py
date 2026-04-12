@@ -105,6 +105,12 @@ def build_daw_ptsl_semantic_execute_payload(capability_id: str, command_name: st
         minimum_host_version = request_payload.pop("minimumHostVersion", None)
         if minimum_host_version is not None:
             minimum_host_version = str(minimum_host_version).strip() or None
+        if command_name == "CId_CreateFadesBasedOnPreset" and "fade_preset_name" in request_payload:
+            fade_preset_name = request_payload.get("fade_preset_name")
+            if fade_preset_name is None or not str(fade_preset_name).strip():
+                request_payload.pop("fade_preset_name", None)
+            else:
+                request_payload["fade_preset_name"] = str(fade_preset_name).strip()
 
         daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
         execute = getattr(daw, "execute_ptsl_command", None)

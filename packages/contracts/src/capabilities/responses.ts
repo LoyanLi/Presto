@@ -328,6 +328,7 @@ export interface ImportPlanRunItemsResponse {
     colorSlot: number | null
     shouldApplyColor: boolean
     stripAfterImport: boolean
+    fadeAfterStrip: boolean
   }>
 }
 

@@ -28,6 +28,13 @@
 - workflow core 纯逻辑模块
 - 多步骤 workflow definition
 - 批量 rename / color / strip / save 编排
+- 导入运行参数与 workflow 编排解耦：`ui.importAudioMode` 进入 `daw.import.run.start`，`ui.fadeAfterStrip` / `ui.fadePresetName` 进入 plan item
+
+它也是当前 import 类 workflow 的正式参考实现，已经覆盖这几类稳定设置：
+
+- 导入音频模式：`copy` / `link`
+- `Strip Silence` 后批量 fade
+- 空 `fadePresetName` 透传为“省略 `fade_preset_name`”，语义是复用 `Pro Tools` Fades 对话框的 last-used 设置，而不是查找一个空名 preset
 
 新插件如果需要复杂列表、批量处理、配置驱动执行，应先参考它。
 

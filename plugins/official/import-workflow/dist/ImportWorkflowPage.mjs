@@ -42,6 +42,7 @@ const RUN_STAGE_LABEL_KEYS = {
   rename: 'page.stage.rename',
   color: 'page.stage.color',
   strip: 'page.stage.strip',
+  fade: 'page.stage.fade',
   save: 'page.stage.save',
   completed: 'page.stage.completed',
   failed: 'page.stage.failed',
@@ -210,7 +211,7 @@ function formatMessage(template, replacements = {}) {
   return Object.entries(replacements).reduce((text, [key, value]) => text.replace(`{${key}}`, String(value)), template)
 }
 
-function buildRunStageKeys({ executionRows, categoryColorSlotById, stripAfterImport, autoSaveSession }) {
+function buildRunStageKeys({ executionRows, categoryColorSlotById, stripAfterImport, fadeAfterStrip, autoSaveSession }) {
   const stageKeys = ['import']
   const needsRename = executionRows.some((row) => normalizeTrackName(stemOf(row.filePath)) !== normalizeTrackName(row.finalName || ''))
   const needsColor = executionRows.some((row) => Number.isInteger(categoryColorSlotById?.[row.categoryId]))
@@ -222,6 +223,9 @@ function buildRunStageKeys({ executionRows, categoryColorSlotById, stripAfterImp
   }
   if (stripAfterImport && executionRows.length > 0) {
     stageKeys.push('strip')
+  }
+  if (stripAfterImport && fadeAfterStrip && executionRows.length > 0) {
+    stageKeys.push('fade')
   }
   if (autoSaveSession) {
     stageKeys.push('save')
@@ -709,6 +713,7 @@ export function ImportWorkflowPage({ context, host }) {
         executionRows: finalized.executionRows,
         categoryColorSlotById,
         stripAfterImport: settings.ui.stripAfterImport,
+        fadeAfterStrip: settings.ui.fadeAfterStrip,
         autoSaveSession: settings.ui.autoSaveSession,
       })
       const response = await context.presto.workflow.run.start({

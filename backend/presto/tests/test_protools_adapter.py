@@ -782,6 +782,19 @@ def test_import_audio_files_preserves_requested_order_when_bulk_import_reorders_
     assert engine.import_calls[1]["audio_data"]["file_list"] == [str(Path("/tmp/Alpha.wav").resolve())]
 
 
+def test_import_audio_files_uses_add_audio_operation_when_link_mode_is_requested() -> None:
+    adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
+    engine = FakeImportEngine()
+    adapter._engine = engine
+    adapter._connected = True
+
+    imported = adapter.import_audio_files(["/tmp/Kick.wav"], import_mode="link")
+
+    assert imported == ["Kick"]
+    assert len(engine.import_calls) == 1
+    assert engine.import_calls[0]["audio_data"]["audio_operations"] == "AddAudio"
+
+
 def test_set_timeline_selection_uses_engine_wrapper_and_reads_back_selection() -> None:
     adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
     engine = FakeTimelineEngine()

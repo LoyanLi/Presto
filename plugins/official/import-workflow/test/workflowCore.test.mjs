@@ -27,6 +27,15 @@ test('analyzeFilePaths builds ready proposals with normalized stems', () => {
   assert.equal(proposals[1]?.aiName, 'Lead Vox')
 })
 
+test('default import workflow settings include import mode and post-strip fade options', () => {
+  const defaults = workflowCore.createDefaultImportWorkflowSettings()
+
+  assert.equal(defaults.ui.importAudioMode, 'copy')
+  assert.equal(defaults.ui.fadeAfterStrip, false)
+  assert.equal(defaults.ui.fadePresetName, '')
+  assert.equal(defaults.ui.fadeAutoAdjustBounds, true)
+})
+
 test('buildRunValidation reports duplicate and empty final names', () => {
   const issues = buildRunValidation([
     {

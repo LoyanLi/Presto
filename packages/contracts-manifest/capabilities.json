@@ -1612,8 +1612,16 @@
     "canonicalSource": "pro_tools",
     "fieldSupport": {
       "pro_tools": {
-        "requestFields": [],
-        "responseFields": []
+        "requestFields": [
+          "rows",
+          "categories",
+          "importedTrackNames",
+          "stripAfterImport",
+          "fadeAfterStrip"
+        ],
+        "responseFields": [
+          "items"
+        ]
       }
     },
     "implementations": {
@@ -1653,8 +1661,19 @@
     "canonicalSource": "pro_tools",
     "fieldSupport": {
       "pro_tools": {
-        "requestFields": [],
-        "responseFields": []
+        "requestFields": [
+          "folderPaths",
+          "orderedFilePaths",
+          "importMode",
+          "host",
+          "port",
+          "timeoutSeconds"
+        ],
+        "responseFields": [
+          "jobId",
+          "capability",
+          "state"
+        ]
       }
     },
     "implementations": {

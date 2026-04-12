@@ -85,9 +85,17 @@ export function createDefaultImportWorkflowSettings() {
     ui: {
       analyzeCacheEnabled: true,
       stripAfterImport: true,
+      importAudioMode: 'copy',
+      fadeAfterStrip: false,
+      fadePresetName: '',
+      fadeAutoAdjustBounds: true,
       autoSaveSession: true,
     },
   }
+}
+
+function normalizeImportAudioMode(value) {
+  return String(value ?? '').trim().toLowerCase() === 'link' ? 'link' : 'copy'
 }
 
 function normalizeCategory(category, index, usedIds) {
@@ -145,6 +153,16 @@ export function mergeImportWorkflowSettings(raw) {
         raw?.ui?.stripAfterImport !== undefined
           ? Boolean(raw.ui.stripAfterImport)
           : defaults.ui.stripAfterImport,
+      importAudioMode: normalizeImportAudioMode(raw?.ui?.importAudioMode ?? defaults.ui.importAudioMode),
+      fadeAfterStrip:
+        raw?.ui?.fadeAfterStrip !== undefined
+          ? Boolean(raw.ui.fadeAfterStrip)
+          : defaults.ui.fadeAfterStrip,
+      fadePresetName: String(raw?.ui?.fadePresetName ?? defaults.ui.fadePresetName).trim(),
+      fadeAutoAdjustBounds:
+        raw?.ui?.fadeAutoAdjustBounds !== undefined
+          ? Boolean(raw.ui.fadeAutoAdjustBounds)
+          : defaults.ui.fadeAutoAdjustBounds,
       autoSaveSession:
         raw?.ui?.autoSaveSession !== undefined
           ? Boolean(raw.ui.autoSaveSession)

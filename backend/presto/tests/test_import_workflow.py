@@ -36,8 +36,8 @@ class FakeDawAdapter:
     def __init__(self) -> None:
         self.connected = True
         self.connect_calls: list[dict[str, object | None]] = []
-        self.import_calls: list[list[str]] = []
-        self.import_file_calls: list[str] = []
+        self.import_calls: list[dict[str, object]] = []
+        self.import_file_calls: list[dict[str, str]] = []
         self.import_error: PrestoError | None = None
         self.delay_seconds = 0.0
         self.started_event = threading.Event()
@@ -82,8 +82,8 @@ class FakeDawAdapter:
         self.connected = True
         return True
 
-    def import_audio_files(self, paths: list[str]) -> list[str]:
-        self.import_calls.append(list(paths))
+    def import_audio_files(self, paths: list[str], import_mode: str = "copy") -> list[str]:
+        self.import_calls.append({"paths": list(paths), "importMode": import_mode})
         self.started_event.set()
         if self.block_until_released:
             self.release_event.wait(timeout=5)
@@ -93,8 +93,8 @@ class FakeDawAdapter:
             raise self.import_error
         return [f"imported:{path}" for path in paths]
 
-    def import_audio_file(self, path: str) -> str:
-        self.import_file_calls.append(path)
+    def import_audio_file(self, path: str, import_mode: str = "copy") -> str:
+        self.import_file_calls.append({"path": path, "importMode": import_mode})
         self.started_event.set()
         if self.block_until_released:
             self.release_event.wait(timeout=5)
@@ -491,7 +491,10 @@ def test_import_run_start_executes_resolved_items_and_marks_job_succeeded(tmp_pa
 
     assert response["jobId"]
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
-    assert app.state.services.daw.import_file_calls == [kick_path, snare_path]
+    assert app.state.services.daw.import_file_calls == [
+        {"path": kick_path, "importMode": "copy"},
+        {"path": snare_path, "importMode": "copy"},
+    ]
     assert job.state == "succeeded"
     assert job.progress.phase == "succeeded"
     assert job.started_at is not None
@@ -499,6 +502,7 @@ def test_import_run_start_executes_resolved_items_and_marks_job_succeeded(tmp_pa
     assert job.result == {
         "folderPaths": [str(source_folder.resolve())],
         "orderedFilePaths": [kick_path, snare_path],
+        "importMode": "copy",
         "importedTrackNames": [f"imported:{kick_path}", f"imported:{snare_path}"],
         "successCount": 2,
         "failedCount": 0,
@@ -539,7 +543,10 @@ def test_import_run_start_connects_daw_before_background_import(tmp_path: Path) 
             "timeoutSeconds": None,
         }
     ]
-    assert app.state.services.daw.import_file_calls == [kick_path, snare_path]
+    assert app.state.services.daw.import_file_calls == [
+        {"path": kick_path, "importMode": "copy"},
+        {"path": snare_path, "importMode": "copy"},
+    ]
     assert job.state == "succeeded"
 
 
@@ -559,8 +566,31 @@ def test_import_run_start_respects_ordered_file_paths_from_workflow(tmp_path: Pa
 
     assert response["jobId"]
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
-    assert app.state.services.daw.import_file_calls == [snare_path, kick_path]
+    assert app.state.services.daw.import_file_calls == [
+        {"path": snare_path, "importMode": "copy"},
+        {"path": kick_path, "importMode": "copy"},
+    ]
     assert job.result["orderedFilePaths"] == [snare_path, kick_path]
+
+
+def test_import_run_start_passes_link_mode_through_to_adapter(tmp_path: Path) -> None:
+    app = _app_with_fake_daw()
+    source_folder = _create_audio_source_folder(tmp_path, file_names=["kick.wav"])
+    kick_path = str((source_folder / "kick.wav").resolve())
+
+    response = start_import_run(
+        app.state.services,
+        {
+            "folderPaths": [str(source_folder)],
+            "importMode": "link",
+        },
+    )
+
+    assert response["jobId"]
+    _wait_for_job_state(app, response["jobId"], "succeeded")
+    assert app.state.services.daw.import_file_calls == [
+        {"path": kick_path, "importMode": "link"},
+    ]
 
 
 def test_import_run_start_updates_progress_after_each_imported_file(tmp_path: Path) -> None:
@@ -592,11 +622,14 @@ def test_import_run_start_updates_progress_after_each_imported_file(tmp_path: Pa
     assert job.progress.total == 2
     assert job.progress.percent == 50.0
     assert job.progress.message == "Imported 1 of 2 file(s)."
-    assert app.state.services.daw.import_file_calls[0] == kick_path
+    assert app.state.services.daw.import_file_calls[0] == {"path": kick_path, "importMode": "copy"}
 
     app.state.services.daw.release_event.set()
     completed_job = _wait_for_job_state(app, response["jobId"], "succeeded")
-    assert app.state.services.daw.import_file_calls == [kick_path, snare_path]
+    assert app.state.services.daw.import_file_calls == [
+        {"path": kick_path, "importMode": "copy"},
+        {"path": snare_path, "importMode": "copy"},
+    ]
     assert completed_job.progress.percent == 100.0
 
 

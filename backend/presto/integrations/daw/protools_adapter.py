@@ -572,8 +572,8 @@ class ProToolsDawAdapter:
         )
         self._run_transport_command("CId_TogglePlayState", {}, capability_id="daw.transport.record")
 
-    def import_audio_file(self, path: str) -> str:
-        imported = self.import_audio_files([path])
+    def import_audio_file(self, path: str, import_mode: str = "copy") -> str:
+        imported = self.import_audio_files([path], import_mode=import_mode)
         if not imported:
             raise PrestoError(
                 "TRACK_DETECTION_FAILED",
@@ -591,7 +591,7 @@ class ProToolsDawAdapter:
             )
         return imported[0]
 
-    def import_audio_files(self, paths: list[str]) -> list[str]:
+    def import_audio_files(self, paths: list[str], import_mode: str = "copy") -> list[str]:
         if not paths:
             return []
 
@@ -601,15 +601,15 @@ class ProToolsDawAdapter:
         if len(file_paths) > 1:
             imported: list[str] = []
             for file_path in file_paths:
-                imported.append(self.import_audio_file(file_path))
+                imported.append(self.import_audio_file(file_path, import_mode=import_mode))
             return imported
 
         before = self.list_track_names()
 
         try:
-            self._import_audio(engine, file_paths, convert=False)
+            self._import_audio(engine, file_paths, import_mode=import_mode, convert=False)
         except Exception as exc:
-            if not self._is_sample_rate_mismatch_error(exc):
+            if import_mode != "copy" or not self._is_sample_rate_mismatch_error(exc):
                 raise PrestoError(
                     "IMPORT_FAILED",
                     str(exc) or "Failed to import audio into Pro Tools.",
@@ -627,7 +627,7 @@ class ProToolsDawAdapter:
                     adapter="pro_tools",
                 ) from exc
             try:
-                self._import_audio(engine, file_paths, convert=True)
+                self._import_audio(engine, file_paths, import_mode=import_mode, convert=True)
             except Exception as convert_exc:
                 if len(file_paths) == 1:
                     raise PrestoError(
@@ -1412,10 +1412,10 @@ class ProToolsDawAdapter:
 
         return tracks
 
-    def _import_audio(self, engine: Any, file_paths: list[str], *, convert: bool) -> None:
+    def _import_audio(self, engine: Any, file_paths: list[str], *, import_mode: str, convert: bool) -> None:
         session_path = self.ensure_session_open()
         import_type = getattr(pt, "Audio", getattr(pt, "IType_Audio", 2)) if pt is not None else 2
-        audio_operation = self._resolve_audio_operation(convert=convert)
+        audio_operation = self._resolve_audio_operation(import_mode=import_mode, convert=convert)
         audio_destination = getattr(pt, "MD_NewTrack", 0) if pt is not None else 0
         audio_location = getattr(pt, "ML_SessionStart", 0) if pt is not None else 0
         location_type = getattr(pt, "Start", getattr(pt, "SLType_Start", 0)) if pt is not None else 0
@@ -1444,24 +1444,36 @@ class ProToolsDawAdapter:
             unavailable_message="Pro Tools import API is unavailable on the current engine.",
             failed_code="IMPORT_FAILED",
             failed_message="Failed to import audio into Pro Tools.",
-            failed_details={"file_paths": list(file_paths), "convert": bool(convert)},
+            failed_details={"file_paths": list(file_paths), "convert": bool(convert), "import_mode": str(import_mode)},
         )
 
     @staticmethod
-    def _resolve_audio_operation(*, convert: bool) -> int:
+    def _resolve_audio_operation(*, import_mode: str, convert: bool) -> int:
         if pt is None:
             return 0
 
-        candidates = (
-            ("AOperations_ConvertAudio", "ConvertAudio")
-            if convert
-            else ("AOperations_CopyAudio", "CopyAudio")
-        )
+        normalized_mode = str(import_mode or "copy").strip().lower()
+        if normalized_mode not in {"copy", "link"}:
+            raise PrestoError(
+                "IMPORT_OPTIONS_UNSUPPORTED",
+                f"Unsupported import mode: {import_mode}",
+                source="runtime",
+                retryable=False,
+                capability="daw.import.run.start",
+                adapter="pro_tools",
+            )
+
+        if convert:
+            candidates = ("AOperations_ConvertAudio", "ConvertAudio")
+        elif normalized_mode == "link":
+            candidates = ("AOperations_AddAudio", "AddAudio")
+        else:
+            candidates = ("AOperations_CopyAudio", "CopyAudio")
         for name in candidates:
             if hasattr(pt, name):
                 return int(getattr(pt, name))
 
-        requested = "convert" if convert else "copy"
+        requested = "convert" if convert else normalized_mode
         raise PrestoError(
             "IMPORT_OPTIONS_UNSUPPORTED",
             f"PTSL import {requested} operation is not available in current py-ptsl build.",

@@ -28,6 +28,12 @@ _CANONICAL_CAPABILITY_ID_BY_COMMAND: dict[str, str] = {
 _ACTION_OVERRIDE_BY_COMMAND: dict[str, str] = {
     "CId_GetPtslVersion": "getSdkVersion",
 }
+_FIELD_SUPPORT_OVERRIDE_BY_COMMAND: dict[str, dict[str, list[str]]] = {
+    "CId_CreateFadesBasedOnPreset": {
+        "requestFields": ["fade_preset_name", "auto_adjust_bounds"],
+        "responseFields": ["command", "result"],
+    },
+}
 
 
 def _snake_to_lower_camel(value: str | None) -> str:
@@ -79,6 +85,23 @@ def semantic_capability_id(entry: PtslCommandCatalogEntry) -> str:
     return canonical_capability_id(entry) or generated_semantic_capability_id(entry)
 
 
+def _semantic_field_support(entry: PtslCommandCatalogEntry) -> dict[str, dict[str, list[str]]]:
+    override = _FIELD_SUPPORT_OVERRIDE_BY_COMMAND.get(entry.command_name)
+    if override is not None:
+        return {
+            "pro_tools": {
+                "requestFields": list(override["requestFields"]),
+                "responseFields": list(override["responseFields"]),
+            }
+        }
+    return {
+        "pro_tools": {
+            "requestFields": [],
+            "responseFields": ["command", "result"],
+        }
+    }
+
+
 def semantic_capability_definition(entry: PtslCommandCatalogEntry) -> dict[str, Any]:
     if not is_generated_semantic_command(entry):
         raise ValueError(f"{entry.command_name} is mapped to an existing canonical capability.")
@@ -107,12 +130,7 @@ def semantic_capability_definition(entry: PtslCommandCatalogEntry) -> dict[str, 
         "portability": "daw_specific",
         "supportedDaws": ["pro_tools"],
         "canonicalSource": "pro_tools",
-        "fieldSupport": {
-            "pro_tools": {
-                "requestFields": [],
-                "responseFields": ["command", "result"],
-            }
-        },
+        "fieldSupport": _semantic_field_support(entry),
         "implementations": {
             "pro_tools": {
                 "kind": "ptsl_command",
