@@ -14,7 +14,6 @@
   "copyright": "Copyright (c) 2026 Loyan Li",
   "scripts": {
     "clean:local": "node scripts/clean-local-artifacts.mjs",
-    "landing:preview": "node scripts/preview-static.mjs presto-product-landing 4173",
     "version:sync": "node scripts/sync-version.mjs",
     "test": "npm run test:node && npm run test:python",
     "test:node": "node --test frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs",
