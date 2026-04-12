@@ -114,7 +114,7 @@ Renderer 侧的关键入口是：
 - backend stderr
 - backend 进程退出
 
-`0.3.5` 当前还补上了三条关键事实：
+`0.3.6` 当前还补上了三条关键事实：
 
 - 健康检查使用 Rust 侧本地 HTTP 请求直接轮询 `/api/v1/health`。
 - 请求实现不能在写完后提前 `shutdown(Write)`；否则 uvicorn 不返回响应，宿主会误以为后端未就绪并主动清理进程。

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.6
+
+- public capability registry 统一收口到 `daw.*` 命名空间，workflow / automation manifest 与 `usesCapability` 声明现在都对齐同一套 capability ID。
+- Pro Tools 的 `PTSL` 语义封装继续并入 canonical capability surface；生成产物、后端 handler registry、SDK client、插件 manifest 与 Developer Console 现在都围绕同一份 registry 元数据工作。
+- 保持插件运行时客户端接口稳定：workflow / automation 继续通过 `presto.session.*`、`presto.track.*`、`presto.import.*` 等既有入口执行，不引入并行的 `presto.daw.*` runtime API。
+- 修复宿主 DAW 状态轮询误读 `developerPresto.daw.session.getInfo()` 的回归；当前统一改回 canonical `developerPresto.session.getInfo()`。
+- 统一应用、workspace package、Tauri 与 FastAPI 版本基线到 `0.3.6`。
+
 ## 0.3.5
 
 - 后端引入 `backend/presto/application/daw_runtime.py` 作为 DAW 运行时依赖解析入口，`build_service_container()` 通过 `target_daw` 统一解析 `daw`、`mac_automation` 和 `daw_ui_profile`，为后续多 DAW 扩展保留清晰接缝，但当前仍只接通 `pro_tools`。
