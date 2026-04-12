@@ -400,7 +400,7 @@ fn validate_plugin_manifest(
     if !matches!(host_api_version.as_str(), "0.1.0" | "1" | "1.0.0") {
         return Err("manifest_validation:hostApiVersion:unsupported_host_api_version".to_string());
     }
-    if !matches!(extension_type.as_str(), "workflow" | "automation") {
+    if !matches!(extension_type.as_str(), "workflow" | "automation" | "tool") {
         return Err("manifest_validation:extensionType:must_be_workflow_or_automation".to_string());
     }
     if ui_runtime != "react18" {
@@ -410,7 +410,7 @@ fn validate_plugin_manifest(
     let supported_daws =
         required_string_array_field_at(manifest_object, "supportedDaws", "supportedDaws")?;
     validate_unique_string_values(&supported_daws, "supportedDaws")?;
-    validate_supported_daw_targets(&supported_daws)?;
+    validate_supported_daw_targets(&supported_daws, &extension_type)?;
 
     let required_capabilities = required_string_array_field_at(
         manifest_object,
@@ -418,7 +418,10 @@ fn validate_plugin_manifest(
         "requiredCapabilities",
     )?;
     validate_unique_string_values(&required_capabilities, "requiredCapabilities")?;
-    validate_page_definitions(required_array_field(manifest_object, "pages", "pages")?)?;
+    validate_page_definitions(
+        required_array_field(manifest_object, "pages", "pages")?,
+        &extension_type,
+    )?;
     let settings_pages = manifest_object
         .get("settingsPages")
         .cloned()
@@ -563,7 +566,14 @@ fn validate_unique_string_values(values: &[String], field: &str) -> Result<(), S
     Ok(())
 }
 
-fn validate_supported_daw_targets(values: &[String]) -> Result<(), String> {
+fn validate_supported_daw_targets(values: &[String], extension_type: &str) -> Result<(), String> {
+    if extension_type == "tool" {
+        if !values.is_empty() {
+            return Err("manifest_validation:supportedDaws:must_be_empty_for_tool".to_string());
+        }
+        return Ok(());
+    }
+
     if values.is_empty() {
         return Err("manifest_validation:supportedDaws:must_not_be_empty".to_string());
     }
@@ -577,7 +587,17 @@ fn validate_supported_daw_targets(values: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_page_definitions(pages: &[Value]) -> Result<(), String> {
+fn validate_page_definitions(pages: &[Value], extension_type: &str) -> Result<(), String> {
+    let expected_mount = if extension_type == "tool" {
+        "tools"
+    } else {
+        "workspace"
+    };
+    let mount_error = if extension_type == "tool" {
+        "must_be_tools"
+    } else {
+        "must_be_workspace"
+    };
     let mut seen_page_ids = HashSet::new();
     for (index, page) in pages.iter().enumerate() {
         let field_prefix = format!("pages[{index}]");
@@ -593,10 +613,8 @@ fn validate_page_definitions(pages: &[Value]) -> Result<(), String> {
             "componentExport",
             &format!("{field_prefix}.componentExport"),
         )?;
-        if page_object.get("mount").and_then(Value::as_str) != Some("workspace") {
-            return Err(format!(
-                "manifest_validation:{field_prefix}.mount:must_be_workspace"
-            ));
+        if page_object.get("mount").and_then(Value::as_str) != Some(expected_mount) {
+            return Err(format!("manifest_validation:{field_prefix}.mount:{mount_error}"));
         }
         if !seen_page_ids.insert(page_id.clone()) {
             return Err(format!(
@@ -1169,6 +1187,99 @@ mod tests {
                 error,
                 "manifest_validation:workflowDefinition:uses_capability_not_declared:daw.track.rename"
             ),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_accepts_tool_plugins_with_empty_supported_daws() {
+        let plugin_root = temp_plugin_root();
+        let manifest = json!({
+            "pluginId": "plugin.tools.example",
+            "extensionType": "tool",
+            "version": "1.0.0",
+            "hostApiVersion": "1.0.0",
+            "uiRuntime": "react18",
+            "supportedDaws": [],
+            "displayName": "Tools Example",
+            "entry": "dist/index.js",
+            "requiredCapabilities": [],
+            "pages": [{
+                "pageId": "main",
+                "path": "/tools-example",
+                "title": "Tools Example",
+                "mount": "tools",
+                "componentExport": "MainPage"
+            }]
+        });
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_tool_plugins_with_non_empty_supported_daws() {
+        let plugin_root = temp_plugin_root();
+        let manifest = json!({
+            "pluginId": "plugin.tools.example",
+            "extensionType": "tool",
+            "version": "1.0.0",
+            "hostApiVersion": "1.0.0",
+            "uiRuntime": "react18",
+            "supportedDaws": ["pro_tools"],
+            "displayName": "Tools Example",
+            "entry": "dist/index.js",
+            "requiredCapabilities": [],
+            "pages": [{
+                "pageId": "main",
+                "path": "/tools-example",
+                "title": "Tools Example",
+                "mount": "tools",
+                "componentExport": "MainPage"
+            }]
+        });
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:supportedDaws:must_be_empty_for_tool"
+            ),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_tool_plugins_with_workspace_mount() {
+        let plugin_root = temp_plugin_root();
+        let manifest = json!({
+            "pluginId": "plugin.tools.example",
+            "extensionType": "tool",
+            "version": "1.0.0",
+            "hostApiVersion": "1.0.0",
+            "uiRuntime": "react18",
+            "supportedDaws": [],
+            "displayName": "Tools Example",
+            "entry": "dist/index.js",
+            "requiredCapabilities": [],
+            "pages": [{
+                "pageId": "main",
+                "path": "/tools-example",
+                "title": "Tools Example",
+                "mount": "workspace",
+                "componentExport": "MainPage"
+            }]
+        });
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(error, "manifest_validation:pages[0].mount:must_be_tools"),
         }
     }
 }
