@@ -45,6 +45,9 @@ test('plugin contracts expose tool plugin page and runner surfaces', async () =>
   assert.match(pageSource, /dialog:\s*PluginToolDialogHost/)
   assert.match(pageSource, /fs:\s*PluginToolFsHost/)
   assert.match(pageSource, /shell:\s*PluginToolShellHost/)
+  assert.match(pageSource, /export interface PluginToolRunRequest/)
+  assert.match(pageSource, /export interface PluginToolRunResponse/)
+  assert.match(pageSource, /runTool\(request:\s*PluginToolRunRequest\):\s*Promise<PluginToolRunResponse>/)
   assert.match(pageSource, /export interface PluginToolPageProps/)
 
   assert.match(moduleSource, /export interface PluginToolBundledProcessHost/)
@@ -57,6 +60,8 @@ test('plugin contracts expose tool plugin page and runner surfaces', async () =>
   assert.match(pluginIndexSource, /PluginToolRuntimePermission/)
   assert.match(pluginIndexSource, /PluginBundledResourceDefinition/)
   assert.match(pluginIndexSource, /PluginToolPageProps/)
+  assert.match(pluginIndexSource, /PluginToolRunRequest/)
+  assert.match(pluginIndexSource, /PluginToolRunResponse/)
   assert.match(pluginIndexSource, /PluginToolRunnerContext/)
   assert.match(pluginIndexSource, /PluginToolRunner/)
 })

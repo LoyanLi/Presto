@@ -9,6 +9,7 @@
 | `official.import-workflow` | `workflow` | 有 | 有 | 有 | 复杂 workflow、批量处理、settings、纯逻辑分层 |
 | `official.export-workflow` | `workflow` | 有 | 有 | 有 | 轻量 workflow、快照管理、导出 job 流程 |
 | `official.split-stereo-to-mono-automation` | `automation` | 无 | 无 | 无 | 最小 automation、单 capability 自动化入口 |
+| `official.atmos-video-mux-tool` | `tool` | 有（`Tools`） | 扩展管理独立于 workflow | 无 | 独立工具页、bundled process、本地工具链编排 |
 
 ## 2. `official.import-workflow`
 
@@ -75,7 +76,37 @@
 
 如果新插件只是向宿主注册一个单一自动化入口，应先参考它。
 
-## 5. 标准映射建议
+## 5. `official.atmos-video-mux-tool`
+
+路径：
+
+- `plugins/official/atmos-video-mux-tool/manifest.json`
+- `plugins/official/atmos-video-mux-tool/dist/entry.mjs`
+- `plugins/official/atmos-video-mux-tool/dist/AtmosVideoMuxToolPage.mjs`
+- `plugins/official/atmos-video-mux-tool/dist/toolCore.mjs`
+- `plugins/official/atmos-video-mux-tool/resources/*`
+
+这个插件展示了当前 tool 标准：
+
+- `extensionType: "tool"` 且 `supportedDaws: []`
+- 页面 `mount: "tools"`，只在 `Tools` 区域出现
+- `tools[]` 声明 tool runner
+- `toolRuntimePermissions` 与页面/runner能力对齐
+- `bundledResources` + `process.execBundled(...)` 的最小闭环
+
+它基于 `DD视频一键封装工具` 算法，覆盖这些关键流程：
+
+- 双源 MP4 选择与输入校验
+- 帧率检测与差异判定（阈值 `0.01`）
+- 可选视频帧率转换
+- demux 后自动识别视频/立体声/Atmos 流
+- mux 时 Atmos 先于 stereo
+- H.264 level 不兼容自动修复并重试
+- 输出命名 `Atmos_Output_YYYYMMDD_HHMMSS.mp4`
+
+如果新插件是独立工具型能力，应优先参考它。
+
+## 6. 标准映射建议
 
 ### 想写复杂 workflow
 
@@ -97,7 +128,13 @@
 
 1. `official.split-stereo-to-mono-automation`
 
-## 6. 不应该参考什么
+### 想写工具型插件（Tool）
+
+先看：
+
+1. `official.atmos-video-mux-tool`
+
+## 7. 不应该参考什么
 
 以下内容不要当成插件正式标准：
 
@@ -105,3 +142,4 @@
 - 历史文档中的 `context.runtime`
 - 未在官方插件中出现的 `requiredRuntimeServices`
 - 没有被宿主识别的自定义 `automationType`
+- 未声明在 `toolRuntimePermissions` / `bundledResources` 里的 tool 执行路径

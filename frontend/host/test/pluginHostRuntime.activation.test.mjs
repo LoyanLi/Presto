@@ -186,6 +186,15 @@ async function createToolPluginFixture(root) {
         componentExport: 'Ec3ToolPage',
       },
     ],
+    tools: [
+      {
+        toolId: 'ec3-decode',
+        pageId: 'tools.page.ec3',
+        title: 'EC3 Decode',
+        description: 'Decode EC3 assets.',
+        runnerExport: 'runEc3Decode',
+      },
+    ],
     requiredCapabilities: [],
     adapterModuleRequirements: [],
     capabilityRequirements: [],
@@ -197,6 +206,20 @@ async function createToolPluginFixture(root) {
       export const manifest = ${JSON.stringify(manifest, null, 2)}
 
       export async function activate() {}
+
+      export async function runEc3Decode(context, input) {
+        const execution = await context.process.execBundled('ec3-decode-script', ['--input', String(input.inputPath ?? '')])
+        return {
+          summary: 'ec3-decode-finished',
+          result: {
+            input,
+            execution,
+            hasDialog: typeof context.dialog?.openFile === 'function',
+            hasFs: typeof context.fs?.readFile === 'function',
+            hasShell: typeof context.shell?.openPath === 'function',
+          },
+        }
+      }
 
       export function Ec3ToolPage() {
         return null
@@ -445,6 +468,131 @@ test('loadHostPlugins injects tool page host services and excludes tools from wo
     canceled: false,
     paths: ['/output'],
   })
+})
+
+test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox)
+  const nowIso = new Date().toISOString()
+  const jobsCreateCalls = []
+  const jobsUpdateCalls = []
+  const processCalls = []
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {
+      jobs: {
+        async create(request) {
+          jobsCreateCalls.push(request)
+          return {
+            job: {
+              jobId: 'job-tool-1',
+              capability: request.capability,
+              targetDaw: request.targetDaw,
+              state: request.state ?? 'queued',
+              progress: request.progress ?? { phase: 'queued', current: 0, total: 1, percent: 0 },
+              metadata: request.metadata,
+              createdAt: nowIso,
+            },
+          }
+        },
+        async update(request) {
+          jobsUpdateCalls.push(request)
+          return {
+            job: {
+              jobId: request.jobId,
+              capability: 'tool.run',
+              targetDaw: 'pro_tools',
+              state: request.state ?? 'running',
+              progress: request.progress ?? { phase: 'running', current: 0, total: 1, percent: 10 },
+              metadata: request.metadata,
+              result: request.result,
+              error: request.error,
+              createdAt: nowIso,
+              startedAt: request.startedAt,
+              finishedAt: request.finishedAt,
+            },
+          }
+        },
+      },
+    },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
+        openFile: async () => ({ canceled: false, paths: ['/input.wav'] }),
+        openDirectory: async () => ({ canceled: false, paths: ['/output'] }),
+      },
+      fs: {
+        readFile: async () => 'source',
+        writeFile: async () => true,
+        exists: async () => true,
+        readdir: async () => ['a.wav'],
+        deleteFile: async () => true,
+      },
+      shell: {
+        openPath: async () => '',
+        openExternal: async () => true,
+      },
+      process: {
+        async execBundled(resourceId, args) {
+          processCalls.push({ resourceId, args })
+          return {
+            ok: true,
+            exitCode: 0,
+            stdout: 'done',
+            stderr: '',
+          }
+        },
+      },
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+  assert.equal(typeof renderedPage?.props?.host?.runTool, 'function')
+
+  const runResult = await renderedPage.props.host.runTool({
+    toolId: 'ec3-decode',
+    input: {
+      inputPath: '/tmp/source.ec3',
+    },
+  })
+
+  assert.equal(runResult.jobId, 'job-tool-1')
+  assert.equal(runResult.job.capability, 'tool.run')
+  assert.equal(runResult.job.state, 'succeeded')
+
+  assert.equal(jobsCreateCalls.length, 1)
+  assert.equal(jobsCreateCalls[0]?.capability, 'tool.run')
+  assert.equal(jobsCreateCalls[0]?.metadata?.pluginId, 'installed.audio-tools')
+  assert.equal(jobsCreateCalls[0]?.metadata?.toolId, 'ec3-decode')
+  assert.equal(jobsCreateCalls[0]?.metadata?.toolTitle, 'EC3 Decode')
+  assert.equal(jobsCreateCalls[0]?.metadata?.pageId, 'tools.page.ec3')
+
+  assert.equal(jobsUpdateCalls.length, 2)
+  assert.equal(jobsUpdateCalls[0]?.state, 'running')
+  assert.equal(jobsUpdateCalls[1]?.state, 'succeeded')
+  assert.equal(jobsUpdateCalls[1]?.result?.metrics?.toolId, 'ec3-decode')
+  assert.equal(jobsUpdateCalls[1]?.result?.metrics?.toolLabel, 'EC3 Decode')
+
+  assert.deepEqual(processCalls, [
+    {
+      resourceId: 'ec3-decode-script',
+      args: ['--input', '/tmp/source.ec3'],
+    },
+  ])
 })
 
 test('loadHostPlugins keeps workflow library entries visible when the workflow page module fails to load', async () => {

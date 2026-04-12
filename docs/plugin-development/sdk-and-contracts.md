@@ -18,7 +18,7 @@
 - `WorkflowPluginManifest`
 - `WorkflowPluginModule`
 - `PluginContext`
-- 页面、导航、命令、设置页定义
+- workflow/tool 页面、automation/tool 入口、设置页定义
 - workflow definition
 - capability ID 与 capability client 类型
 
@@ -106,25 +106,43 @@ export interface PluginContext {
 需要区分模块激活和页面渲染：
 
 - `activate(context)` 只收到 `PluginContext`
-- 插件页面组件会收到 `PluginPageProps`
+- workflow 页面收到 `PluginWorkflowPageProps`
+- tool 页面收到 `PluginToolPageProps`
 
-当前 `PluginPageProps` 里包含：
+两类页面 props 都包含：
 
 - `context`
 - `host`
 - `params`
 - `searchParams`
 
-其中 `host` 当前稳定开放的能力是：
+其中 `host` 的当前稳定能力分两类：
 
-- `pickFolder()`
+- workflow 页面：
+  - `pickFolder()`
+- tool 页面：
+  - `dialog.openFile()`
+  - `dialog.openDirectory()`
+  - `fs.readFile()/writeFile()/exists()/readdir()/deleteFile()`
+  - `shell.openPath()`
 
 这意味着：
 
-- 插件页面可以请求宿主打开目录选择器
-- 但这不等于插件拿到了通用 `runtime` 或 `dialog` client
+- 页面可以请求宿主执行有限 UI/文件辅助能力
+- 但这不等于插件拿到了通用 `runtime` client
 
-## 8. 什么时候需要改哪一层
+## 8. tool runner 额外上下文
+
+tool runner 使用 `PluginToolRunnerContext`，它在 `PluginContext` 基础上增加：
+
+- `dialog`
+- `fs`
+- `shell`
+- `process.execBundled(...)`
+
+`process.execBundled` 对应的是 manifest 里的 `bundledResources` 与 `toolRuntimePermissions`，不是开放式系统命令执行。
+
+## 9. 什么时候需要改哪一层
 
 如果需求是新增正式业务能力：
 

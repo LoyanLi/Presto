@@ -12,6 +12,8 @@ export type {
   PluginToolFsHost,
   PluginToolPageHost,
   PluginToolPageProps,
+  PluginToolRunRequest,
+  PluginToolRunResponse,
   PluginToolShellHost,
   PluginWorkflowPageHost,
   PluginWorkflowPageProps,

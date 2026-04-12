@@ -1,4 +1,5 @@
 import type { PluginContext } from './context'
+import type { JobRecord } from '../jobs/job'
 
 // `workspace` remains the canonical mount for existing workflow pages.
 export type PluginPageMount = 'workspace' | 'tools'
@@ -78,10 +79,21 @@ export interface PluginToolShellHost {
   openPath(path: string): Promise<string>
 }
 
+export interface PluginToolRunRequest {
+  toolId: string
+  input: Record<string, unknown>
+}
+
+export interface PluginToolRunResponse {
+  jobId: string
+  job: JobRecord
+}
+
 export interface PluginToolPageHost {
   dialog: PluginToolDialogHost
   fs: PluginToolFsHost
   shell: PluginToolShellHost
+  runTool(request: PluginToolRunRequest): Promise<PluginToolRunResponse>
 }
 
 export interface PluginWorkflowPageProps {

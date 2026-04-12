@@ -1,7 +1,12 @@
 import type {
+  DawTarget,
   PluginAutomationItemDefinition,
   PluginAutomationRunner,
   PluginLocaleContext,
+  PluginToolDefinition,
+  PluginToolRunner,
+  PluginToolRunnerContext,
+  PrestoErrorPayload,
   PrestoClient,
 } from '@presto/contracts'
 import type { PluginRuntimeListResult } from '@presto/sdk-runtime/clients/plugins'
@@ -29,6 +34,7 @@ import {
   createHostPluginStorage,
   createPluginToolPageHost,
   createPluginWorkflowPageHost,
+  type PluginToolRunHost,
   type PluginHostRuntime,
 } from './pluginHostServices'
 import type {
@@ -100,6 +106,179 @@ function resolveMountedPages(
   }))
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && typeof error.message === 'string' && error.message.trim().length > 0) {
+    return error.message.trim()
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim()
+  }
+  return 'tool_run_failed'
+}
+
+function toToolRunErrorPayload(error: unknown): PrestoErrorPayload {
+  return {
+    code: 'TOOL_RUN_FAILED',
+    message: toErrorMessage(error),
+    source: 'runtime',
+    retryable: false,
+  }
+}
+
+function resolveToolTargetDaw(supportedDaws: readonly DawTarget[]): DawTarget {
+  if (Array.isArray(supportedDaws) && supportedDaws.length > 0) {
+    return supportedDaws[0] as DawTarget
+  }
+  return 'pro_tools'
+}
+
+function createUnavailableBundledProcessHost(pluginId: string): PluginToolRunnerContext['process'] {
+  return {
+    async execBundled(resourceId) {
+      return {
+        ok: false,
+        exitCode: -1,
+        stdout: '',
+        stderr: '',
+        error: {
+          code: 'TOOL_PROCESS_UNAVAILABLE',
+          message: `Bundled process runtime is unavailable for plugin "${pluginId}" and resource "${resourceId}".`,
+        },
+      }
+    },
+  }
+}
+
+function createToolRunHost(input: {
+  page: MountedPluginPage
+  plugin: PluginRuntimeListResult['plugins'][number]
+  moduleNamespace: Record<string, unknown>
+  context: ReturnType<typeof createPluginRuntime>
+  presto: PrestoClient
+  runtime: PluginHostRuntime
+}): PluginToolRunHost {
+  const { page, plugin, moduleNamespace, context, presto, runtime } = input
+  const pageTools = ((plugin.manifest.tools ?? []) as PluginToolDefinition[]).filter(
+    (tool) => tool.pageId === page.pageId,
+  )
+  const toolById = new Map(pageTools.map((tool) => [tool.toolId, tool]))
+  const runtimeToolHost = createPluginToolPageHost(runtime)
+  const toolProcessHost: PluginToolRunnerContext['process'] = runtime.process
+    ? {
+        execBundled: (resourceId, args, options) => runtime.process!.execBundled(resourceId, args, options),
+      }
+    : createUnavailableBundledProcessHost(plugin.pluginId)
+  const jobsClient = presto.jobs
+
+  return async ({ toolId, input: toolInput = {} }) => {
+    const normalizedToolId = String(toolId ?? '').trim()
+    const toolDefinition =
+      toolById.get(normalizedToolId) ??
+      (normalizedToolId.length === 0 && pageTools.length === 1 ? pageTools[0] : undefined)
+    if (!toolDefinition) {
+      throw new Error(`Tool "${toolId}" is not defined on page "${page.pageId}".`)
+    }
+
+    const runnerExport = moduleNamespace[toolDefinition.runnerExport]
+    if (typeof runnerExport !== 'function') {
+      throw new Error(`Missing tool runner export "${toolDefinition.runnerExport}".`)
+    }
+
+    if (!jobsClient || typeof jobsClient.create !== 'function' || typeof jobsClient.update !== 'function') {
+      throw new Error('Host jobs client is unavailable for tool.run.')
+    }
+
+    const metadata = {
+      pluginId: plugin.pluginId,
+      toolId: toolDefinition.toolId,
+      toolTitle: toolDefinition.title,
+      pageId: page.pageId,
+    }
+    const created = await jobsClient.create({
+      capability: 'tool.run',
+      targetDaw: resolveToolTargetDaw(plugin.manifest.supportedDaws ?? []),
+      state: 'queued',
+      progress: {
+        phase: 'queued',
+        current: 0,
+        total: 1,
+        percent: 0,
+        message: `${toolDefinition.title} queued.`,
+      },
+      metadata,
+    })
+    const jobId = created.job.jobId
+
+    await jobsClient.update({
+      jobId,
+      state: 'running',
+      progress: {
+        phase: 'running',
+        current: 0,
+        total: 1,
+        percent: 10,
+        message: `${toolDefinition.title} running.`,
+      },
+      startedAt: new Date().toISOString(),
+      metadata,
+    })
+
+    try {
+      const runnerContext: PluginToolRunnerContext = {
+        ...context,
+        dialog: runtimeToolHost.dialog,
+        fs: runtimeToolHost.fs,
+        shell: runtimeToolHost.shell,
+        process: toolProcessHost,
+      }
+      const runResult = await (runnerExport as PluginToolRunner)(runnerContext, toolInput)
+      const succeeded = await jobsClient.update({
+        jobId,
+        state: 'succeeded',
+        progress: {
+          phase: 'completed',
+          current: 1,
+          total: 1,
+          percent: 100,
+          message: runResult?.summary ?? `${toolDefinition.title} completed.`,
+        },
+        result: {
+          ...(runResult ?? {}),
+          toolId: toolDefinition.toolId,
+          toolTitle: toolDefinition.title,
+          metrics: {
+            toolId: toolDefinition.toolId,
+            toolLabel: toolDefinition.title,
+          },
+        },
+        finishedAt: new Date().toISOString(),
+        metadata,
+      })
+
+      return {
+        jobId,
+        job: succeeded.job,
+      }
+    } catch (error) {
+      await jobsClient.update({
+        jobId,
+        state: 'failed',
+        progress: {
+          phase: 'failed',
+          current: 1,
+          total: 1,
+          percent: 100,
+          message: `${toolDefinition.title} failed.`,
+        },
+        error: toToolRunErrorPayload(error),
+        finishedAt: new Date().toISOString(),
+        metadata,
+      })
+      throw error
+    }
+  }
+}
+
 export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<LoadedHostPlugins> {
   const automationEntries: HostAutomationEntry[] = []
   const homeEntries: HostPluginHomeEntry[] = []
@@ -110,7 +289,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const storage = createHostPluginStorage()
   const logger = createHostPluginLogger()
   const workflowHost = createPluginWorkflowPageHost(input.runtime)
-  const toolHost = createPluginToolPageHost(input.runtime)
+  const fallbackToolHost = createPluginToolPageHost(input.runtime)
 
   for (const plugin of input.catalog.plugins) {
     if (plugin.enabled === false) {
@@ -158,7 +337,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       presto: input.presto,
       storage,
       logger,
-        metricsRecorder: input.metricsRecorder
+      metricsRecorder: input.metricsRecorder
         ? {
             recordCommandSuccess: input.metricsRecorder.recordCommandSuccess,
             recordWorkflowJobSuccess: input.metricsRecorder.recordWorkflowJobSuccess,
@@ -220,6 +399,20 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
     }
 
     for (const page of mountedPages) {
+      const toolHost =
+        page.mount === 'tools'
+          ? createPluginToolPageHost(
+              input.runtime,
+              createToolRunHost({
+                page,
+                plugin,
+                moduleNamespace: loaded.module as Record<string, unknown>,
+                context,
+                presto: input.presto,
+                runtime: input.runtime,
+              }),
+            )
+          : fallbackToolHost
       const renderedPage = createMountedPageEntry({
         page,
         moduleNamespace: loaded.module,

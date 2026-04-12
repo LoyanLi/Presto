@@ -6,9 +6,9 @@
 
 仓库中可以直接确认的版本事实：
 
-- App Version：当前仓库值是 `0.3.6`
+- App Version：当前仓库值是 `0.3.7`
 - App Name：`Presto`
-- Backend FastAPI Version：由 `backend/presto/version.py::VERSION` 导出，当前值也是 `0.3.6`
+- Backend FastAPI Version：由 `backend/presto/version.py::VERSION` 导出，当前值也是 `0.3.7`
 - Capability Schema Version：`1`
 
 这三类版本不是一回事，不能混用。
@@ -74,11 +74,12 @@
 - `cubase`
 - `nuendo`
 
-但当前实际支持只能写成：
+但按插件类型，当前 manifest 约束是：
 
-- `pro_tools`
+- `workflow` / `automation`：`supportedDaws` 写 `["pro_tools"]`
+- `tool`：`supportedDaws` 必须写 `[]`
 
-其余值只是类型预留。
+其余 DAW 值当前仍是类型预留。
 
 ## 5. 当前插件版本字段的含义
 
@@ -120,12 +121,17 @@
 - `official.import-workflow`：`1.0.0`
 - `official.export-workflow`：`1.0.1`
 - `official.split-stereo-to-mono-automation`：`1.0.0`
+- `official.atmos-video-mux-tool`：`1.0.0`
 
-它们当前共同事实：
+这些官方插件当前共同事实：
 
 - `hostApiVersion` 为 `0.1.0`
-- `supportedDaws` 为 `["pro_tools"]`
 - capability / module 最低版本要求使用 `2025.10.0`
+
+`supportedDaws` 的当前事实是分类型的：
+
+- workflow / automation 官方插件：`["pro_tools"]`
+- tool 官方插件：`[]`
 
 ## 8. 文档里什么叫“支持”
 

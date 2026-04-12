@@ -2,12 +2,40 @@ import type {
   PluginAutomationRunnerContext,
   PluginLogger,
   PluginToolPageHost,
+  PluginToolRunRequest,
+  PluginToolRunResponse,
   PluginWorkflowPageHost,
   PluginStorage,
 } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 
-export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> & Partial<Pick<PrestoRuntime, 'macAccessibility' | 'fs' | 'shell'>>
+export interface PluginHostProcessRuntime {
+  execBundled(
+    resourceId: string,
+    args?: string[],
+    options?: {
+      cwd?: string
+      env?: Record<string, string>
+    },
+  ): Promise<{
+    ok: boolean
+    exitCode: number
+    stdout: string
+    stderr?: string
+    error?: {
+      code: string
+      message: string
+      details?: Record<string, unknown>
+    }
+  }>
+}
+
+export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> &
+  Partial<Pick<PrestoRuntime, 'macAccessibility' | 'fs' | 'shell'>> & {
+    process?: PluginHostProcessRuntime
+  }
+
+export type PluginToolRunHost = (request: PluginToolRunRequest) => Promise<PluginToolRunResponse>
 
 type MacAccessibilityClient = NonNullable<PrestoRuntime['macAccessibility']>
 
@@ -65,6 +93,10 @@ const unavailableToolShellHost: PluginToolPageHost['shell'] = {
   async openPath(path) {
     return `shell runtime is unavailable in this host shell: ${path}`
   },
+}
+
+const unavailableToolRunHost: PluginToolRunHost = async ({ toolId }) => {
+  throw new Error(`tool.run is unavailable in this host shell: ${toolId}`)
 }
 
 export function createHostPluginStorage(): PluginStorage {
@@ -135,7 +167,10 @@ export function createPluginWorkflowPageHost(runtime: PluginHostRuntime): Plugin
   }
 }
 
-export function createPluginToolPageHost(runtime: PluginHostRuntime): PluginToolPageHost {
+export function createPluginToolPageHost(
+  runtime: PluginHostRuntime,
+  runToolHost: PluginToolRunHost = unavailableToolRunHost,
+): PluginToolPageHost & { runTool: PluginToolRunHost } {
   return {
     dialog: {
       async openFile() {
@@ -174,6 +209,7 @@ export function createPluginToolPageHost(runtime: PluginHostRuntime): PluginTool
           openPath: (path) => runtime.shell!.openPath(path),
         }
       : unavailableToolShellHost,
+    runTool: runToolHost,
   }
 }
 

@@ -4,10 +4,11 @@ import type { DawTarget } from '../daw/targets'
 import type { JobProgress } from './progress'
 
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type JobCapabilityId = PublicCapabilityId | 'tool.run'
 
 export interface JobRecord<TResult = unknown> {
   jobId: string
-  capability: PublicCapabilityId
+  capability: JobCapabilityId
   targetDaw: DawTarget
   state: JobState
   progress: JobProgress
@@ -21,7 +22,7 @@ export interface JobRecord<TResult = unknown> {
 
 export interface JobAcceptedResponse {
   jobId: string
-  capability: PublicCapabilityId
+  capability: JobCapabilityId
   state: 'queued' | 'running'
 }
 
@@ -34,7 +35,7 @@ export interface JobsGetResponse {
 }
 
 export interface JobsCreateRequest {
-  capability: PublicCapabilityId
+  capability: JobCapabilityId
   targetDaw: DawTarget
   state?: JobState
   progress?: Partial<JobProgress>
@@ -51,7 +52,7 @@ export interface JobsCreateResponse {
 
 export interface JobsListRequest {
   states?: JobState[]
-  capabilities?: PublicCapabilityId[]
+  capabilities?: JobCapabilityId[]
   limit?: number
 }
 

@@ -2,23 +2,22 @@
 
 本文档只描述插件 UI 层的当前正式边界，包括页面组件、settings page 和页面可用的宿主辅助能力。
 
-## 1. UI 只存在于两种地方
+## 1. UI 主要存在于三种地方
 
-当前插件 UI 主要存在于两类表面：
+当前插件 UI 主要存在于三类表面：
 
 1. `workflow` 插件页面
-2. workflow 插件的结构化 settings page
+2. `tool` 插件页面
+3. workflow 插件的结构化 settings page
 
 当前官方 automation 插件不自带页面 UI，而是由宿主根据 `automationType` 渲染自动化卡片。
 
 ## 2. 页面组件输入边界
 
-当前插件页面组件收到的是 `PluginPageProps`：
+当前插件页面有两种 props：
 
-- `context`
-- `host`
-- `params`
-- `searchParams`
+- workflow 页：`PluginWorkflowPageProps`
+- tool 页：`PluginToolPageProps`
 
 其中：
 
@@ -27,7 +26,7 @@
 
 不要把页面 props 理解成宿主 runtime 直通。
 
-## 3. `host.pickFolder()` 的使用边界
+## 3. workflow 页面 `host.pickFolder()` 的使用边界
 
 当前稳定开放的页面 host 能力只有：
 
@@ -45,7 +44,26 @@
 - 依赖更多未开放的 dialog / shell / fs 能力
 - 在 `activate(context)` 中调用页面 host
 
-## 4. 页面层职责
+## 4. tool 页面 host 能力边界
+
+`tool` 页面当前稳定开放这些 host 能力：
+
+- `host.dialog.openFile()`
+- `host.dialog.openDirectory()`
+- `host.fs.readFile(path)`
+- `host.fs.writeFile(path, content)`
+- `host.fs.exists(path)`
+- `host.fs.readdir(path)`
+- `host.fs.deleteFile(path)`
+- `host.shell.openPath(path)`
+
+使用规则：
+
+- 这些能力只在页面渲染时可用
+- 不能把它们当成 `activate(context)` 的通用 runtime
+- 只应围绕工具页面输入、预检、结果展示使用
+
+## 5. 页面层职责
 
 页面层应负责：
 
@@ -62,7 +80,7 @@
 - 复杂纯逻辑规则堆积
 - settings 数据模型定义
 
-## 5. 当前页面状态标准
+## 6. 当前页面状态标准
 
 参考 `import-workflow` 和 `export-workflow`，推荐把页面状态拆成几类：
 
@@ -74,7 +92,7 @@
 
 不要把所有状态揉成一个难以推导的总对象。
 
-## 6. 作业型 UI 标准
+## 7. 作业型 UI 标准
 
 如果 capability 会返回 job 或 workflow run：
 
@@ -85,7 +103,7 @@
 
 这类行为在 `workflow` 页面中是 UI 职责的一部分，不应被隐藏到宿主之外。
 
-## 7. Settings Page 标准
+## 8. Settings Page 标准
 
 settings page 当前不是插件自带整页 React UI，而是结构化声明模型。
 
@@ -109,7 +127,7 @@ settings page 应描述：
 - `number`
 - `categoryList`
 
-## 8. Settings 层职责
+## 9. Settings 层职责
 
 settings page 负责：
 
@@ -123,7 +141,9 @@ settings page 不负责：
 - 绕过宿主存储
 - 混入运行时临时状态
 
-## 9. 样式组织标准
+`tool` 插件的扩展管理入口与 workflow 分离，归在 `Tool Extensions` 页面，不应混写到 workflow 扩展管理语义里。
+
+## 10. 样式组织标准
 
 当前官方 workflow 插件都通过 `styleEntry` 引入独立样式文件。
 
@@ -133,16 +153,19 @@ settings page 不负责：
 - 结构和语义由页面模块控制
 - 不依赖宿主私有样式细节
 
-## 10. 当前标准参考
+## 11. 当前标准参考
 
 - `official.import-workflow`
   - 适合参考复杂表单、步骤流、列表预览、批量状态
 - `official.export-workflow`
   - 适合参考快照管理、预设选择、导出进度展示
+- `official.atmos-video-mux-tool`
+  - 适合参考 tool 页面文件选择、工具链预检与执行参数组织
 
-## 11. 自检清单
+## 12. 自检清单
 
 - 页面只用了 `context` 和受限 `host`
 - 没有把 UI 事件直接扩展成宿主私有调用
 - settings 结构和导出一致
 - job 型流程有明确进度、终态和错误展示
+- tool 页面仅使用已开放的 `dialog/fs/shell` 子集
