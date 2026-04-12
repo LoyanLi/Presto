@@ -4,6 +4,7 @@ import type { PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import { Button, EmptyState, ShellSurface } from '../ui'
 import { AutomationSurface } from './automation/AutomationSurface'
+import { HostRunsSurface } from './HostRunsSurface'
 import type { HostShellViewId } from './hostShellState'
 import { hostShellColors } from './hostShellColors'
 import type { HostLocale } from './i18n'
@@ -371,12 +372,7 @@ export function HostHomeSurface({
     }
 
     if (surface === 'runs') {
-      return (
-        <PlaceholderSection
-          title={translateHost(locale, 'home.runs.title')}
-          locale={locale}
-        />
-      )
+      return <HostRunsSurface locale={locale} />
     }
 
     return renderHomeContent()

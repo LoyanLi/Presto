@@ -371,6 +371,105 @@ def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_f
     record = services.job_manager.get(job_id)
     assert record.state == "succeeded"
     assert services.daw.renames == [("Kick", "Kick In"), ("Snare", "Snare Top")]
+    assert record.result["metrics"] == {
+        "schemaVersion": 1,
+        "workflowId": "test.workflow.import.batched",
+        "commandCounts": {
+            "daw.import.run.start": 1,
+            "daw.track.rename": 2,
+        },
+    }
+
+
+def test_workflow_run_start_reports_only_successful_executed_workflow_commands(tmp_path: Path) -> None:
+    services = _services()
+    first_file = tmp_path / "Kick.wav"
+    second_file = tmp_path / "Snare.wav"
+    first_file.write_bytes(b"RIFF")
+    second_file.write_bytes(b"RIFF")
+
+    accepted = execute_capability(
+        services,
+        "workflow.run.start",
+        {
+            "pluginId": "official.import-workflow",
+            "workflowId": "test.workflow.metrics",
+            "definition": {
+                "workflowId": "test.workflow.metrics",
+                "version": "1.0.0",
+                "inputSchemaId": "test.workflow.import.v1",
+                "steps": [
+                    {
+                        "stepId": "import",
+                        "usesCapability": "daw.import.run.start",
+                        "awaitJob": True,
+                        "input": {
+                            "folderPaths": {"$ref": "input.folderPaths"},
+                            "orderedFilePaths": {"$ref": "input.orderedFilePaths"},
+                        },
+                        "saveAs": "importJob",
+                    },
+                    {
+                        "stepId": "rename",
+                        "foreach": {
+                            "items": {"$ref": "input.renameItems"},
+                            "as": "item",
+                        },
+                        "steps": [
+                            {
+                                "stepId": "rename_track",
+                                "usesCapability": "daw.track.rename",
+                                "input": {
+                                    "currentName": {"$ref": "item.currentName"},
+                                    "newName": {"$ref": "item.newName"},
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "stepId": "save",
+                        "when": {
+                            "$ref": "input.shouldSave",
+                            "equals": True,
+                        },
+                        "usesCapability": "daw.session.save",
+                        "input": {},
+                    },
+                ],
+            },
+            "allowedCapabilities": ["daw.import.run.start", "daw.track.rename", "daw.session.save"],
+            "input": {
+                "folderPaths": [str(tmp_path)],
+                "orderedFilePaths": [str(first_file), str(second_file)],
+                "renameItems": [
+                    {"currentName": "Kick", "newName": "Kick In"},
+                    {"currentName": "Snare", "newName": "Snare Top"},
+                ],
+                "shouldSave": False,
+            },
+        },
+    )
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        record = services.job_manager.get(accepted["jobId"])
+        if record.state in {"succeeded", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow job did not finish in time")
+
+    record = services.job_manager.get(accepted["jobId"])
+    assert record.state == "succeeded"
+    assert record.result["metrics"] == {
+        "schemaVersion": 1,
+        "workflowId": "test.workflow.metrics",
+        "commandCounts": {
+            "daw.import.run.start": 1,
+            "daw.track.rename": 2,
+        },
+    }
+    assert "daw.session.save" not in record.result["metrics"]["commandCounts"]
 
 
 def test_workflow_run_start_propagates_request_id_to_nested_capability(monkeypatch: pytest.MonkeyPatch) -> None:

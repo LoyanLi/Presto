@@ -15,6 +15,11 @@ import type {
   HostRenderedPluginPage,
 } from '../host'
 import { getSystemLocaleCandidates, resolveHostLocale } from '../host/i18n'
+import {
+  recordAutomationRunSuccess,
+  recordCommandRunSuccess,
+  recordWorkflowJobSuccess,
+} from '../host/hostRunMetrics'
 import { loadHostPlugins } from '../host/pluginHostRuntime'
 import { getHostShellPreferences, subscribeHostShellPreferences } from '../host/shellPreferences'
 
@@ -100,6 +105,25 @@ export function useHostPluginCatalogState({
         },
         presto: client,
         runtime,
+        metricsRecorder: {
+          recordAutomationRunSuccess: ({ automationKey, label }) =>
+            recordAutomationRunSuccess({
+              automationKey,
+              label,
+            }),
+          recordCommandSuccess: (capabilityId) =>
+            recordCommandRunSuccess({
+              capabilityId,
+            }),
+          recordWorkflowJobSuccess: ({ jobId, workflowId, label, commandCounts, at }) =>
+            recordWorkflowJobSuccess({
+              jobId,
+              workflowId,
+              label,
+              commandCounts,
+              at,
+            }),
+        },
       })
       if (requestId !== latestRequestIdRef.current) {
         return

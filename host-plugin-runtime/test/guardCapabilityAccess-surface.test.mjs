@@ -380,3 +380,110 @@ test('guardCapabilityAccess exposes backend import analyze and cache save capabi
     { method: 'daw.import.cache.save', request: { folderPath: '/tmp/import', payload: { version: 1 } } },
   ])
 })
+
+test('guardCapabilityAccess records workflow job metrics from jobs.get while counting workflow.run.start only as a command', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const presto = createPrestoFixture([])
+  const metricsEvents = []
+  const manifest = {
+    pluginId: 'plugin.guard.metrics',
+    displayName: 'Guard Metrics Workflow',
+    requiredCapabilities: ['workflow.run.start', 'jobs.get'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest, {
+    recordCommandSuccess(capabilityId) {
+      metricsEvents.push({ kind: 'command', capabilityId })
+    },
+    recordWorkflowJobSuccess(input) {
+      metricsEvents.push({ kind: 'workflowJob', ...input })
+    },
+  })
+
+  await guarded.workflow.run.start({
+    pluginId: 'plugin.guard.metrics',
+    workflowId: 'official.export-workflow.run',
+    input: {},
+  })
+  presto.jobs.get = async (jobId) => ({
+    jobId,
+    capability: 'workflow.run.start',
+    targetDaw: 'pro_tools',
+    state: 'succeeded',
+    progress: {
+      phase: 'succeeded',
+      current: 2,
+      total: 2,
+      percent: 100,
+      message: 'Workflow completed.',
+    },
+    metadata: {
+      pluginId: 'plugin.guard.metrics',
+      workflowId: 'official.export-workflow.run',
+    },
+    result: {
+      workflowId: 'official.export-workflow.run',
+      steps: {},
+      metrics: {
+        schemaVersion: 1,
+        workflowId: 'official.export-workflow.run',
+        commandCounts: {
+          'daw.export.run.start': 1,
+          'daw.session.save': 1,
+        },
+      },
+    },
+    createdAt: '2026-04-12T10:00:00.000Z',
+    finishedAt: '2026-04-12T10:01:00.000Z',
+  })
+  await guarded.jobs.get('job-1')
+
+  assert.deepEqual(metricsEvents, [
+    { kind: 'command', capabilityId: 'workflow.run.start' },
+    {
+      kind: 'workflowJob',
+      jobId: 'job-1',
+      workflowId: 'official.export-workflow.run',
+      pluginId: 'plugin.guard.metrics',
+      label: 'Guard Metrics Workflow',
+      commandCounts: {
+        'daw.export.run.start': 1,
+        'daw.session.save': 1,
+      },
+      at: '2026-04-12T10:01:00.000Z',
+    },
+  ])
+})
+
+test('guardCapabilityAccess does not record failed capability executions', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const metricsEvents = []
+  const presto = {
+    workflow: {
+      run: {
+        async start() {
+          throw new Error('workflow_failed')
+        },
+      },
+    },
+  }
+  const manifest = {
+    pluginId: 'plugin.guard.metrics-failure',
+    requiredCapabilities: ['workflow.run.start'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest, {
+    recordCommandSuccess(capabilityId) {
+      metricsEvents.push({ kind: 'command', capabilityId })
+    },
+    recordWorkflowJobSuccess(input) {
+      metricsEvents.push({ kind: 'workflowJob', ...input })
+    },
+  })
+
+  await assert.rejects(
+    async () => guarded.workflow.run.start({ pluginId: 'plugin.guard.metrics-failure', workflowId: 'workflow-1', input: {} }),
+    /workflow_failed/,
+  )
+  assert.deepEqual(metricsEvents, [])
+})

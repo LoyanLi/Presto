@@ -489,3 +489,175 @@ test('loadHostPlugins wires automation runner entries with host-rendered schema 
     summary: 'batch-ara-render-finished',
   })
 })
+
+test('loadHostPlugins records successful automation runs through the host metrics recorder', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createAutomationPluginFixture(sandbox)
+  const metricsEvents = []
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {
+      track: {
+        selection: {
+          async get() {
+            return { trackNames: ['Lead Vox'] }
+          },
+        },
+      },
+    },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/tmp'] }),
+      },
+      macAccessibility: {
+        async preflight() {
+          return { ok: true, trusted: true }
+        },
+        async runScript(script, args) {
+          return { ok: true, stdout: JSON.stringify({ script, args }) }
+        },
+        async runFile(pathValue, args) {
+          return { ok: true, stdout: JSON.stringify({ pathValue, args }) }
+        },
+      },
+    },
+    metricsRecorder: {
+      recordAutomationRunSuccess(input) {
+        metricsEvents.push(input)
+      },
+    },
+  })
+
+  await result.automationEntries[0]?.execute({
+    hideBackupTracks: true,
+    renderPass: 'all',
+  })
+
+  assert.deepEqual(metricsEvents, [
+    {
+      automationKey: 'installed.batch-ara-render:batch-ara-render.card',
+      label: 'Batch ARA Render',
+    },
+  ])
+})
+
+test('loadHostPlugins does not record failed automation runs', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRoot = path.join(sandbox, 'installed.failed-automation')
+  const entryPath = path.join(pluginRoot, 'dist/index.mjs')
+  const metricsEvents = []
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  await mkdir(path.dirname(entryPath), { recursive: true })
+  await writeFile(
+    entryPath,
+    `
+      export const manifest = ${JSON.stringify({
+        pluginId: 'installed.failed-automation',
+        extensionType: 'automation',
+        version: '1.0.0',
+        hostApiVersion: '0.1.0',
+        supportedDaws: ['pro_tools'],
+        uiRuntime: 'react18',
+        displayName: 'Failed Automation',
+        description: 'Always fails.',
+        entry: 'dist/index.mjs',
+        pages: [],
+        automationItems: [
+          {
+            itemId: 'failed-automation.card',
+            title: 'Failed Automation',
+            automationType: 'failedAutomation',
+            runnerExport: 'runFailedAutomation',
+          },
+        ],
+        requiredCapabilities: [],
+        adapterModuleRequirements: [],
+        capabilityRequirements: [],
+      }, null, 2)}
+
+      export async function activate() {}
+
+      export async function runFailedAutomation() {
+        throw new Error('automation_failed')
+      }
+    `,
+  )
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [
+        {
+          pluginId: 'installed.failed-automation',
+          displayName: 'Failed Automation',
+          version: '1.0.0',
+          pluginRoot,
+          entryPath,
+          manifest: {
+            pluginId: 'installed.failed-automation',
+            extensionType: 'automation',
+            version: '1.0.0',
+            hostApiVersion: '0.1.0',
+            supportedDaws: ['pro_tools'],
+            uiRuntime: 'react18',
+            displayName: 'Failed Automation',
+            description: 'Always fails.',
+            entry: 'dist/index.mjs',
+            pages: [],
+            automationItems: [
+              {
+                itemId: 'failed-automation.card',
+                title: 'Failed Automation',
+                automationType: 'failedAutomation',
+                runnerExport: 'runFailedAutomation',
+              },
+            ],
+            requiredCapabilities: [],
+            adapterModuleRequirements: [],
+            capabilityRequirements: [],
+          },
+          settingsPages: [],
+          loadable: true,
+        },
+      ],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/tmp'] }),
+      },
+    },
+    metricsRecorder: {
+      recordAutomationRunSuccess(input) {
+        metricsEvents.push(input)
+      },
+    },
+  })
+
+  await assert.rejects(async () => result.automationEntries[0]?.execute({}), /automation_failed/)
+  assert.deepEqual(metricsEvents, [])
+})

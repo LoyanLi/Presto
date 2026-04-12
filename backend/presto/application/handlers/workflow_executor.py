@@ -75,6 +75,10 @@ def _job_record_payload(record: JobRecord) -> dict[str, Any]:
     }
 
 
+def _record_successful_command(command_counts: dict[str, int], capability_id: str) -> None:
+    command_counts[capability_id] = command_counts.get(capability_id, 0) + 1
+
+
 def _normalize_error(services: ServiceContainer, error: Exception, *, capability_id: str) -> PrestoErrorPayload:
     payload = services.error_normalizer.normalize(
         error,
@@ -169,6 +173,7 @@ def _execute_steps(
     steps: list[dict[str, Any]],
     *,
     context: dict[str, Any],
+    command_counts: dict[str, int],
     invoke_capability: Callable[[str, dict[str, Any]], Any],
     cancel_event: threading.Event,
     progress_phase: str | None = None,
@@ -214,6 +219,7 @@ def _execute_steps(
                     parent_job_id,
                     [nested_step for nested_step in nested_steps if isinstance(nested_step, dict)],
                     context=context,
+                    command_counts=command_counts,
                     invoke_capability=invoke_capability,
                     cancel_event=cancel_event,
                     progress_phase=effective_phase,
@@ -259,6 +265,7 @@ def _execute_steps(
             if not isinstance(result, dict) or not isinstance(result.get("jobId"), str):
                 raise _validation_error("awaitJob steps must return a jobId.", field="definition")
             result = _await_child_job(services, parent_job_id, result["jobId"], phase=effective_phase, cancel_event=cancel_event)
+        _record_successful_command(command_counts, capability_id)
 
         if report_step_progress:
             parent_job = services.job_manager.get(parent_job_id)
@@ -312,11 +319,13 @@ def _run_workflow_job(
         context: dict[str, Any] = {
             "input": workflow_input,
         }
+        command_counts: dict[str, int] = {}
         final_context = _execute_steps(
             services,
             job_id,
             [step for step in definition["steps"] if isinstance(step, dict)],
             context=context,
+            command_counts=command_counts,
             invoke_capability=invoke_capability,
             cancel_event=cancel_event,
         )
@@ -332,6 +341,11 @@ def _run_workflow_job(
         job.result = {
             "workflowId": definition["workflowId"],
             "steps": {key: value for key, value in final_context.items() if key != "input"},
+            "metrics": {
+                "schemaVersion": 1,
+                "workflowId": definition["workflowId"],
+                "commandCounts": command_counts,
+            },
         }
         job.finished_at = _utc_now()
         services.job_manager.upsert(job)

@@ -53,6 +53,21 @@ export interface LoadHostPluginsInput {
   locale: PluginLocaleContext
   presto: PrestoClient
   runtime: PluginHostRuntime
+  metricsRecorder?: {
+    recordAutomationRunSuccess?(input: {
+      automationKey: string
+      label?: string
+    }): void
+    recordCommandSuccess?(capabilityId: string): void
+    recordWorkflowJobSuccess?(input: {
+      jobId: string
+      workflowId: string
+      pluginId: string
+      label?: string
+      commandCounts: Record<string, number>
+      at?: string
+    }): void
+  }
 }
 
 export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<LoadedHostPlugins> {
@@ -103,6 +118,12 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       presto: input.presto,
       storage,
       logger,
+        metricsRecorder: input.metricsRecorder
+        ? {
+            recordCommandSuccess: input.metricsRecorder.recordCommandSuccess,
+            recordWorkflowJobSuccess: input.metricsRecorder.recordWorkflowJobSuccess,
+          }
+        : undefined,
     })
     const activation = await activatePlugin({
       module: loaded.module,
@@ -146,8 +167,14 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         automationType: automationItem.automationType,
         order: automationItem.order,
         optionsSchema: automationItem.optionsSchema ?? [],
-        execute: async (automationInput) =>
-          (runner as PluginAutomationRunner)(automationRunnerContext, automationInput),
+        execute: async (automationInput) => {
+          const result = await (runner as PluginAutomationRunner)(automationRunnerContext, automationInput)
+          input.metricsRecorder?.recordAutomationRunSuccess?.({
+            automationKey: `${plugin.pluginId}:${automationItem.itemId}`,
+            label: automationItem.title,
+          })
+          return result
+        },
       })
     }
 

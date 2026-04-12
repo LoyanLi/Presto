@@ -14,7 +14,89 @@ class PluginPermissionError extends Error {
   }
 }
 
-type ManifestPermissionShape = Pick<WorkflowPluginManifest, 'pluginId' | 'requiredCapabilities'>
+type ManifestPermissionShape = Pick<WorkflowPluginManifest, 'pluginId' | 'requiredCapabilities'> & {
+  displayName?: string
+}
+
+export interface PluginRunMetricsRecorder {
+  recordCommandSuccess?(capabilityId: string): void
+  recordWorkflowJobSuccess?(input: {
+    jobId: string
+    workflowId: string
+    pluginId: string
+    label?: string
+    commandCounts: Record<string, number>
+    at?: string
+  }): void
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeCommandCounts(value: unknown): Record<string, number> {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([capabilityId, count]) =>
+      Number.isFinite(count) && Math.trunc(count) > 0 ? [[capabilityId, Math.trunc(count)]] : [],
+    ),
+  )
+}
+
+function getWorkflowJobMetrics(
+  value: unknown,
+  fallbackPluginId: string,
+  label?: string,
+):
+  | {
+      jobId: string
+      workflowId: string
+      pluginId: string
+      label?: string
+      commandCounts: Record<string, number>
+      at?: string
+    }
+  | null {
+  if (!isRecord(value) || value.capability !== 'workflow.run.start' || value.state !== 'succeeded') {
+    return null
+  }
+
+  const jobId = typeof value.jobId === 'string' ? value.jobId.trim() : ''
+  if (jobId.length === 0) {
+    return null
+  }
+
+  const metadata = isRecord(value.metadata) ? value.metadata : null
+  const result = isRecord(value.result) ? value.result : null
+  const metrics = result && isRecord(result.metrics) ? result.metrics : null
+  const workflowIdCandidate =
+    (metrics && typeof metrics.workflowId === 'string' ? metrics.workflowId : undefined) ??
+    (metadata && typeof metadata.workflowId === 'string' ? metadata.workflowId : undefined) ??
+    (result && typeof result.workflowId === 'string' ? result.workflowId : undefined) ??
+    ''
+  const workflowId = workflowIdCandidate.trim()
+  if (workflowId.length === 0) {
+    return null
+  }
+
+  const pluginIdCandidate = metadata && typeof metadata.pluginId === 'string' ? metadata.pluginId : fallbackPluginId
+
+  return {
+    jobId,
+    workflowId,
+    pluginId: pluginIdCandidate.trim() || fallbackPluginId,
+    ...(label ? { label } : {}),
+    commandCounts: normalizeCommandCounts(metrics?.commandCounts),
+    ...(typeof value.finishedAt === 'string' && value.finishedAt.trim().length > 0 ? { at: value.finishedAt } : {}),
+  }
+}
+
+function shouldRecordCommand(capabilityId: string): boolean {
+  return !capabilityId.startsWith('jobs.')
+}
 
 function createPermissionError(pluginId: string, resource: string, action: string): PluginPermissionError {
   return new PluginPermissionError(
@@ -30,13 +112,28 @@ function createCapabilityGuard<Args extends unknown[], Result>(
   capabilityId: string,
   action: string,
   invoke: (...args: Args) => Promise<Result>,
+  pluginDisplayName?: string,
+  metricsRecorder?: PluginRunMetricsRecorder,
 ): (...args: Args) => Promise<Result> {
   return async (...args: Args) => {
     if (!allowedCapabilities.has(capabilityId)) {
       throw createPermissionError(pluginId, capabilityId, action)
     }
 
-    return invoke(...args)
+    const result = await invoke(...args)
+
+    if (shouldRecordCommand(capabilityId)) {
+      metricsRecorder?.recordCommandSuccess?.(capabilityId)
+    }
+
+    if (capabilityId === 'jobs.get') {
+      const workflowJobMetrics = getWorkflowJobMetrics(result, pluginId, pluginDisplayName)
+      if (workflowJobMetrics) {
+        metricsRecorder?.recordWorkflowJobSuccess?.(workflowJobMetrics)
+      }
+    }
+
+    return result
   }
 }
 
@@ -52,7 +149,11 @@ function requireService<T>(service: T | undefined | null, pluginId: string, serv
   return service
 }
 
-export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPermissionShape): PrestoClient {
+export function guardCapabilityAccess(
+  presto: PrestoClient,
+  manifest: ManifestPermissionShape,
+  metricsRecorder?: PluginRunMetricsRecorder,
+): PrestoClient {
   const allowedCapabilities = new Set<string>(manifest.requiredCapabilities)
   const pluginId = manifest.pluginId
 
@@ -69,386 +170,308 @@ export function guardCapabilityAccess(presto: PrestoClient, manifest: ManifestPe
   const stripSilence = () => requireService(presto.stripSilence, pluginId, 'presto.stripSilence')
   const exportClient = () => requireService(presto.export, pluginId, 'presto.export')
   const jobs = () => requireService(presto.jobs, pluginId, 'presto.jobs')
+  const guard = <Args extends unknown[], Result>(
+    capabilityId: string,
+    action: string,
+    invoke: (...args: Args) => Promise<Result>,
+  ): ((...args: Args) => Promise<Result>) =>
+    createCapabilityGuard(
+      allowedCapabilities,
+      pluginId,
+      capabilityId,
+      action,
+      invoke,
+      manifest.displayName,
+      metricsRecorder,
+    )
 
   return {
     automation: {
       splitStereoToMono: {
-        execute: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.automation.splitStereoToMono.execute',
+        execute: guard(
+                    'daw.automation.splitStereoToMono.execute',
           'daw.automation.splitStereoToMono.execute()',
           (request) => automation().splitStereoToMono.execute(request),
         ),
       },
     },
     system: {
-      health: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'system.health',
+      health: guard(
+                  'system.health',
         'system.health()',
         () => system().health(),
       ),
     },
     config: {
-      get: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'config.get',
+      get: guard(
+                  'config.get',
         'config.get()',
         () => config().get(),
       ),
-      update: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'config.update',
+      update: guard(
+                  'config.update',
         'config.update()',
         (request) => config().update(request),
       ),
     },
     daw: {
       adapter: {
-        getSnapshot: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.adapter.getSnapshot',
+        getSnapshot: guard(
+                    'daw.adapter.getSnapshot',
           'daw.adapter.getSnapshot()',
           () => daw().adapter.getSnapshot(),
         ),
       },
       connection: {
-        connect: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.connection.connect',
+        connect: guard(
+                    'daw.connection.connect',
           'daw.connection.connect()',
           (request) => daw().connection.connect(request),
         ),
-        disconnect: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.connection.disconnect',
+        disconnect: guard(
+                    'daw.connection.disconnect',
           'daw.connection.disconnect()',
           () => daw().connection.disconnect(),
         ),
-        getStatus: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.connection.getStatus',
+        getStatus: guard(
+                    'daw.connection.getStatus',
           'daw.connection.getStatus()',
           () => daw().connection.getStatus(),
         ),
       },
     },
     session: {
-      getInfo: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.session.getInfo',
+      getInfo: guard(
+                  'daw.session.getInfo',
         'daw.session.getInfo()',
         () => session().getInfo(),
       ),
-      getLength: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.session.getLength',
+      getLength: guard(
+                  'daw.session.getLength',
         'daw.session.getLength()',
         () => session().getLength(),
       ),
-      save: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.session.save',
+      save: guard(
+                  'daw.session.save',
         'daw.session.save()',
         () => session().save(),
       ),
-      applySnapshot: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.session.applySnapshot',
+      applySnapshot: guard(
+                  'daw.session.applySnapshot',
         'daw.session.applySnapshot()',
         (request) => session().applySnapshot(request),
       ),
-      getSnapshotInfo: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.session.getSnapshotInfo',
+      getSnapshotInfo: guard(
+                  'daw.session.getSnapshotInfo',
         'daw.session.getSnapshotInfo()',
         (request) => session().getSnapshotInfo(request),
       ),
     },
     track: {
-      list: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.track.list',
+      list: guard(
+                  'daw.track.list',
         'daw.track.list()',
         () => track().list(),
       ),
-      listNames: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.track.listNames',
+      listNames: guard(
+                  'daw.track.listNames',
         'daw.track.listNames()',
         () => track().listNames(),
       ),
       selection: {
-        get: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.selection.get',
+        get: guard(
+                    'daw.track.selection.get',
           'daw.track.selection.get()',
           () => track().selection.get(),
         ),
       },
-      rename: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.track.rename',
+      rename: guard(
+                  'daw.track.rename',
         'daw.track.rename()',
         (request) => track().rename(request),
       ),
-      select: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.track.select',
+      select: guard(
+                  'daw.track.select',
         'daw.track.select()',
         (request) => track().select(request),
       ),
       color: {
-        apply: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.color.apply',
+        apply: guard(
+                    'daw.track.color.apply',
           'daw.track.color.apply()',
           (request) => track().color.apply(request),
         ),
       },
       pan: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.pan.set',
+        set: guard(
+                    'daw.track.pan.set',
           'daw.track.pan.set()',
           (request) => track().pan.set(request),
         ),
       },
       mute: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.mute.set',
+        set: guard(
+                    'daw.track.mute.set',
           'daw.track.mute.set()',
           (request) => track().mute.set(request),
         ),
       },
       solo: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.solo.set',
+        set: guard(
+                    'daw.track.solo.set',
           'daw.track.solo.set()',
           (request) => track().solo.set(request),
         ),
       },
       hidden: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.hidden.set',
+        set: guard(
+                    'daw.track.hidden.set',
           'daw.track.hidden.set()',
           (request) => track().hidden.set(request),
         ),
       },
       inactive: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.track.inactive.set',
+        set: guard(
+                    'daw.track.inactive.set',
           'daw.track.inactive.set()',
           (request) => track().inactive.set(request),
         ),
       },
     },
     clip: {
-      selectAllOnTrack: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.clip.selectAllOnTrack',
+      selectAllOnTrack: guard(
+                  'daw.clip.selectAllOnTrack',
         'daw.clip.selectAllOnTrack()',
         (request) => clip().selectAllOnTrack(request),
       ),
     },
     transport: {
-      play: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.transport.play',
+      play: guard(
+                  'daw.transport.play',
         'daw.transport.play()',
         () => transport().play(),
       ),
-      stop: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.transport.stop',
+      stop: guard(
+                  'daw.transport.stop',
         'daw.transport.stop()',
         () => transport().stop(),
       ),
-      record: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.transport.record',
+      record: guard(
+                  'daw.transport.record',
         'daw.transport.record()',
         () => transport().record(),
       ),
-      getStatus: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.transport.getStatus',
+      getStatus: guard(
+                  'daw.transport.getStatus',
         'daw.transport.getStatus()',
         () => transport().getStatus(),
       ),
     },
     workflow: {
       run: {
-        start: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'workflow.run.start',
+        start: guard(
+                    'workflow.run.start',
           'workflow.run.start()',
           (request) => workflow().run.start(request),
         ),
       },
     },
     import: {
-      analyze: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.import.analyze',
+      analyze: guard(
+                  'daw.import.analyze',
         'daw.import.analyze()',
         (request) => importClient().analyze(request),
       ),
       cache: {
-        save: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.import.cache.save',
+        save: guard(
+                    'daw.import.cache.save',
           'daw.import.cache.save()',
           (request) => importClient().cache.save(request),
         ),
       },
       run: {
-        start: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.import.run.start',
+        start: guard(
+                    'daw.import.run.start',
           'daw.import.run.start()',
           (request) => importClient().run.start(request),
         ),
       },
     },
     stripSilence: {
-      open: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.stripSilence.open',
+      open: guard(
+                  'daw.stripSilence.open',
         'daw.stripSilence.open()',
         () => stripSilence().open(),
       ),
-      execute: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.stripSilence.execute',
+      execute: guard(
+                  'daw.stripSilence.execute',
         'daw.stripSilence.execute()',
         (request) => stripSilence().execute(request),
       ),
     },
     export: {
       range: {
-        set: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.export.range.set',
+        set: guard(
+                    'daw.export.range.set',
           'daw.export.range.set()',
           (request) => exportClient().range.set(request),
         ),
       },
-      start: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'daw.export.start',
+      start: guard(
+                  'daw.export.start',
         'daw.export.start()',
         (request) => exportClient().start(request),
       ),
       direct: {
-        start: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.export.direct.start',
+        start: guard(
+                    'daw.export.direct.start',
           'daw.export.direct.start()',
           (request) => exportClient().direct.start(request),
         ),
       },
       mixSource: {
-        list: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.export.mixWithSource',
+        list: guard(
+                    'daw.export.mixWithSource',
           'export.mixSource.list()',
           (request) => exportClient().mixSource.list(request),
         ),
       },
       run: {
-        start: createCapabilityGuard(
-          allowedCapabilities,
-          pluginId,
-          'daw.export.run.start',
+        start: guard(
+                    'daw.export.run.start',
           'daw.export.run.start()',
           (request) => exportClient().run.start(request),
         ),
       },
     },
     jobs: {
-      create: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.create',
+      create: guard(
+                  'jobs.create',
         'jobs.create()',
         (request) => jobs().create(request),
       ),
-      update: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.update',
+      update: guard(
+                  'jobs.update',
         'jobs.update()',
         (request) => jobs().update(request),
       ),
-      get: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.get',
+      get: guard(
+                  'jobs.get',
         'jobs.get()',
         (jobId) => jobs().get(jobId),
       ),
-      list: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.list',
+      list: guard(
+                  'jobs.list',
         'jobs.list()',
         (filter) => jobs().list(filter),
       ),
-      cancel: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.cancel',
+      cancel: guard(
+                  'jobs.cancel',
         'jobs.cancel()',
         (jobId) => jobs().cancel(jobId),
       ),
-      delete: createCapabilityGuard(
-        allowedCapabilities,
-        pluginId,
-        'jobs.delete',
+      delete: guard(
+                  'jobs.delete',
         'jobs.delete()',
         (jobId) => jobs().delete(jobId),
       ),
