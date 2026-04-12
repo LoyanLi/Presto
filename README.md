@@ -87,6 +87,12 @@ npm run tauri:build
 - [内核开发文档](docs/kernel-development/README.md)
 - [插件开发与规范](docs/plugin-development/README.md)
 
+## License
+
+Presto 以 `AGPL-3.0-only` 发布。仓库根目录的 `LICENSE` 是唯一许可证文本来源。
+
+第三方依赖继续遵循各自原始许可证；本仓库新增的源代码与改动部分按 `AGPL-3.0-only` 管理。
+
 ## 捐赠
 
 如果这个项目对你有帮助，可以扫码支持：

@@ -15,5 +15,6 @@
     "./clients/plugins": "./src/clients/plugins.ts",
     "./clients/shell": "./src/clients/shell.ts",
     "./clients/window": "./src/clients/window.ts"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }

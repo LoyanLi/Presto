@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.7
+
+- 宿主新增独立 `Runs` 页面，统一展示 `workflow`、`automation`、`command` 三个维度的成功运行排行。
+- `workflow` 统计口径改为“成功完成的 workflow job”；`workflow.run.start` 不再计入 workflow 榜，但继续计入 command 榜。
+- workflow 成功执行时会把内部每次成功 command 调用一并累计到 command 榜，榜单现在反映实际运行次数，而不是仅反映 workflow 入口次数。
+- command 榜支持宿主侧文字译名显示，页面布局和交互语言与现有 host shell 保持同一套卡片、配色和滚动规则。
+- 删除未继续使用的静态 landing preview 入口和相关目录。
+- 仓库许可证基线明确为 `AGPL-3.0-only`，并把 README、包元数据与 Rust crate 元数据统一到同一 SPDX 标识。
+
 ## 0.3.6
 
 - public capability registry 统一收口到 `daw.*` 命名空间，workflow / automation manifest 与 `usesCapability` 声明现在都对齐同一套 capability ID。

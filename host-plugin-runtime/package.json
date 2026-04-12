@@ -8,5 +8,6 @@
   },
   "exports": {
     "./browser": "./browser.ts"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }

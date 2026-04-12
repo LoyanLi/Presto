@@ -15,5 +15,6 @@
     "./plugins/page": "./src/plugins/page.ts",
     "./plugins/settings": "./src/plugins/settings.ts",
     "./plugins/storage": "./src/plugins/storage.ts"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }
