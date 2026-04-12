@@ -35,12 +35,14 @@ test('runs surface renders a dedicated empty state when no usage metrics exist',
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
       summary: {
-        totals: { workflowRuns: 0, automationRuns: 0, commandRuns: 0 },
+        totals: { workflowRuns: 0, automationRuns: 0, toolRuns: 0, commandRuns: 0 },
         topWorkflow: null,
         topAutomation: null,
+        topTool: null,
         topCommand: null,
         workflows: [],
         automations: [],
+        tools: [],
         commands: [],
       },
     }),
@@ -57,7 +59,7 @@ test('runs surface renders translated command labels and ranked usage sections',
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
       summary: {
-        totals: { workflowRuns: 3, automationRuns: 1, commandRuns: 4 },
+        totals: { workflowRuns: 3, automationRuns: 1, toolRuns: 1, commandRuns: 4 },
         topWorkflow: {
           key: 'official.import-workflow.run',
           label: 'Import Workflow',
@@ -69,6 +71,12 @@ test('runs surface renders translated command labels and ranked usage sections',
           label: 'Batch ARA Backup',
           count: 1,
           lastUsedAt: '2026-04-12T11:00:00.000Z',
+        },
+        topTool: {
+          key: 'installed.audio-tools:ec3-decode',
+          label: 'EC3 Decode',
+          count: 1,
+          lastUsedAt: '2026-04-12T10:30:00.000Z',
         },
         topCommand: {
           key: 'workflow.run.start',
@@ -89,6 +97,14 @@ test('runs surface renders translated command labels and ranked usage sections',
             label: 'Batch ARA Backup',
             count: 1,
             lastUsedAt: '2026-04-12T11:00:00.000Z',
+          },
+        ],
+        tools: [
+          {
+            key: 'installed.audio-tools:ec3-decode',
+            label: 'EC3 Decode',
+            count: 1,
+            lastUsedAt: '2026-04-12T10:30:00.000Z',
           },
         ],
         commands: [
@@ -112,6 +128,7 @@ test('runs surface renders translated command labels and ranked usage sections',
   assert.match(markup, /Analyze Import Source/)
   assert.match(markup, /Workflow ranking/)
   assert.match(markup, /Automation ranking/)
+  assert.match(markup, /Tool ranking/)
   assert.match(markup, /Command ranking/)
   assert.doesNotMatch(markup, /COUNT/)
   assert.doesNotMatch(markup, /presto-stat-chip/)
@@ -130,7 +147,7 @@ test('runs surface renders translated workflow-step command labels in zh-CN', as
     React.createElement(HostRunsSurfaceView, {
       locale: 'zh-CN',
       summary: {
-        totals: { workflowRuns: 1, automationRuns: 0, commandRuns: 2 },
+        totals: { workflowRuns: 1, automationRuns: 0, toolRuns: 1, commandRuns: 2 },
         topWorkflow: {
           key: 'official.import-workflow.run',
           label: '导入工作流',
@@ -138,6 +155,12 @@ test('runs surface renders translated workflow-step command labels in zh-CN', as
           lastUsedAt: '2026-04-12T12:00:00.000Z',
         },
         topAutomation: null,
+        topTool: {
+          key: 'installed.audio-tools:ixml-delete',
+          label: '删除 iXML',
+          count: 1,
+          lastUsedAt: '2026-04-12T11:00:00.000Z',
+        },
         topCommand: {
           key: 'daw.editing.createFadesBasedOnPreset',
           count: 1,
@@ -152,6 +175,14 @@ test('runs surface renders translated workflow-step command labels in zh-CN', as
           },
         ],
         automations: [],
+        tools: [
+          {
+            key: 'installed.audio-tools:ixml-delete',
+            label: '删除 iXML',
+            count: 1,
+            lastUsedAt: '2026-04-12T11:00:00.000Z',
+          },
+        ],
         commands: [
           {
             key: 'daw.editing.createFadesBasedOnPreset',
@@ -180,9 +211,10 @@ test('runs surface keeps partially empty ranking sections within the same card l
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
       summary: {
-        totals: { workflowRuns: 0, automationRuns: 0, commandRuns: 2 },
+        totals: { workflowRuns: 0, automationRuns: 0, toolRuns: 0, commandRuns: 2 },
         topWorkflow: null,
         topAutomation: null,
+        topTool: null,
         topCommand: {
           key: 'workflow.run.start',
           count: 2,
@@ -190,6 +222,7 @@ test('runs surface keeps partially empty ranking sections within the same card l
         },
         workflows: [],
         automations: [],
+        tools: [],
         commands: [
           {
             key: 'workflow.run.start',
@@ -201,9 +234,10 @@ test('runs surface keeps partially empty ranking sections within the same card l
     }),
   )
 
-  assert.equal((markup.match(/surface-container-low/g) || []).length, 3)
+  assert.equal((markup.match(/surface-container-low/g) || []).length, 4)
   assert.match(markup, /Workflow ranking/)
   assert.match(markup, /Automation ranking/)
+  assert.match(markup, /Tool ranking/)
   assert.match(markup, /Command ranking/)
   assert.match(markup, /No data yet/)
 })
@@ -214,7 +248,7 @@ test('runs surface keeps a strict three-column-or-one-column grid and confines s
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
       summary: {
-        totals: { workflowRuns: 6, automationRuns: 4, commandRuns: 8 },
+        totals: { workflowRuns: 6, automationRuns: 4, toolRuns: 2, commandRuns: 8 },
         topWorkflow: {
           key: 'official.import-workflow.run',
           label: 'Import Workflow',
@@ -226,6 +260,12 @@ test('runs surface keeps a strict three-column-or-one-column grid and confines s
           label: 'Batch ARA Backup',
           count: 2,
           lastUsedAt: '2026-04-12T11:00:00.000Z',
+        },
+        topTool: {
+          key: 'installed.audio-tools:ec3-decode',
+          label: 'EC3 Decode',
+          count: 2,
+          lastUsedAt: '2026-04-12T11:30:00.000Z',
         },
         topCommand: {
           key: 'workflow.run.start',
@@ -260,6 +300,14 @@ test('runs surface keeps a strict three-column-or-one-column grid and confines s
             lastUsedAt: '2026-04-12T09:00:00.000Z',
           },
         ],
+        tools: [
+          {
+            key: 'installed.audio-tools:ec3-decode',
+            label: 'EC3 Decode',
+            count: 2,
+            lastUsedAt: '2026-04-12T11:30:00.000Z',
+          },
+        ],
         commands: [
           {
             key: 'workflow.run.start',
@@ -284,5 +332,5 @@ test('runs surface keeps a strict three-column-or-one-column grid and confines s
   assert.match(markup, /grid-template-columns:\s*minmax\(0, 1fr\)/)
   assert.doesNotMatch(markup, /auto-fit/)
   assert.match(markup, /overflow:hidden/)
-  assert.equal((markup.match(/overflow-y:auto/g) || []).length, 3)
+  assert.equal((markup.match(/overflow-y:auto/g) || []).length, 4)
 })

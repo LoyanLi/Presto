@@ -68,6 +68,12 @@ export interface LoadHostPluginsInput {
       commandCounts: Record<string, number>
       at?: string
     }): void
+    recordToolRunSuccess?(input: {
+      jobId: string
+      toolKey: string
+      label?: string
+      at?: string
+    }): void
   }
 }
 
@@ -156,6 +162,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         ? {
             recordCommandSuccess: input.metricsRecorder.recordCommandSuccess,
             recordWorkflowJobSuccess: input.metricsRecorder.recordWorkflowJobSuccess,
+            recordToolRunSuccess: input.metricsRecorder.recordToolRunSuccess,
           }
         : undefined,
     })

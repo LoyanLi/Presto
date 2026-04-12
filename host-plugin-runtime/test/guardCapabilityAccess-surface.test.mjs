@@ -455,6 +455,56 @@ test('guardCapabilityAccess records workflow job metrics from jobs.get while cou
   ])
 })
 
+test('guardCapabilityAccess records tool job metrics from jobs.get without inflating command totals', async () => {
+  const guardCapabilityAccess = await loadGuardCapabilityAccess()
+  const presto = createPrestoFixture([])
+  const metricsEvents = []
+  const manifest = {
+    pluginId: 'plugin.guard.tools',
+    displayName: 'Guard Tools',
+    requiredCapabilities: ['jobs.get'],
+  }
+
+  const guarded = guardCapabilityAccess(presto, manifest, {
+    recordCommandSuccess(capabilityId) {
+      metricsEvents.push({ kind: 'command', capabilityId })
+    },
+    recordToolRunSuccess(input) {
+      metricsEvents.push({ kind: 'toolJob', ...input })
+    },
+  })
+
+  presto.jobs.get = async (jobId) => ({
+    jobId,
+    capability: 'tool.run',
+    targetDaw: 'host',
+    state: 'succeeded',
+    metadata: {
+      pluginId: 'plugin.guard.tools',
+      toolId: 'ec3-decode',
+      toolTitle: 'EC3 Decode',
+    },
+    result: {
+      metrics: {
+        toolId: 'ec3-decode',
+      },
+    },
+    finishedAt: '2026-04-12T11:45:00.000Z',
+  })
+
+  await guarded.jobs.get('tool-job-1')
+
+  assert.deepEqual(metricsEvents, [
+    {
+      kind: 'toolJob',
+      jobId: 'tool-job-1',
+      toolKey: 'plugin.guard.tools:ec3-decode',
+      label: 'EC3 Decode',
+      at: '2026-04-12T11:45:00.000Z',
+    },
+  ])
+})
+
 test('guardCapabilityAccess does not record failed capability executions', async () => {
   const guardCapabilityAccess = await loadGuardCapabilityAccess()
   const metricsEvents = []

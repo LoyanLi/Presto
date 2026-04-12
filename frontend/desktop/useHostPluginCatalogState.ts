@@ -18,6 +18,7 @@ import { getSystemLocaleCandidates, resolveHostLocale } from '../host/i18n'
 import {
   recordAutomationRunSuccess,
   recordCommandRunSuccess,
+  recordToolRunSuccess,
   recordWorkflowJobSuccess,
 } from '../host/hostRunMetrics'
 import { loadHostPlugins } from '../host/pluginHostRuntime'
@@ -121,6 +122,13 @@ export function useHostPluginCatalogState({
               workflowId,
               label,
               commandCounts,
+              at,
+            }),
+          recordToolRunSuccess: ({ jobId, toolKey, label, at }) =>
+            recordToolRunSuccess({
+              jobId,
+              toolKey,
+              label,
               at,
             }),
         },

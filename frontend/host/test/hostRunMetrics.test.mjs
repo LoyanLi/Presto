@@ -55,11 +55,13 @@ test('host run metrics falls back to an empty snapshot when storage payload is i
   const snapshot = module.hydrateHostRunMetricsState()
 
   assert.deepEqual(snapshot, {
-    version: 2,
+    version: 3,
     workflows: {},
     automations: {},
+    tools: {},
     commands: {},
     processedWorkflowJobs: {},
+    processedToolJobs: {},
   })
 })
 
@@ -96,6 +98,23 @@ test('host run metrics records workflow-job metrics exactly once and keeps comma
     label: 'Batch ARA Backup',
     at: '2026-04-12T12:00:00.000Z',
   })
+  module.recordToolRunSuccess({
+    toolKey: 'installed.audio-tools:ec3-decode',
+    label: 'EC3 Decode',
+    jobId: 'tool-job-1',
+    at: '2026-04-12T16:00:00.000Z',
+  })
+  module.recordToolRunSuccess({
+    toolKey: 'installed.audio-tools:ec3-decode',
+    label: 'EC3 Decode',
+    jobId: 'tool-job-1',
+    at: '2026-04-12T17:00:00.000Z',
+  })
+  module.recordToolRunSuccess({
+    toolKey: 'installed.audio-tools:ixml-delete',
+    label: 'Delete iXML',
+    at: '2026-04-12T11:30:00.000Z',
+  })
   module.recordCommandRunSuccess({
     capabilityId: 'daw.import.analyze',
     at: '2026-04-12T08:00:00.000Z',
@@ -115,12 +134,21 @@ test('host run metrics records workflow-job metrics exactly once and keeps comma
   assert.deepEqual(summary.totals, {
     workflowRuns: 1,
     automationRuns: 1,
+    toolRuns: 2,
     commandRuns: 7,
   })
   assert.equal(summary.topWorkflow?.key, 'official.import-workflow.run')
   assert.equal(summary.topWorkflow?.count, 1)
   assert.equal(summary.topAutomation?.key, 'official.batch-ara-backup:run')
+  assert.equal(summary.topTool?.key, 'installed.audio-tools:ec3-decode')
   assert.equal(summary.topCommand?.key, 'daw.track.rename')
+  assert.deepEqual(
+    summary.tools.map((entry) => [entry.key, entry.count]),
+    [
+      ['installed.audio-tools:ec3-decode', 1],
+      ['installed.audio-tools:ixml-delete', 1],
+    ],
+  )
   assert.deepEqual(
     summary.commands.map((entry) => [entry.key, entry.count]),
     [
@@ -131,8 +159,10 @@ test('host run metrics records workflow-job metrics exactly once and keeps comma
       ['workflow.run.start', 1],
     ],
   )
-  assert.equal(persisted.version, 2)
+  assert.equal(persisted.version, 3)
   assert.equal(persisted.workflows['official.import-workflow.run'].lastUsedAt, '2026-04-12T14:00:00.000Z')
   assert.equal(persisted.automations['official.batch-ara-backup:run'].label, 'Batch ARA Backup')
+  assert.equal(persisted.tools['installed.audio-tools:ec3-decode'].label, 'EC3 Decode')
   assert.equal(persisted.processedWorkflowJobs['workflow-job-1'], '2026-04-12T14:00:00.000Z')
+  assert.equal(persisted.processedToolJobs['tool-job-1'], '2026-04-12T16:00:00.000Z')
 })

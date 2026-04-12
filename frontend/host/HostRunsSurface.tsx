@@ -211,7 +211,7 @@ function formatMetricTimestamp(locale: HostLocale, value: string): string {
 function renderMetricLabel(
   locale: HostLocale,
   item: HostRunMetricListItem,
-  kind: 'workflow' | 'automation' | 'command',
+  kind: 'workflow' | 'automation' | 'tool' | 'command',
 ): string {
   if (kind === 'command') {
     return formatCapabilityLabel(locale, item.key)
@@ -230,7 +230,7 @@ function RankingSection({
   locale: HostLocale
   title: string
   items: HostRunMetricListItem[]
-  kind: 'workflow' | 'automation' | 'command'
+  kind: 'workflow' | 'automation' | 'tool' | 'command'
   description?: string
 }) {
   return (
@@ -278,6 +278,7 @@ export function HostRunsSurfaceView({
   const isEmpty =
     summary.totals.workflowRuns === 0 &&
     summary.totals.automationRuns === 0 &&
+    summary.totals.toolRuns === 0 &&
     summary.totals.commandRuns === 0
 
   return (
@@ -297,6 +298,7 @@ export function HostRunsSurfaceView({
         <div className={runsSurfaceGridClassName} style={gridStyle}>
           <RankingSection locale={locale} title={translateHost(locale, 'runs.list.workflows')} items={summary.workflows} kind="workflow" />
           <RankingSection locale={locale} title={translateHost(locale, 'runs.list.automations')} items={summary.automations} kind="automation" />
+          <RankingSection locale={locale} title={translateHost(locale, 'runs.list.tools')} items={summary.tools} kind="tool" />
           <RankingSection
             locale={locale}
             title={translateHost(locale, 'runs.list.commands')}

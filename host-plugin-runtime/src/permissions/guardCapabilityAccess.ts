@@ -28,6 +28,12 @@ export interface PluginRunMetricsRecorder {
     commandCounts: Record<string, number>
     at?: string
   }): void
+  recordToolRunSuccess?(input: {
+    jobId: string
+    toolKey: string
+    label?: string
+    at?: string
+  }): void
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -94,6 +100,57 @@ function getWorkflowJobMetrics(
   }
 }
 
+function getToolJobMetrics(
+  value: unknown,
+  fallbackPluginId: string,
+):
+  | {
+      jobId: string
+      toolKey: string
+      label?: string
+      at?: string
+    }
+  | null {
+  if (!isRecord(value) || value.capability !== 'tool.run' || value.state !== 'succeeded') {
+    return null
+  }
+
+  const jobId = typeof value.jobId === 'string' ? value.jobId.trim() : ''
+  if (jobId.length === 0) {
+    return null
+  }
+
+  const metadata = isRecord(value.metadata) ? value.metadata : null
+  const result = isRecord(value.result) ? value.result : null
+  const metrics = result && isRecord(result.metrics) ? result.metrics : null
+  const toolIdCandidate =
+    (metrics && typeof metrics.toolId === 'string' ? metrics.toolId : undefined) ??
+    (metadata && typeof metadata.toolId === 'string' ? metadata.toolId : undefined) ??
+    (result && typeof result.toolId === 'string' ? result.toolId : undefined) ??
+    ''
+  const toolId = toolIdCandidate.trim()
+  if (toolId.length === 0) {
+    return null
+  }
+
+  const pluginIdCandidate = metadata && typeof metadata.pluginId === 'string' ? metadata.pluginId : fallbackPluginId
+  const pluginId = pluginIdCandidate.trim() || fallbackPluginId
+  const labelCandidate =
+    (metrics && typeof metrics.toolLabel === 'string' ? metrics.toolLabel : undefined) ??
+    (metadata && typeof metadata.toolTitle === 'string' ? metadata.toolTitle : undefined) ??
+    (metadata && typeof metadata.toolLabel === 'string' ? metadata.toolLabel : undefined) ??
+    (result && typeof result.toolTitle === 'string' ? result.toolTitle : undefined) ??
+    (result && typeof result.toolLabel === 'string' ? result.toolLabel : undefined)
+  const label = typeof labelCandidate === 'string' && labelCandidate.trim().length > 0 ? labelCandidate : undefined
+
+  return {
+    jobId,
+    toolKey: `${pluginId}:${toolId}`,
+    ...(label ? { label } : {}),
+    ...(typeof value.finishedAt === 'string' && value.finishedAt.trim().length > 0 ? { at: value.finishedAt } : {}),
+  }
+}
+
 function shouldRecordCommand(capabilityId: string): boolean {
   return !capabilityId.startsWith('jobs.')
 }
@@ -130,6 +187,11 @@ function createCapabilityGuard<Args extends unknown[], Result>(
       const workflowJobMetrics = getWorkflowJobMetrics(result, pluginId, pluginDisplayName)
       if (workflowJobMetrics) {
         metricsRecorder?.recordWorkflowJobSuccess?.(workflowJobMetrics)
+      }
+
+      const toolJobMetrics = getToolJobMetrics(result, pluginId)
+      if (toolJobMetrics) {
+        metricsRecorder?.recordToolRunSuccess?.(toolJobMetrics)
       }
     }
 

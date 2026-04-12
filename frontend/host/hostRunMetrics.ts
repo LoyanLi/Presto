@@ -5,11 +5,13 @@ export interface HostRunMetricRecord {
 }
 
 export interface HostRunMetricsSnapshot {
-  version: 2
+  version: 3
   workflows: Record<string, HostRunMetricRecord>
   automations: Record<string, HostRunMetricRecord>
+  tools: Record<string, HostRunMetricRecord>
   commands: Record<string, HostRunMetricRecord>
   processedWorkflowJobs: Record<string, string>
+  processedToolJobs: Record<string, string>
 }
 
 export interface HostRunMetricListItem extends HostRunMetricRecord {
@@ -20,19 +22,22 @@ export interface HostRunMetricsSummary {
   totals: {
     workflowRuns: number
     automationRuns: number
+    toolRuns: number
     commandRuns: number
   }
   topWorkflow: HostRunMetricListItem | null
   topAutomation: HostRunMetricListItem | null
+  topTool: HostRunMetricListItem | null
   topCommand: HostRunMetricListItem | null
   workflows: HostRunMetricListItem[]
   automations: HostRunMetricListItem[]
+  tools: HostRunMetricListItem[]
   commands: HostRunMetricListItem[]
 }
 
-export const HOST_RUN_METRICS_STORAGE_KEY = 'presto.host.run-metrics.v2'
+export const HOST_RUN_METRICS_STORAGE_KEY = 'presto.host.run-metrics.v3'
 
-type HostRunMetricBucket = keyof Pick<HostRunMetricsSnapshot, 'workflows' | 'automations' | 'commands'>
+type HostRunMetricBucket = keyof Pick<HostRunMetricsSnapshot, 'workflows' | 'automations' | 'tools' | 'commands'>
 
 const listeners = new Set<() => void>()
 
@@ -95,6 +100,18 @@ function normalizeProcessedWorkflowJobs(value: unknown): Record<string, string> 
   )
 }
 
+function normalizeProcessedToolJobs(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([jobId, processedAt]) =>
+      typeof processedAt === 'string' && processedAt.trim().length > 0 ? [[jobId, processedAt]] : [],
+    ),
+  )
+}
+
 function readStoredSnapshot(): HostRunMetricsSnapshot {
   const storage = getStorage()
   if (!storage) {
@@ -108,16 +125,18 @@ function readStoredSnapshot(): HostRunMetricsSnapshot {
     }
 
     const parsed = JSON.parse(raw)
-    if (!isRecord(parsed) || parsed.version !== 2) {
+    if (!isRecord(parsed) || parsed.version !== 3) {
       return createEmptyHostRunMetricsSnapshot()
     }
 
     return {
-      version: 2,
+      version: 3,
       workflows: normalizeMetricBucket(parsed.workflows),
       automations: normalizeMetricBucket(parsed.automations),
+      tools: normalizeMetricBucket(parsed.tools),
       commands: normalizeMetricBucket(parsed.commands),
       processedWorkflowJobs: normalizeProcessedWorkflowJobs(parsed.processedWorkflowJobs),
+      processedToolJobs: normalizeProcessedToolJobs(parsed.processedToolJobs),
     }
   } catch {
     return createEmptyHostRunMetricsSnapshot()
@@ -224,11 +243,13 @@ function sortBucket(bucket: Record<string, HostRunMetricRecord>): HostRunMetricL
 
 export function createEmptyHostRunMetricsSnapshot(): HostRunMetricsSnapshot {
   return {
-    version: 2,
+    version: 3,
     workflows: {},
     automations: {},
+    tools: {},
     commands: {},
     processedWorkflowJobs: {},
+    processedToolJobs: {},
   }
 }
 
@@ -284,6 +305,39 @@ export function recordCommandRunSuccess({
   return updateSnapshot((snapshot) => updateBucket(snapshot, 'commands', capabilityId, undefined, at))
 }
 
+export function recordToolRunSuccess({
+  toolKey,
+  label,
+  jobId,
+  at = new Date().toISOString(),
+}: {
+  toolKey: string
+  label?: string
+  jobId?: string
+  at?: string
+}): HostRunMetricsSnapshot {
+  return updateSnapshot((snapshot) => {
+    const normalizedJobId = typeof jobId === 'string' ? jobId.trim() : ''
+    const normalizedToolKey = toolKey.trim()
+    if (normalizedToolKey.length === 0 || (normalizedJobId.length > 0 && snapshot.processedToolJobs[normalizedJobId])) {
+      return snapshot
+    }
+
+    const nextSnapshot = updateBucket(snapshot, 'tools', normalizedToolKey, label, at)
+    if (normalizedJobId.length === 0) {
+      return nextSnapshot
+    }
+
+    return {
+      ...nextSnapshot,
+      processedToolJobs: {
+        ...nextSnapshot.processedToolJobs,
+        [normalizedJobId]: at,
+      },
+    }
+  })
+}
+
 export function recordWorkflowJobSuccess({
   jobId,
   workflowId,
@@ -324,19 +378,23 @@ export function createHostRunMetricsSummary(
 ): HostRunMetricsSummary {
   const workflows = sortBucket(snapshot.workflows)
   const automations = sortBucket(snapshot.automations)
+  const tools = sortBucket(snapshot.tools)
   const commands = sortBucket(snapshot.commands)
 
   return {
     totals: {
       workflowRuns: sumCounts(snapshot.workflows),
       automationRuns: sumCounts(snapshot.automations),
+      toolRuns: sumCounts(snapshot.tools),
       commandRuns: sumCounts(snapshot.commands),
     },
     topWorkflow: workflows[0] ?? null,
     topAutomation: automations[0] ?? null,
+    topTool: tools[0] ?? null,
     topCommand: commands[0] ?? null,
     workflows,
     automations,
+    tools,
     commands,
   }
 }
