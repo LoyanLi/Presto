@@ -9,6 +9,37 @@ let pluginModulePromise = null
 
 function createSharedUiMock() {
   return {
+    WorkflowStepper({ steps = [], currentStep = 1, className }) {
+      return React.createElement(
+        'div',
+        { className: ['presto-workflow-stepper', className].filter(Boolean).join(' ') },
+        React.createElement(
+          'div',
+          { className: 'presto-workflow-stepper__row' },
+          steps.map((step, index) =>
+            React.createElement(
+              'div',
+              {
+                key: step.id ?? index,
+                className: [
+                  'presto-workflow-stepper__item',
+                  index + 1 === currentStep ? 'presto-workflow-stepper__item--active' : null,
+                  index + 1 < currentStep ? 'presto-workflow-stepper__item--complete' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' '),
+              },
+              React.createElement('span', { className: 'presto-workflow-stepper__index' }, String(index + 1)),
+              React.createElement(
+                'span',
+                { className: 'presto-workflow-stepper__label' },
+                typeof step === 'object' && step !== null && 'label' in step ? step.label : step,
+              ),
+            ),
+          ),
+        ),
+      )
+    },
     WorkflowFrame({ title, subtitle, steps = [], currentStep = 1, children, footer, className }) {
       return React.createElement(
         'section',
@@ -365,7 +396,7 @@ test('runner executes bundled script resource with expected args', async () => {
   assert.match(result.summary, /Atmos video mux completed:/)
 })
 
-test('tool page renders the formal three-step workflow shell instead of the old staging page', async () => {
+test('tool page renders the approved two-step workflow shell without the outer workflow frame', async () => {
   const pluginModule = await loadPluginModule()
   const markup = renderToStaticMarkup(
     React.createElement(pluginModule.AtmosVideoMuxToolPage, {
@@ -373,39 +404,58 @@ test('tool page renders the formal three-step workflow shell instead of the old 
     }),
   )
 
-  assert.match(markup, /Atmos Video Mux/)
   assert.match(markup, /Sources/)
-  assert.match(markup, /Output/)
-  assert.match(markup, /Review \/ Run/)
-  assert.match(markup, /presto-workflow-frame/)
+  assert.match(markup, /Output \/ Review \/ Run/)
   assert.match(markup, /presto-workflow-stepper/)
   assert.match(markup, /ui-panel/)
   assert.match(markup, /presto-workflow-action-bar/)
   assert.match(markup, /Pick video MP4/)
   assert.match(markup, /Pick Atmos MP4/)
-  assert.match(markup, /Run option/)
-  assert.match(markup, /Next: Output/)
+  assert.match(markup, /Allow FPS conversion/)
+  assert.match(markup, /Next: Output \/ Review \/ Run/)
+  assert.doesNotMatch(markup, /Selected files/)
+  assert.doesNotMatch(markup, /Video<\/span><strong>Pending/)
+  assert.doesNotMatch(markup, /Atmos<\/span><strong>Pending/)
+  assert.doesNotMatch(markup, /presto-workflow-frame/)
+  assert.doesNotMatch(markup, /presto-page-header/)
+  assert.doesNotMatch(markup, /Official tool plugin/)
+  assert.doesNotMatch(markup, /Atmos Video Mux/)
+  assert.doesNotMatch(markup, /Run option/)
+  assert.doesNotMatch(markup, /Latest result/)
+  assert.doesNotMatch(markup, /class=\"tm-path\"/)
   assert.doesNotMatch(markup, /Host-side tool execution wiring is pending/)
   assert.doesNotMatch(markup, /Runner payload preview/)
 })
 
 test('tool page source routes runs through host.runTool and shared workflow ui helpers', async () => {
-  const [pageSource, uiSource] = await Promise.all([
+  const [pageSource, uiSource, cssSource] = await Promise.all([
     readFile(new URL('../dist/AtmosVideoMuxToolPage.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../dist/ui.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../dist/atmos-video-mux-tool.css', import.meta.url), 'utf8'),
   ])
 
   assert.match(pageSource, /host\.runTool/)
-  assert.match(pageSource, /WorkflowFrame/)
+  assert.match(pageSource, /WorkflowStepper/)
   assert.match(pageSource, /\.\/ui\.mjs/)
   assert.doesNotMatch(pageSource, /layoutStyle/)
+  assert.doesNotMatch(pageSource, /WorkflowFrame/)
+  assert.doesNotMatch(pageSource, /statusPanel/)
+  assert.doesNotMatch(pageSource, /Latest result/)
   assert.match(uiSource, /presto-workflow-action-bar/)
+  assert.match(uiSource, /WorkflowStepper/)
   assert.match(uiSource, /ui-panel/)
+  assert.match(pageSource, /tm-field-row tm-field-row--picker/)
+  assert.match(cssSource, /\.tm-field-row--picker\s*\{[\s\S]*align-items:\s*center;/)
+  assert.match(cssSource, /\.tm-field-label\s*\{/)
+  assert.match(cssSource, /\.tm-field-copy\s*\{/)
+  assert.match(cssSource, /\.tm-shell\s*\{[\s\S]*height:\s*100%;[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[\s\S]*overflow:\s*hidden;/)
+  assert.match(cssSource, /\.tm-shell__body\s*\{[\s\S]*overflow-y:\s*auto;/)
+  assert.doesNotMatch(cssSource, /\.tm-action-bar\s*\{[\s\S]*margin-top:\s*4px;/)
 })
 
-test('review step run action calls host.runTool with the normalized Atmos mux payload', async () => {
+test('second step run action calls host.runTool with the normalized Atmos mux payload', async () => {
   const { pageModule, restore } = await loadPageModuleWithHookHarness({
-    1: 3,
+    1: 2,
     2: '/tmp/source/video.mp4',
     3: '/tmp/source/atmos.mp4',
     4: '/tmp/out',
@@ -445,7 +495,7 @@ test('review step run action calls host.runTool with the normalized Atmos mux pa
       (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Run Atmos Mux',
     )
 
-    assert.ok(runButton, 'expected review step to expose a Run Atmos Mux action')
+    assert.ok(runButton, 'expected the second step to expose a Run Atmos Mux action')
     await runButton.props.onClick()
   } finally {
     restore()
@@ -506,4 +556,47 @@ test('source pickers request MP4-only file filters from host dialog.openFile', a
       filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
     },
   ])
+})
+
+test('selected source and review states do not render duplicate path blocks', async () => {
+  const stepOneHarness = await loadPageModuleWithHookHarness({
+    1: 1,
+    2: '/tmp/source/video.mp4',
+    3: '/tmp/source/atmos.mp4',
+    4: '',
+    5: true,
+    6: '',
+    7: false,
+  })
+  const stepTwoHarness = await loadPageModuleWithHookHarness({
+    1: 2,
+    2: '/tmp/source/video.mp4',
+    3: '/tmp/source/atmos.mp4',
+    4: '/tmp/out',
+    5: true,
+    6: '',
+    7: false,
+  })
+
+  try {
+    const stepOneMarkup = renderToStaticMarkup(
+      React.createElement(stepOneHarness.pageModule.AtmosVideoMuxToolPage, {
+        host: createHostMock(),
+      }),
+    )
+    const stepTwoMarkup = renderToStaticMarkup(
+      React.createElement(stepTwoHarness.pageModule.AtmosVideoMuxToolPage, {
+        host: createHostMock(),
+      }),
+    )
+
+    assert.doesNotMatch(stepOneMarkup, /class=\"tm-path\"/)
+    assert.doesNotMatch(stepTwoMarkup, /class=\"tm-path\"/)
+    assert.doesNotMatch(stepTwoMarkup, /\/tmp\/source\/video\.mp4/)
+    assert.doesNotMatch(stepTwoMarkup, /\/tmp\/source\/atmos\.mp4/)
+    assert.doesNotMatch(stepTwoMarkup, /\/tmp\/out/)
+  } finally {
+    stepOneHarness.restore()
+    stepTwoHarness.restore()
+  }
 })

@@ -130,6 +130,44 @@ export function WorkflowFrame({
   )
 }
 
+export function WorkflowStepper({ steps = [], currentStep = 1, className }) {
+  if (typeof sharedUi.WorkflowStepper === 'function') {
+    return h(sharedUi.WorkflowStepper, {
+      steps,
+      currentStep,
+      className,
+    })
+  }
+
+  const normalizedSteps = normalizeSteps(steps)
+  return h(
+    'div',
+    { className: ['presto-workflow-stepper', className].filter(Boolean).join(' ') },
+    h(
+      'div',
+      { className: 'presto-workflow-stepper__row' },
+      normalizedSteps.map((step, index) => {
+        const stepNumber = index + 1
+        const state =
+          stepNumber === currentStep
+            ? 'presto-workflow-stepper__item--active'
+            : stepNumber < currentStep
+              ? 'presto-workflow-stepper__item--complete'
+              : null
+        return h(
+          'div',
+          {
+            key: step.id ?? stepNumber,
+            className: ['presto-workflow-stepper__item', state].filter(Boolean).join(' '),
+          },
+          h('span', { className: 'presto-workflow-stepper__index' }, String(stepNumber)),
+          h('span', { className: 'presto-workflow-stepper__label' }, step.label),
+        )
+      }),
+    ),
+  )
+}
+
 export function WorkflowCard({ title, subtitle, actions, children, className }) {
   if (typeof sharedUi.Panel === 'function') {
     return h(

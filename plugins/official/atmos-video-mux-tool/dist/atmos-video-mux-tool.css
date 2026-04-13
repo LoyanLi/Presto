@@ -1,22 +1,35 @@
 .tm-shell {
-  min-height: 100%;
-}
-
-.tm-shell .presto-workflow-frame__body {
+  min-height: 0;
+  height: 100%;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   overflow: hidden;
+}
+
+.tm-stepper .presto-workflow-stepper__row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tm-shell__body {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  align-content: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.tm-panel .ui-panel__body {
+  display: grid;
+  gap: 14px;
 }
 
 .tm-step-stack {
   display: grid;
   gap: 16px;
   min-height: 0;
-}
-
-.tm-panel .ui-panel__body {
-  display: grid;
-  gap: 14px;
 }
 
 .tm-panel--scroll .ui-panel__body {
@@ -38,11 +51,40 @@
   gap: 12px;
 }
 
+.tm-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tm-field-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--presto-color-text-muted, rgba(80, 88, 102, 0.95));
+}
+
+.tm-field-copy {
+  margin: 0;
+  font-size: 12px;
+  color: var(--presto-color-text-muted, rgba(80, 88, 102, 0.95));
+}
+
 .tm-field-row {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
+}
+
+.tm-field-row--picker {
+  align-items: center;
+}
+
+.tm-field-control {
+  min-width: 0;
 }
 
 .tm-field-actions {
@@ -100,20 +142,6 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-}
-
-.tm-code {
-  margin: 0;
-  padding: 14px;
-  border-radius: 18px;
-  background: #0f172a;
-  color: #dbe5f4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  min-height: 0;
-  max-height: min(42vh, 360px);
-  overflow: auto;
 }
 
 .tm-algorithm {

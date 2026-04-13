@@ -1,6 +1,5 @@
 import React from './react-shared.mjs'
 import {
-  ATMOS_MUX_ALGORITHM_STEPS,
   buildAtmosMuxRunPreview,
   buildAtmosMuxToolRunRequest,
   inferParentDirectory,
@@ -11,16 +10,15 @@ import {
   WorkflowActionBar,
   WorkflowButton,
   WorkflowCard,
-  WorkflowFrame,
   WorkflowInput,
+  WorkflowStepper,
 } from './ui.mjs'
 
 const h = React.createElement
 
 const WORKFLOW_STEPS = [
   { id: 'sources', label: 'Sources' },
-  { id: 'output', label: 'Output' },
-  { id: 'review', label: 'Review / Run' },
+  { id: 'output-review-run', label: 'Output / Review / Run' },
 ]
 
 const MP4_FILE_PICKER_OPTIONS = Object.freeze({
@@ -89,7 +87,6 @@ export function AtmosVideoMuxToolPage({ host }) {
   const [atmosPath, setAtmosPath] = React.useState('')
   const [outputDir, setOutputDir] = React.useState('')
   const [allowFpsConversion, setAllowFpsConversion] = React.useState(true)
-  const [outputDirEntryCount, setOutputDirEntryCount] = React.useState(null)
   const [statusMessage, setStatusMessage] = React.useState('')
   const [isRunning, setIsRunning] = React.useState(false)
   const [lastRun, setLastRun] = React.useState(() => createEmptyLastRun())
@@ -144,35 +141,6 @@ export function AtmosVideoMuxToolPage({ host }) {
     setStatusMessage('Output directory staged.')
   }, [host.dialog])
 
-  const refreshOutputDirectoryListing = React.useCallback(async () => {
-    if (!outputDir) {
-      setStatusMessage('Select an output directory first.')
-      return
-    }
-
-    try {
-      const entries = await host.fs.readdir(outputDir)
-      setOutputDirEntryCount(Array.isArray(entries) ? entries.length : 0)
-      setStatusMessage('Output directory listing refreshed.')
-    } catch (error) {
-      setStatusMessage(toErrorMessage(error, 'Unable to list the output directory.'))
-    }
-  }, [host.fs, outputDir])
-
-  const openOutputDirectory = React.useCallback(async () => {
-    if (!outputDir) {
-      setStatusMessage('Select an output directory first.')
-      return
-    }
-
-    try {
-      const response = await host.shell.openPath(outputDir)
-      setStatusMessage(response ? `Open output directory: ${response}` : 'Opened output directory.')
-    } catch (error) {
-      setStatusMessage(toErrorMessage(error, 'Unable to open the output directory.'))
-    }
-  }, [host.shell, outputDir])
-
   const goPrevious = React.useCallback(() => {
     setStep((currentStep) => clampStep(currentStep - 1))
   }, [])
@@ -187,7 +155,7 @@ export function AtmosVideoMuxToolPage({ host }) {
     }
 
     setIsRunning(true)
-    setStatusMessage('Running Atmos video mux…')
+    setStatusMessage('Running Atmos video mux...')
 
     try {
       const response = await host.runTool(
@@ -217,37 +185,6 @@ export function AtmosVideoMuxToolPage({ host }) {
     }
   }, [allowFpsConversion, atmosPath, host, isRunning, outputDir, runPreview.canRun, videoPath])
 
-  const statusPanel =
-    statusMessage || lastRun.jobId
-      ? h(
-          WorkflowCard,
-          {
-            title: 'Run status',
-            subtitle: 'Latest host-owned tool execution result.',
-            className: 'tm-panel',
-          },
-          h(
-            'div',
-            { className: 'tm-summary' },
-            h(
-              'div',
-              { className: 'tm-summary__row' },
-              h(
-                StatusBadge,
-                {
-                  tone: lastRun.state === 'succeeded' ? 'success' : lastRun.state === 'failed' ? 'danger' : reviewTone,
-                },
-                lastRun.state === 'succeeded' ? 'Ready' : lastRun.state === 'failed' ? 'Failed' : isRunning ? 'Running' : 'Staged',
-              ),
-              lastRun.jobId ? h(StatItem, { label: 'Job', value: lastRun.jobId }) : null,
-              lastRun.outputPath ? h(StatItem, { label: 'Output', value: inferParentDirectory(lastRun.outputPath) || lastRun.outputPath }) : null,
-            ),
-            statusMessage ? h('p', { className: 'tm-status-note' }, statusMessage) : null,
-            lastRun.outputPath ? h('code', { className: 'tm-path' }, lastRun.outputPath) : null,
-          ),
-        )
-      : null
-
   function renderSourcesStep() {
     return h(
       'div',
@@ -261,91 +198,82 @@ export function AtmosVideoMuxToolPage({ host }) {
         },
         h(
           'div',
-          { className: 'tm-status-grid' },
-          h(StatItem, { label: 'Selected files', value: `${sourceReadyCount}/2` }),
-          h(StatItem, { label: 'Video', value: videoPath ? 'Ready' : 'Pending' }),
-          h(StatItem, { label: 'Atmos', value: atmosPath ? 'Ready' : 'Pending' }),
-        ),
-        h(
-          'div',
           { className: 'tm-field-grid' },
           h(
             'div',
-            { className: 'tm-field-row' },
-            h(WorkflowInput, {
-              label: 'Video MP4',
-              readOnly: true,
-              value: videoPath,
-              placeholder: 'Select the mastered video MP4',
-              hint: 'The output directory auto-follows this file until you override it.',
-            }),
+            { className: 'tm-field' },
+            h('p', { className: 'tm-field-label' }, 'Video MP4'),
             h(
               'div',
-              { className: 'tm-field-actions' },
+              { className: 'tm-field-row tm-field-row--picker' },
+              h(WorkflowInput, {
+                readOnly: true,
+                value: videoPath,
+                placeholder: 'Select the mastered video MP4',
+                className: 'tm-field-control',
+              }),
               h(
-                WorkflowButton,
-                {
-                  variant: 'secondary',
-                  onClick: pickVideo,
-                },
-                'Pick video MP4',
+                'div',
+                { className: 'tm-field-actions' },
+                h(
+                  WorkflowButton,
+                  {
+                    variant: 'secondary',
+                    onClick: pickVideo,
+                  },
+                  'Pick video MP4',
+                ),
               ),
             ),
+            h('p', { className: 'tm-field-copy' }, 'Pick the mastered picture file that will anchor the mux job.'),
+            videoPath ? null : h('p', { className: 'tm-status-note' }, 'Video source not selected yet.'),
           ),
-          videoPath
-            ? h('code', { className: 'tm-path' }, videoPath)
-            : h('p', { className: 'tm-status-note' }, 'Video source not selected yet.'),
           h(
             'div',
-            { className: 'tm-field-row' },
-            h(WorkflowInput, {
-              label: 'Atmos MP4',
-              readOnly: true,
-              value: atmosPath,
-              placeholder: 'Select the Atmos MP4 source',
-              hint: 'Use the official dual-MP4 mux algorithm input file.',
-            }),
+            { className: 'tm-field' },
+            h('p', { className: 'tm-field-label' }, 'Atmos MP4'),
             h(
               'div',
-              { className: 'tm-field-actions' },
+              { className: 'tm-field-row tm-field-row--picker' },
+              h(WorkflowInput, {
+                readOnly: true,
+                value: atmosPath,
+                placeholder: 'Select the Atmos MP4 source',
+                className: 'tm-field-control',
+              }),
               h(
-                WorkflowButton,
-                {
-                  variant: 'secondary',
-                  onClick: pickAtmos,
-                },
-                'Pick Atmos MP4',
+                'div',
+                { className: 'tm-field-actions' },
+                h(
+                  WorkflowButton,
+                  {
+                    variant: 'secondary',
+                    onClick: pickAtmos,
+                  },
+                  'Pick Atmos MP4',
+                ),
               ),
             ),
+            h('p', { className: 'tm-field-copy' }, 'Use the official dual-MP4 Atmos input file.'),
+            atmosPath ? null : h('p', { className: 'tm-status-note' }, 'Atmos source not selected yet.'),
           ),
-          atmosPath
-            ? h('code', { className: 'tm-path' }, atmosPath)
-            : h('p', { className: 'tm-status-note' }, 'Atmos source not selected yet.'),
-        ),
-      ),
-      h(
-        WorkflowCard,
-        {
-          title: 'Run option',
-          subtitle: 'Keep the algorithm behavior aligned with the official one-click tool.',
-          className: 'tm-panel',
-        },
-        h(
-          'label',
-          { className: 'tm-toggle' },
-          h('input', {
-            type: 'checkbox',
-            checked: allowFpsConversion,
-            onChange: (event) => setAllowFpsConversion(Boolean(event.target.checked)),
-          }),
           h(
-            'span',
-            null,
-            h('span', { className: 'tm-toggle__title' }, 'Allow FPS conversion'),
+            'label',
+            { className: 'tm-toggle tm-toggle--inline' },
+            h('input', {
+              type: 'checkbox',
+              checked: allowFpsConversion,
+              onChange: (event) => setAllowFpsConversion(Boolean(event.target.checked)),
+            }),
             h(
               'span',
-              { className: 'tm-toggle__hint' },
-              'Convert the video FPS when the source mismatch exceeds 0.01 before muxing.',
+              null,
+              h('span', { className: 'tm-toggle__title' }, 'Allow FPS conversion'),
+              h(
+                'span',
+                { className: 'tm-toggle__hint' },
+                'Convert the video FPS when the source mismatch exceeds 0.01 before muxing.',
+              ),
             ),
           ),
         ),
@@ -353,94 +281,16 @@ export function AtmosVideoMuxToolPage({ host }) {
     )
   }
 
-  function renderOutputStep() {
+  function renderOutputReviewRunStep() {
     return h(
       'div',
       { className: 'tm-step-stack' },
       h(
         WorkflowCard,
         {
-          title: 'Output directory',
-          subtitle: 'Pick the destination folder for the generated Atmos output MP4.',
+          title: 'Output / Review / Run',
+          subtitle: 'Set the output folder, review the staged inputs, and run the mux job.',
           className: 'tm-panel tm-panel--scroll',
-        },
-        h(
-          'div',
-          { className: 'tm-status-grid' },
-          h(StatItem, { label: 'Output folder', value: outputDir ? 'Ready' : 'Pending' }),
-          h(StatItem, { label: 'Listing', value: outputDirEntryCount === null ? 'Not loaded' : `${outputDirEntryCount} items` }),
-          h(StatItem, { label: 'Filename', value: 'Atmos_Output_YYYYMMDD_HHMMSS.mp4' }),
-        ),
-        h(
-          'div',
-          { className: 'tm-field-row' },
-          h(WorkflowInput, {
-            label: 'Destination',
-            readOnly: true,
-            value: outputDir,
-            placeholder: 'Select an output directory',
-            hint: 'If you skip this, the page defaults to the video file parent folder.',
-          }),
-          h(
-            'div',
-            { className: 'tm-field-actions' },
-            h(
-              WorkflowButton,
-              {
-                variant: 'secondary',
-                onClick: pickOutputDir,
-              },
-              'Pick output directory',
-            ),
-            h(
-              WorkflowButton,
-              {
-                variant: 'tertiary',
-                onClick: refreshOutputDirectoryListing,
-                disabled: !outputDir,
-              },
-              'Refresh listing',
-            ),
-            h(
-              WorkflowButton,
-              {
-                variant: 'tertiary',
-                onClick: openOutputDirectory,
-                disabled: !outputDir,
-              },
-              'Open output directory',
-            ),
-          ),
-        ),
-        outputDir ? h('code', { className: 'tm-path' }, outputDir) : h('p', { className: 'tm-status-note' }, 'Output directory not selected yet.'),
-      ),
-      h(
-        WorkflowCard,
-        {
-          title: 'Output behavior',
-          subtitle: 'The script writes a timestamped file and retries with H.264 level repair if required.',
-          className: 'tm-panel',
-        },
-        h(
-          'div',
-          { className: 'tm-summary' },
-          h('p', { className: 'tm-status-note' }, 'Output order remains video + Atmos + stereo, with `--input-video-frame-rate` passed into the mux step.'),
-          h('p', { className: 'tm-status-note' }, 'If muxing fails because of H.264 level incompatibility, the flow retries with `h264_metadata=level=5.1`.'),
-        ),
-      ),
-    )
-  }
-
-  function renderReviewStep() {
-    return h(
-      'div',
-      { className: 'tm-step-stack' },
-      h(
-        WorkflowCard,
-        {
-          title: 'Run readiness',
-          subtitle: 'Review the staged inputs and launch the host-owned tool job.',
-          className: 'tm-panel',
         },
         h(
           'div',
@@ -451,55 +301,90 @@ export function AtmosVideoMuxToolPage({ host }) {
         ),
         h(
           'div',
-          { className: 'tm-summary' },
+          { className: 'tm-field' },
+          h('p', { className: 'tm-field-label' }, 'Output directory'),
+          h(
+            'div',
+            { className: 'tm-field-row tm-field-row--picker' },
+            h(WorkflowInput, {
+              readOnly: true,
+              value: outputDir,
+              placeholder: 'Select an output directory',
+              className: 'tm-field-control',
+            }),
+            h(
+              'div',
+              { className: 'tm-field-actions' },
+              h(
+                WorkflowButton,
+                {
+                  variant: 'secondary',
+                  onClick: pickOutputDir,
+                },
+                'Pick output directory',
+              ),
+            ),
+          ),
+          h('p', { className: 'tm-field-copy' }, 'Defaults to the video file parent folder until you override it here.'),
+        ),
+        outputDir ? null : h('p', { className: 'tm-status-note' }, 'Output directory not selected yet.'),
+        h(
+          'div',
+          { className: 'tm-summary tm-summary--section' },
           h(
             'div',
             { className: 'tm-summary__row' },
             h(StatusBadge, { tone: reviewTone }, runPreview.canRun ? 'Ready to run' : 'Missing required input'),
-            lastRun.jobId ? h(StatusBadge, { tone: lastRun.state === 'succeeded' ? 'success' : 'warning' }, lastRun.jobId) : null,
+            lastRun.jobId
+              ? h(StatusBadge, { tone: lastRun.state === 'succeeded' ? 'success' : 'warning' }, lastRun.jobId)
+              : null,
           ),
-          videoPath ? h('code', { className: 'tm-path' }, videoPath) : null,
-          atmosPath ? h('code', { className: 'tm-path' }, atmosPath) : null,
-          outputDir ? h('code', { className: 'tm-path' }, outputDir) : null,
           runPreview.issues.length > 0
             ? h(
                 'ul',
                 { className: 'tm-algorithm' },
                 runPreview.issues.map((issue) => h('li', { key: issue }, issue)),
               )
-            : h('p', { className: 'tm-status-note' }, 'The host will create the `tool.run` job and execute the bundled script on your behalf.'),
-        ),
-      ),
-      h(
-        WorkflowCard,
-        {
-          title: 'Command preview',
-          subtitle: 'This is the normalized payload and script argument preview the page sends into `host.runTool(...)`.',
-          className: 'tm-panel tm-panel--scroll',
-        },
-        h('pre', { className: 'tm-code' }, JSON.stringify(runPreview, null, 2)),
-      ),
-      h(
-        WorkflowCard,
-        {
-          title: 'Algorithm outline',
-          subtitle: 'The official sample preserves the same mux sequence as the source shell tool.',
-          className: 'tm-panel tm-panel--scroll',
-        },
-        h(
-          'ol',
-          { className: 'tm-algorithm' },
-          ATMOS_MUX_ALGORITHM_STEPS.map((algorithmStep) => h('li', { key: algorithmStep }, algorithmStep)),
+            : h(
+                'p',
+                { className: 'tm-status-note' },
+                'The host will create the tool.run job and execute the bundled mux script directly.',
+              ),
+          statusMessage || lastRun.jobId
+            ? h(
+                'div',
+                { className: 'tm-summary tm-summary--result' },
+                h(
+                  'div',
+                  { className: 'tm-summary__row' },
+                  h(
+                    StatusBadge,
+                    {
+                      tone: lastRun.state === 'succeeded' ? 'success' : lastRun.state === 'failed' ? 'danger' : reviewTone,
+                    },
+                    lastRun.state === 'succeeded'
+                      ? 'Ready'
+                      : lastRun.state === 'failed'
+                        ? 'Failed'
+                        : isRunning
+                          ? 'Running'
+                          : 'Staged',
+                  ),
+                  lastRun.jobId ? h(StatItem, { label: 'Job', value: lastRun.jobId }) : null,
+                  lastRun.outputPath
+                    ? h(StatItem, {
+                        label: 'Output',
+                        value: inferParentDirectory(lastRun.outputPath) || lastRun.outputPath,
+                      })
+                    : null,
+                ),
+                statusMessage ? h('p', { className: 'tm-status-note' }, statusMessage) : null,
+                lastRun.outputPath ? h('code', { className: 'tm-path' }, lastRun.outputPath) : null,
+              )
+            : null,
         ),
       ),
     )
-  }
-
-  let stepContent = renderSourcesStep()
-  if (step === 2) {
-    stepContent = renderOutputStep()
-  } else if (step === 3) {
-    stepContent = renderReviewStep()
   }
 
   const footer = h(
@@ -507,6 +392,7 @@ export function AtmosVideoMuxToolPage({ host }) {
     {
       align: 'space-between',
       className: 'tm-action-bar',
+      sticky: false,
     },
     step === 1
       ? h('span', { className: 'tm-status-note' }, 'Select both source files to continue.')
@@ -525,11 +411,9 @@ export function AtmosVideoMuxToolPage({ host }) {
           {
             variant: 'primary',
             onClick: goNext,
-            disabled:
-              isRunning ||
-              (step === 1 ? sourceReadyCount < 2 : step === 2 ? !outputDir : false),
+            disabled: isRunning || sourceReadyCount < 2,
           },
-          step === 1 ? 'Next: Output' : 'Next: Review / Run',
+          'Next: Output / Review / Run',
         )
       : h(
           WorkflowButton,
@@ -538,22 +422,19 @@ export function AtmosVideoMuxToolPage({ host }) {
             onClick: runTool,
             disabled: isRunning || !runPreview.canRun,
           },
-          isRunning ? 'Running…' : 'Run Atmos Mux',
+          isRunning ? 'Running...' : 'Run Atmos Mux',
         ),
   )
 
   return h(
-    WorkflowFrame,
-    {
-      className: 'tm-shell',
-      eyebrow: 'Official tool plugin',
-      title: 'Atmos Video Mux',
-      subtitle: 'Stage the source files, verify the output target, then run the host-owned mux job.',
+    'section',
+    { className: 'tm-shell' },
+    h(WorkflowStepper, {
       steps: WORKFLOW_STEPS,
       currentStep: step,
-      footer,
-    },
-    statusPanel,
-    stepContent,
+      className: 'tm-stepper',
+    }),
+    h('div', { className: 'tm-shell__body' }, step === 1 ? renderSourcesStep() : renderOutputReviewRunStep()),
+    footer,
   )
 }
