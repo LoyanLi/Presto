@@ -35,7 +35,7 @@ src-tauri/src/runtime.rs
         │
         ├── runtime operations
         │   ├── plugins.catalog.*
-        │   ├── dialog.folder.open
+        │   ├── dialog.open
         │   ├── shell.*
         │   ├── fs.*
         │   ├── window.*

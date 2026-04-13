@@ -464,3 +464,46 @@ test('review step run action calls host.runTool with the normalized Atmos mux pa
     },
   ])
 })
+
+test('source pickers request MP4-only file filters from host dialog.openFile', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness()
+  const openFileCalls = []
+  const host = createHostMock({
+    dialog: {
+      openFile: async (options) => {
+        openFileCalls.push(options)
+        return { canceled: true, paths: [] }
+      },
+      openDirectory: async () => ({ canceled: true, paths: [] }),
+    },
+  })
+
+  try {
+    const tree = pageModule.AtmosVideoMuxToolPage({ host })
+    const pickVideoButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Pick video MP4',
+    )
+    const pickAtmosButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Pick Atmos MP4',
+    )
+
+    assert.ok(pickVideoButton, 'expected source step to expose a Pick video MP4 action')
+    assert.ok(pickAtmosButton, 'expected source step to expose a Pick Atmos MP4 action')
+
+    await pickVideoButton.props.onClick()
+    await pickAtmosButton.props.onClick()
+  } finally {
+    restore()
+  }
+
+  assert.deepEqual(openFileCalls, [
+    {
+      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+    },
+    {
+      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+    },
+  ])
+})

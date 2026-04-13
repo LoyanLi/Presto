@@ -51,6 +51,9 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
         openPath: 'shell.path.open',
         openExternal: 'shell.external.open',
       },
+      process: {
+        execBundled: 'process.bundled.exec',
+      },
       fs: {
         readFile: 'fs.file.read',
         writeFile: 'fs.file.write',
@@ -107,8 +110,19 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   await runtime.plugins.setEnabled('official.export-workflow', false)
   await runtime.plugins.uninstall('official.export-workflow')
   await runtime.dialog.openFolder()
-  await runtime.dialog.openFile()
+  await runtime.dialog.openFile({
+    filters: [
+      {
+        name: 'MP4 Video',
+        extensions: ['mp4'],
+      },
+    ],
+  })
   await runtime.dialog.openDirectory()
+  await runtime.process.execBundled('official.atmos-video-mux-tool', 'atmos-video-mux-script', ['--help'], {
+    cwd: '/tmp',
+    env: { PRESTO_TEST: '1' },
+  })
 
   assert.deepEqual(calls, [
     ['plugins.catalog.list'],
@@ -119,7 +133,19 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
     ['plugins.set-enabled', 'official.export-workflow', false],
     ['plugins.uninstall', 'official.export-workflow'],
     ['dialog.open', { properties: ['openDirectory'] }],
-    ['dialog.open', { properties: ['openFile'] }],
+    ['dialog.open', { properties: ['openFile'], filters: [{ name: 'MP4 Video', extensions: ['mp4'] }] }],
     ['dialog.open', { properties: ['openDirectory'] }],
+    [
+      'process.bundled.exec',
+      {
+        pluginId: 'official.atmos-video-mux-tool',
+        resourceId: 'atmos-video-mux-script',
+        args: ['--help'],
+        options: {
+          cwd: '/tmp',
+          env: { PRESTO_TEST: '1' },
+        },
+      },
+    ],
   ])
 })

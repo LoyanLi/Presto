@@ -26,7 +26,10 @@ const tauriRuntimeOperations = {
     invokeCapability: 'backend.capability.invoke',
   },
   dialog: {
-    open: 'dialog.folder.open',
+    open: 'dialog.open',
+  },
+  process: {
+    execBundled: 'process.bundled.exec',
   },
   shell: {
     openPath: 'shell.path.open',

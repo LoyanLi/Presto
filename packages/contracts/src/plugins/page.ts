@@ -55,8 +55,17 @@ export interface PluginWorkflowPageHost {
   }>
 }
 
+export interface PluginToolDialogFileFilter {
+  name: string
+  extensions: string[]
+}
+
+export interface PluginToolDialogOpenFileOptions {
+  filters?: PluginToolDialogFileFilter[]
+}
+
 export interface PluginToolDialogHost {
-  openFile(): Promise<{
+  openFile(options?: PluginToolDialogOpenFileOptions): Promise<{
     canceled: boolean
     paths: string[]
   }>

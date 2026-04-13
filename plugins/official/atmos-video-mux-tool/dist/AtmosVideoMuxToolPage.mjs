@@ -23,8 +23,12 @@ const WORKFLOW_STEPS = [
   { id: 'review', label: 'Review / Run' },
 ]
 
-function selectFirstPath(openFn) {
-  return Promise.resolve(openFn()).then((result) => {
+const MP4_FILE_PICKER_OPTIONS = Object.freeze({
+  filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+})
+
+function selectFirstPath(openFn, options) {
+  return Promise.resolve(openFn(options)).then((result) => {
     if (!result || result.canceled || !Array.isArray(result.paths) || result.paths.length === 0) {
       return ''
     }
@@ -105,7 +109,7 @@ export function AtmosVideoMuxToolPage({ host }) {
   const sourceReadyCount = [videoPath, atmosPath].filter(Boolean).length
 
   const pickVideo = React.useCallback(async () => {
-    const selectedPath = await selectFirstPath(host.dialog.openFile)
+    const selectedPath = await selectFirstPath(host.dialog.openFile, MP4_FILE_PICKER_OPTIONS)
     if (!selectedPath) {
       setStatusMessage('Video selection canceled.')
       return
@@ -119,7 +123,7 @@ export function AtmosVideoMuxToolPage({ host }) {
   }, [host.dialog, outputDir])
 
   const pickAtmos = React.useCallback(async () => {
-    const selectedPath = await selectFirstPath(host.dialog.openFile)
+    const selectedPath = await selectFirstPath(host.dialog.openFile, MP4_FILE_PICKER_OPTIONS)
     if (!selectedPath) {
       setStatusMessage('Atmos selection canceled.')
       return

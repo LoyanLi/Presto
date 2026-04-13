@@ -165,7 +165,8 @@ function createToolRunHost(input: {
   const runtimeToolHost = createPluginToolPageHost(runtime)
   const toolProcessHost: PluginToolRunnerContext['process'] = runtime.process
     ? {
-        execBundled: (resourceId, args, options) => runtime.process!.execBundled(resourceId, args, options),
+        execBundled: (resourceId, args, options) =>
+          runtime.process!.execBundled(plugin.pluginId, resourceId, args, options),
       }
     : createUnavailableBundledProcessHost(plugin.pluginId)
   const jobsClient = presto.jobs

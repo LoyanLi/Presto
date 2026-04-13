@@ -31,6 +31,15 @@ pub(super) fn sync_official_plugins(state: &Arc<RuntimeState>) -> Result<(), Str
     Ok(())
 }
 
+pub(super) fn resolve_plugin_candidate(
+    state: &Arc<RuntimeState>,
+    plugin_id: &str,
+) -> Result<Option<PluginCandidate>, String> {
+    let root = managed_plugins_root(state)?;
+    let (plugins, _) = discover_plugins(state, &[root], false)?;
+    Ok(plugins.into_iter().find(|plugin| plugin.plugin_id == plugin_id))
+}
+
 pub(super) fn list_plugins(state: &Arc<RuntimeState>) -> Result<Value, String> {
     let root = managed_plugins_root(state)?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;

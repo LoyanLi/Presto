@@ -152,7 +152,8 @@ pub fn invoke(
             }))
         }
         "app.release.check" => check_for_updates(state, args.first()),
-        "dialog.folder.open" => open_folder_dialog(state),
+        "dialog.open" => open_dialog(args.first()),
+        "process.bundled.exec" => execute_bundled_process(state, args.first()),
         "shell.path.open" => {
             let target = args.first().and_then(Value::as_str).unwrap_or_default();
             open_with_system(target)
@@ -568,8 +569,49 @@ fn open_external(target: &str) -> Result<Value, String> {
     }
 }
 
-fn open_folder_dialog(_state: &Arc<RuntimeState>) -> Result<Value, String> {
-    Ok(match rfd::FileDialog::new().pick_folder() {
+fn open_dialog(request: Option<&Value>) -> Result<Value, String> {
+    let properties = to_string_vec(request.and_then(|value| value.get("properties")));
+    let mut dialog = rfd::FileDialog::new();
+    let filters = request
+        .and_then(|value| value.get("filters"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    for filter in filters {
+        let name = filter
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim();
+        let extensions = filter
+            .get("extensions")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if !name.is_empty() && !extensions.is_empty() {
+            dialog = dialog.add_filter(name, &extensions);
+        }
+    }
+
+    let selection = if properties.iter().any(|property| property == "openFile") {
+        dialog.pick_file()
+    } else if properties
+        .iter()
+        .any(|property| property == "openDirectory")
+    {
+        dialog.pick_folder()
+    } else {
+        return Err("unsupported_dialog_properties".to_string());
+    };
+
+    Ok(match selection {
         Some(path) => json!({
             "canceled": false,
             "filePaths": [path.to_string_lossy().to_string()],
@@ -579,6 +621,252 @@ fn open_folder_dialog(_state: &Arc<RuntimeState>) -> Result<Value, String> {
             "filePaths": [],
         }),
     })
+}
+
+fn to_string_map(value: Option<&Value>) -> Map<String, Value> {
+    value
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn build_process_error(
+    code: &str,
+    message: String,
+    details: Option<Map<String, Value>>,
+    stderr: Option<String>,
+) -> Value {
+    let mut object = Map::new();
+    object.insert("ok".to_string(), Value::Bool(false));
+    object.insert("exitCode".to_string(), Value::Number((-1).into()));
+    object.insert("stdout".to_string(), Value::String(String::new()));
+    if let Some(stderr_text) = stderr.filter(|value| !value.is_empty()) {
+        object.insert("stderr".to_string(), Value::String(stderr_text));
+    }
+    object.insert(
+        "error".to_string(),
+        json!({
+            "code": code,
+            "message": message,
+            "details": details.unwrap_or_default(),
+        }),
+    );
+    Value::Object(object)
+}
+
+fn execute_bundled_process(
+    state: &Arc<RuntimeState>,
+    request: Option<&Value>,
+) -> Result<Value, String> {
+    let plugin_id = request
+        .and_then(|value| value.get("pluginId"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let resource_id = request
+        .and_then(|value| value.get("resourceId"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let args = to_string_vec(request.and_then(|value| value.get("args")));
+    let options = request.and_then(|value| value.get("options"));
+    let cwd = options
+        .and_then(|value| value.get("cwd"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let env = to_string_map(options.and_then(|value| value.get("env")));
+
+    if plugin_id.is_empty() {
+        return Ok(build_process_error(
+            "PLUGIN_ID_REQUIRED",
+            "Bundled process execution requires pluginId.".to_string(),
+            None,
+            None,
+        ));
+    }
+
+    if resource_id.is_empty() {
+        return Ok(build_process_error(
+            "RESOURCE_ID_REQUIRED",
+            "Bundled process execution requires resourceId.".to_string(),
+            None,
+            None,
+        ));
+    }
+
+    let Some(plugin) = plugins::resolve_plugin_candidate(state, &plugin_id)? else {
+        return Ok(build_process_error(
+            "PLUGIN_NOT_FOUND",
+            format!("Bundled process plugin \"{plugin_id}\" was not found."),
+            None,
+            None,
+        ));
+    };
+
+    let bundled_resources = plugin
+        .manifest
+        .get("bundledResources")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let Some(resource) = bundled_resources.into_iter().find(|entry| {
+        entry
+            .get("resourceId")
+            .and_then(Value::as_str)
+            .map(|value| value == resource_id)
+            .unwrap_or(false)
+    }) else {
+        return Ok(build_process_error(
+            "BUNDLED_RESOURCE_NOT_FOUND",
+            format!("Bundled resource \"{resource_id}\" is not declared for plugin \"{plugin_id}\"."),
+            None,
+            None,
+        ));
+    };
+
+    let resource_kind = resource
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let relative_path = resource
+        .get("relativePath")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if relative_path.is_empty() {
+        return Ok(build_process_error(
+            "BUNDLED_RESOURCE_PATH_INVALID",
+            format!("Bundled resource \"{resource_id}\" is missing relativePath."),
+            None,
+            None,
+        ));
+    }
+
+    let relative_resource_path = PathBuf::from(&relative_path);
+    if relative_resource_path.is_absolute()
+        || relative_resource_path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Ok(build_process_error(
+            "BUNDLED_RESOURCE_PATH_INVALID",
+            format!("Bundled resource \"{resource_id}\" has an invalid relativePath."),
+            None,
+            None,
+        ));
+    }
+
+    let executable_path = plugin.plugin_root.join(&relative_resource_path);
+    if !executable_path.exists() {
+        let mut details = Map::new();
+        details.insert(
+            "path".to_string(),
+            Value::String(executable_path.to_string_lossy().to_string()),
+        );
+        return Ok(build_process_error(
+            "BUNDLED_RESOURCE_MISSING",
+            format!("Bundled resource \"{resource_id}\" does not exist on disk."),
+            Some(details),
+            None,
+        ));
+    }
+
+    let mut command = Command::new(&executable_path);
+    command.args(&args);
+    if let Some(cwd_path) = cwd.as_ref() {
+        command.current_dir(cwd_path);
+    }
+    for (key, value) in env {
+        if let Some(value_text) = value.as_str() {
+            command.env(&key, value_text);
+        }
+    }
+
+    let capture = match run_command_capture(&mut command) {
+        Ok(result) => result,
+        Err(error) => {
+            let mut details = Map::new();
+            details.insert("pluginId".to_string(), Value::String(plugin_id.clone()));
+            details.insert("resourceId".to_string(), Value::String(resource_id.clone()));
+            details.insert("kind".to_string(), Value::String(resource_kind));
+            details.insert(
+                "path".to_string(),
+                Value::String(executable_path.to_string_lossy().to_string()),
+            );
+            details.insert(
+                "args".to_string(),
+                Value::Array(args.iter().cloned().map(Value::String).collect()),
+            );
+            return Ok(build_process_error(
+                "BUNDLED_PROCESS_EXEC_FAILED",
+                format!(
+                    "Bundled process launch failed for plugin \"{}\" and resource \"{}\": {}",
+                    plugin_id, resource_id, error
+                ),
+                Some(details),
+                Some(error),
+            ));
+        }
+    };
+
+    let mut object = Map::new();
+    object.insert("ok".to_string(), Value::Bool(capture.success));
+    object.insert(
+        "exitCode".to_string(),
+        Value::Number(serde_json::Number::from(capture.exit_code)),
+    );
+    object.insert("stdout".to_string(), Value::String(capture.output_text.clone()));
+    if !capture.stderr_text.is_empty() {
+        object.insert(
+            "stderr".to_string(),
+            Value::String(capture.stderr_text.clone()),
+        );
+    }
+    if !capture.success {
+        let mut details = Map::new();
+        details.insert("pluginId".to_string(), Value::String(plugin_id.clone()));
+        details.insert("resourceId".to_string(), Value::String(resource_id.clone()));
+        details.insert("kind".to_string(), Value::String(resource_kind));
+        details.insert(
+            "path".to_string(),
+            Value::String(executable_path.to_string_lossy().to_string()),
+        );
+        details.insert(
+            "args".to_string(),
+            Value::Array(args.into_iter().map(Value::String).collect()),
+        );
+        details.insert(
+            "exitCode".to_string(),
+            Value::Number(serde_json::Number::from(capture.exit_code)),
+        );
+        let message = if !capture.stderr_text.is_empty() {
+            capture.stderr_text.clone()
+        } else if !capture.output_text.is_empty() {
+            capture.output_text.clone()
+        } else {
+            format!(
+                "Bundled process exited with code {} for plugin \"{}\" and resource \"{}\".",
+                capture.exit_code, plugin_id, resource_id
+            )
+        };
+        object.insert(
+            "error".to_string(),
+            json!({
+                "code": "BUNDLED_PROCESS_EXIT_NONZERO",
+                "message": message,
+                "details": details,
+            }),
+        );
+    }
+    Ok(Value::Object(object))
 }
 
 fn std_out_key() -> String {
@@ -686,6 +974,7 @@ fn unsupported_mac_accessibility_execution() -> Value {
 
 struct ProcessCapture {
     success: bool,
+    exit_code: i64,
     output_text: String,
     stderr_text: String,
 }
@@ -707,9 +996,14 @@ fn run_process_capture(program: &str, args: &[impl AsRef<str>]) -> Result<Proces
     for arg in args {
         command.arg(arg.as_ref());
     }
+    run_command_capture(&mut command)
+}
+
+fn run_command_capture(command: &mut Command) -> Result<ProcessCapture, String> {
     let result = command.output().map_err(|error| error.to_string())?;
     Ok(ProcessCapture {
         success: result.status.success(),
+        exit_code: i64::from(result.status.code().unwrap_or(-1)),
         output_text: normalize_command_text(&result.stdout),
         stderr_text: normalize_command_text(&result.stderr),
     })

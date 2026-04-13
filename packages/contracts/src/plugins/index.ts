@@ -9,6 +9,8 @@ export type {
   PluginAutomationSelectOptionDefinition,
   PluginAutomationSelectOptionFieldDefinition,
   PluginToolDialogHost,
+  PluginToolDialogFileFilter,
+  PluginToolDialogOpenFileOptions,
   PluginToolFsHost,
   PluginToolPageHost,
   PluginToolPageProps,

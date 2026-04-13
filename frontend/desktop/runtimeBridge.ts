@@ -12,6 +12,7 @@ import type {
   DawAdapterSnapshot,
 } from '@presto/sdk-runtime/clients/backend'
 import type {
+  DialogOpenFileOptions,
   DialogOpenDirectoryResult,
   DialogOpenFileResult,
   DialogOpenFolderResult,
@@ -35,6 +36,11 @@ import type {
   PluginRuntimeUninstallResult,
   PluginRuntimeSetEnabledResult,
 } from '@presto/sdk-runtime/clients/plugins'
+import type {
+  ProcessExecBundledOptions,
+  ProcessExecBundledResult,
+  ProcessRuntimeClient,
+} from '@presto/sdk-runtime/clients/process'
 import type { ShellRuntimeClient } from '@presto/sdk-runtime/clients/shell'
 import type { WindowRuntimeClient } from '@presto/sdk-runtime/clients/window'
 import type { CapabilityRequestEnvelope, CapabilityResponseEnvelope } from '@presto/contracts'
@@ -56,6 +62,9 @@ export interface DesktopRuntimeOperationMap {
   }
   dialog: {
     open: string
+  }
+  process: {
+    execBundled: string
   }
   shell: {
     openPath: string
@@ -148,9 +157,10 @@ export function createDesktopRuntimeBridge(
       }
       return result
     },
-    openFile: async () => {
+    openFile: async (options?: DialogOpenFileOptions) => {
       const response = await invokeTyped<{ canceled: boolean; filePaths: string[] }>(invoke, operations.dialog.open, {
         properties: ['openFile'],
+        ...(options?.filters ? { filters: options.filters } : {}),
       })
       const result: DialogOpenFileResult = {
         canceled: response.canceled,
@@ -173,6 +183,21 @@ export function createDesktopRuntimeBridge(
   const shell: ShellRuntimeClient = {
     openPath: (path: string) => invokeTyped<string>(invoke, operations.shell.openPath, path),
     openExternal: (url: string) => invokeTyped<boolean>(invoke, operations.shell.openExternal, url),
+  }
+
+  const process: ProcessRuntimeClient = {
+    execBundled: (
+      pluginId: string,
+      resourceId: string,
+      args: string[] = [],
+      options?: ProcessExecBundledOptions,
+    ) =>
+      invokeTyped<ProcessExecBundledResult>(invoke, operations.process.execBundled, {
+        pluginId,
+        resourceId,
+        args,
+        ...(options ? { options } : {}),
+      }),
   }
 
   const fs: FsRuntimeClient = {
@@ -231,6 +256,7 @@ export function createDesktopRuntimeBridge(
     app,
     backend,
     dialog,
+    process,
     shell,
     fs,
     plugins,

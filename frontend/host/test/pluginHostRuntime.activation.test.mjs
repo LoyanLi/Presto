@@ -416,6 +416,7 @@ test('loadHostPlugins injects tool page host services and excludes tools from wo
   const { loadHostPlugins } = await loadPluginHostRuntime()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
   const pluginRecord = await createToolPluginFixture(sandbox)
+  const openFileCalls = []
 
   t.after(async () => {
     await rm(sandbox, { recursive: true, force: true })
@@ -435,7 +436,10 @@ test('loadHostPlugins injects tool page host services and excludes tools from wo
     runtime: {
       dialog: {
         openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
-        openFile: async () => ({ canceled: false, paths: ['/input.wav'] }),
+        openFile: async (options) => {
+          openFileCalls.push(options)
+          return { canceled: false, paths: ['/input.wav'] }
+        },
         openDirectory: async () => ({ canceled: false, paths: ['/output'] }),
       },
       fs: {
@@ -468,6 +472,21 @@ test('loadHostPlugins injects tool page host services and excludes tools from wo
     canceled: false,
     paths: ['/output'],
   })
+  await assert.deepEqual(
+    await renderedPage?.props?.host?.dialog?.openFile({
+      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+    }),
+    {
+      canceled: false,
+      paths: ['/input.wav'],
+    },
+  )
+  assert.deepEqual(openFileCalls, [
+    undefined,
+    {
+      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+    },
+  ])
 })
 
 test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (t) => {
@@ -547,8 +566,8 @@ test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (
         openExternal: async () => true,
       },
       process: {
-        async execBundled(resourceId, args) {
-          processCalls.push({ resourceId, args })
+        async execBundled(pluginId, resourceId, args) {
+          processCalls.push({ pluginId, resourceId, args })
           return {
             ok: true,
             exitCode: 0,
@@ -589,6 +608,7 @@ test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (
 
   assert.deepEqual(processCalls, [
     {
+      pluginId: 'installed.audio-tools',
       resourceId: 'ec3-decode-script',
       args: ['--input', '/tmp/source.ec3'],
     },

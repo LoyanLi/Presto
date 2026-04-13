@@ -11,6 +11,7 @@ import type { PrestoRuntime } from '@presto/sdk-runtime'
 
 export interface PluginHostProcessRuntime {
   execBundled(
+    pluginId: string,
     resourceId: string,
     args?: string[],
     options?: {
@@ -173,9 +174,9 @@ export function createPluginToolPageHost(
 ): PluginToolPageHost & { runTool: PluginToolRunHost } {
   return {
     dialog: {
-      async openFile() {
+      async openFile(options) {
         if (typeof runtime.dialog.openFile === 'function') {
-          return runtime.dialog.openFile()
+          return runtime.dialog.openFile(options)
         }
         return {
           canceled: true,
