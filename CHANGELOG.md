@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8
+
+- 官方 `official.atmos-video-mux-tool` 工具页继续向 workflow 壳层收口：保留宿主标题、复用 stepper / panel / 底部 action bar，不再保留独立工具页头部。
+- Atmos mux 工具改成两步流：`Sources` 与 `Output / Review / Run`，文件选择、输出目录选择和底部前进/后退/运行动作现在都与现有 workflow 页面保持同一套布局语义。
+- 输出区进一步精简：移除重复路径展示、顶部 `Video / Atmos / Output` 状态条、`jobId` 和冗余结果 chips，只保留紧凑状态 badge 与结果文案。
+- `tool` 插件技术文档补充当前正式 UI 约束：tool 页面应优先复用 workflow shell 组件，避免重复标题、重复路径块和脱离宿主基线的底部操作栏。
+- 统一应用、workspace package、Tauri、Rust crate 与 backend 版本基线到 `0.3.8`。
+
 ## 0.3.7
 
 - 宿主新增独立 `Runs` 页面，统一展示 `workflow`、`automation`、`command` 三个维度的成功运行排行。

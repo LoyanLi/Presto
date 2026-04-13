@@ -9,7 +9,7 @@ const repoRoot = path.join(__dirname, '../../..')
 
 test('repo no longer exposes the static landing preview surface', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))
-  const releaseNotes = readFileSync(path.join(repoRoot, 'docs/releases/v0.3.7-release.md'), 'utf8')
+  const releaseNotes = readFileSync(path.join(repoRoot, 'docs/releases/v0.3.8-release.md'), 'utf8')
 
   assert.equal(packageJson.scripts?.['landing:preview'], undefined)
   assert.equal(existsSync(path.join(repoRoot, 'scripts', 'preview-static.mjs')), false)

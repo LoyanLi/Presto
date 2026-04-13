@@ -129,7 +129,7 @@ test('isPluginAvailableForSnapshot keeps tool plugins available even when snapsh
       {
         targetDaw: 'pro_tools',
         adapterVersion: '2025.10.0',
-        hostVersion: '0.3.7',
+        hostVersion: '0.3.8',
         modules: [{ moduleId: 'ptsl', version: '2025.10.0' }],
         capabilities: [{ capabilityId: 'daw.export.start', moduleId: 'ptsl', version: '2025.10.0' }],
       },

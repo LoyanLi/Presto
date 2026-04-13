@@ -441,6 +441,7 @@ test('tool page source routes runs through host.runTool and shared workflow ui h
   assert.doesNotMatch(pageSource, /WorkflowFrame/)
   assert.doesNotMatch(pageSource, /statusPanel/)
   assert.doesNotMatch(pageSource, /Latest result/)
+  assert.doesNotMatch(pageSource, /label:\s*'Job'/)
   assert.match(uiSource, /presto-workflow-action-bar/)
   assert.match(uiSource, /WorkflowStepper/)
   assert.match(uiSource, /ui-panel/)
@@ -450,7 +451,7 @@ test('tool page source routes runs through host.runTool and shared workflow ui h
   assert.match(cssSource, /\.tm-field-copy\s*\{/)
   assert.match(cssSource, /\.tm-shell\s*\{[\s\S]*height:\s*100%;[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[\s\S]*overflow:\s*hidden;/)
   assert.match(cssSource, /\.tm-shell__body\s*\{[\s\S]*overflow-y:\s*auto;/)
-  assert.doesNotMatch(cssSource, /\.tm-action-bar\s*\{[\s\S]*margin-top:\s*4px;/)
+  assert.match(cssSource, /\.tm-action-bar\s*\{[\s\S]*border-top:\s*0;[\s\S]*background:\s*transparent;/)
 })
 
 test('second step run action calls host.runTool with the normalized Atmos mux payload', async () => {
@@ -598,5 +599,39 @@ test('selected source and review states do not render duplicate path blocks', as
   } finally {
     stepOneHarness.restore()
     stepTwoHarness.restore()
+  }
+})
+
+test('completed output step keeps only compact result copy without job or full output path', async () => {
+  const harness = await loadPageModuleWithHookHarness({
+    1: 2,
+    2: '/tmp/source/video.mp4',
+    3: '/tmp/source/atmos.mp4',
+    4: '/tmp/out',
+    5: true,
+    6: 'Output file: Atmos_Output_20260412_220000.mp4',
+    7: false,
+    8: {
+      jobId: 'job-atmos-run',
+      outputPath: '/tmp/out/Atmos_Output_20260412_220000.mp4',
+      summary: 'Atmos video mux completed.',
+      state: 'succeeded',
+    },
+  })
+
+  try {
+    const markup = renderToStaticMarkup(
+      React.createElement(harness.pageModule.AtmosVideoMuxToolPage, {
+        host: createHostMock(),
+      }),
+    )
+
+    assert.match(markup, /Completed/)
+    assert.match(markup, /Output file: Atmos_Output_20260412_220000\.mp4/)
+    assert.doesNotMatch(markup, /job-atmos-run/)
+    assert.doesNotMatch(markup, /\/tmp\/out\/Atmos_Output_20260412_220000\.mp4/)
+    assert.doesNotMatch(markup, /<span>Job<\/span>/)
+  } finally {
+    harness.restore()
   }
 })

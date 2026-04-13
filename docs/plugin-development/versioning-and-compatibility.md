@@ -6,9 +6,9 @@
 
 仓库中可以直接确认的版本事实：
 
-- App Version：当前仓库值是 `0.3.7`
+- App Version：当前仓库值是 `0.3.8`
 - App Name：`Presto`
-- Backend FastAPI Version：由 `backend/presto/version.py::VERSION` 导出，当前值也是 `0.3.7`
+- Backend FastAPI Version：由 `backend/presto/version.py::VERSION` 导出，当前值也是 `0.3.8`
 - Capability Schema Version：`1`
 
 这三类版本不是一回事，不能混用。

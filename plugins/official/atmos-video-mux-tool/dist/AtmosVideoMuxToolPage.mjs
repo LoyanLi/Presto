@@ -5,7 +5,6 @@ import {
   inferParentDirectory,
 } from './toolCore.mjs'
 import {
-  StatItem,
   StatusBadge,
   WorkflowActionBar,
   WorkflowButton,
@@ -72,6 +71,15 @@ function getJobOutputPath(job) {
   return ''
 }
 
+function getPathName(filePath) {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    return ''
+  }
+  const normalizedPath = filePath.replace(/\\/g, '/')
+  const segments = normalizedPath.split('/').filter(Boolean)
+  return segments.length > 0 ? segments[segments.length - 1] : normalizedPath
+}
+
 function createEmptyLastRun() {
   return {
     jobId: '',
@@ -104,6 +112,30 @@ export function AtmosVideoMuxToolPage({ host }) {
 
   const reviewTone = runPreview.canRun ? 'success' : 'warning'
   const sourceReadyCount = [videoPath, atmosPath].filter(Boolean).length
+  const resultTone =
+    lastRun.state === 'succeeded'
+      ? 'success'
+      : lastRun.state === 'failed'
+        ? 'danger'
+        : isRunning
+          ? 'warning'
+          : reviewTone
+  const resultLabel =
+    lastRun.state === 'succeeded'
+      ? 'Completed'
+      : lastRun.state === 'failed'
+        ? 'Failed'
+        : isRunning
+          ? 'Running'
+          : runPreview.canRun
+            ? 'Ready to run'
+            : 'Missing required input'
+  const resultMessage =
+    typeof statusMessage === 'string' && statusMessage.trim()
+      ? statusMessage.trim()
+      : lastRun.outputPath
+        ? `Output file: ${getPathName(lastRun.outputPath)}`
+        : lastRun.summary
 
   const pickVideo = React.useCallback(async () => {
     const selectedPath = await selectFirstPath(host.dialog.openFile, MP4_FILE_PICKER_OPTIONS)
@@ -175,8 +207,9 @@ export function AtmosVideoMuxToolPage({ host }) {
       }
       setLastRun(nextRun)
       setStatusMessage(
-        nextRun.summary ||
-          (nextRun.outputPath ? `Atmos video mux completed: ${nextRun.outputPath}` : 'Atmos video mux finished.'),
+        nextRun.outputPath
+          ? `Output file: ${getPathName(nextRun.outputPath)}`
+          : nextRun.summary || 'Atmos video mux finished.',
       )
     } catch (error) {
       setStatusMessage(toErrorMessage(error, 'Atmos video mux failed.'))
@@ -294,13 +327,6 @@ export function AtmosVideoMuxToolPage({ host }) {
         },
         h(
           'div',
-          { className: 'tm-status-grid' },
-          h(StatItem, { label: 'Video', value: videoPath ? 'Ready' : 'Missing' }),
-          h(StatItem, { label: 'Atmos', value: atmosPath ? 'Ready' : 'Missing' }),
-          h(StatItem, { label: 'Output', value: outputDir ? 'Ready' : 'Missing' }),
-        ),
-        h(
-          'div',
           { className: 'tm-field' },
           h('p', { className: 'tm-field-label' }, 'Output directory'),
           h(
@@ -331,57 +357,15 @@ export function AtmosVideoMuxToolPage({ host }) {
         h(
           'div',
           { className: 'tm-summary tm-summary--section' },
-          h(
-            'div',
-            { className: 'tm-summary__row' },
-            h(StatusBadge, { tone: reviewTone }, runPreview.canRun ? 'Ready to run' : 'Missing required input'),
-            lastRun.jobId
-              ? h(StatusBadge, { tone: lastRun.state === 'succeeded' ? 'success' : 'warning' }, lastRun.jobId)
-              : null,
-          ),
+          h('div', { className: 'tm-summary__row' }, h(StatusBadge, { tone: resultTone }, resultLabel)),
           runPreview.issues.length > 0
             ? h(
                 'ul',
                 { className: 'tm-algorithm' },
                 runPreview.issues.map((issue) => h('li', { key: issue }, issue)),
               )
-            : h(
-                'p',
-                { className: 'tm-status-note' },
-                'The host will create the tool.run job and execute the bundled mux script directly.',
-              ),
-          statusMessage || lastRun.jobId
-            ? h(
-                'div',
-                { className: 'tm-summary tm-summary--result' },
-                h(
-                  'div',
-                  { className: 'tm-summary__row' },
-                  h(
-                    StatusBadge,
-                    {
-                      tone: lastRun.state === 'succeeded' ? 'success' : lastRun.state === 'failed' ? 'danger' : reviewTone,
-                    },
-                    lastRun.state === 'succeeded'
-                      ? 'Ready'
-                      : lastRun.state === 'failed'
-                        ? 'Failed'
-                        : isRunning
-                          ? 'Running'
-                          : 'Staged',
-                  ),
-                  lastRun.jobId ? h(StatItem, { label: 'Job', value: lastRun.jobId }) : null,
-                  lastRun.outputPath
-                    ? h(StatItem, {
-                        label: 'Output',
-                        value: inferParentDirectory(lastRun.outputPath) || lastRun.outputPath,
-                      })
-                    : null,
-                ),
-                statusMessage ? h('p', { className: 'tm-status-note' }, statusMessage) : null,
-                lastRun.outputPath ? h('code', { className: 'tm-path' }, lastRun.outputPath) : null,
-              )
             : null,
+          resultMessage ? h('p', { className: 'tm-status-note' }, resultMessage) : null,
         ),
       ),
     )

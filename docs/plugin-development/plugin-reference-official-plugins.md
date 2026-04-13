@@ -93,6 +93,8 @@
 - `tools[]` 声明 tool runner
 - `toolRuntimePermissions` 与页面/runner能力对齐
 - `bundledResources` + `process.execBundled(...)` 的最小闭环
+- tool 页面向 workflow shell 组件收口：复用 stepper / panel / action bar，避免重复标题与重复路径块
+- 两步式工具流和紧凑结果区：输入阶段与输出/运行阶段分离，但结果展示不暴露冗余 `jobId` 和完整路径回显
 
 它基于 `DD视频一键封装工具` 算法，覆盖这些关键流程：
 

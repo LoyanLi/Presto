@@ -102,3 +102,18 @@ type PluginToolRunner = (
 5. mux 时把 Atmos 音轨排在立体声之前，并传入输入视频帧率
 6. 若出现 H.264 level 不兼容，使用 `h264_metadata=level=5.1` 修复后重试
 7. 输出文件名使用 `Atmos_Output_YYYYMMDD_HHMMSS.mp4`
+
+## 7. 当前 tool 页面 UI 约束
+
+`tool` 页面当前应尽量复用现有 workflow 页面壳层，而不是重新发明一套独立工具页布局。
+
+正式要求：
+
+- 顶部标题由宿主 `Tools` 页面容器提供；插件页面内部不要重复渲染第二个页面标题
+- 多步骤 tool 页面优先复用共享 `WorkflowStepper`、`WorkflowCard`、`WorkflowActionBar`、`WorkflowButton`、`WorkflowInput`
+- 页面主体应使用“顶部 stepper + 中部滚动内容 + 底部 action bar”布局，让前进 / 后退 / 运行动作稳定吸附在窗口底部
+- 底部 action bar 的视觉基线应与 workflow 保持一致：透明背景、无额外顶部分隔线、只保留当前步骤操作
+- 文件 / 目录选择应使用一行输入框 + picker 按钮，不重复额外渲染完整路径块
+- 结果区应保持紧凑，只展示当前状态、必要问题列表和结果摘要；不要把 `jobId`、重复路径和调试信息堆进正式页面
+
+如果当前 tool 能力本质上是“独立工具，但交互形态接近 workflow”，应优先向 `official.import-workflow` / `official.export-workflow` 的页面骨架对齐，再补上 tool 特有的 host / runner 边界。
