@@ -2,10 +2,12 @@
 
 ## 0.3.8
 
-- 官方 `official.atmos-video-mux-tool` 工具页继续向 workflow 壳层收口：保留宿主标题、复用 stepper / panel / 底部 action bar，不再保留独立工具页头部。
-- Atmos mux 工具改成两步流：`Sources` 与 `Output / Review / Run`，文件选择、输出目录选择和底部前进/后退/运行动作现在都与现有 workflow 页面保持同一套布局语义。
-- 输出区进一步精简：移除重复路径展示、顶部 `Video / Atmos / Output` 状态条、`jobId` 和冗余结果 chips，只保留紧凑状态 badge 与结果文案。
-- `tool` 插件技术文档补充当前正式 UI 约束：tool 页面应优先复用 workflow shell 组件，避免重复标题、重复路径块和脱离宿主基线的底部操作栏。
+- 正式引入 `tool` 插件类型：contracts、host runtime、Tauri runtime 和插件装配链现在都把 `Tools` 作为一等表面，支持 `tool.run`、受限 `dialog/fs/shell` 页面 host 和 `process.execBundled` runner 闭环。
+- 宿主新增 `Tools` 页面与 `Tool Extensions` 设置分组；tool 插件不再混入 workflow 列表，而是通过独立工具表面和独立扩展管理入口接入。
+- 新增官方 `official.atmos-video-mux-tool` 参考插件，携带 `ffmpeg`、`ffprobe`、`mp4demuxer`、`mp4muxer` 与封装脚本，作为当前正式 `tool` 插件样例。
+- Atmos mux 工具页继续向 workflow 壳层收口：改为两步流 `Sources` / `Output / Review / Run`，复用共享 stepper / panel / 底部 action bar，并移除重复路径、`jobId` 与冗余结果块。
+- 宿主运行统计继续接入 `tools` 维度；成功 tool job 现在可以进入 runs metrics 统计口径。
+- 仓库许可证基线补齐为 `AGPL-3.0-only`，并同步到 README、包元数据与 Rust crate 元数据。
 - 统一应用、workspace package、Tauri、Rust crate 与 backend 版本基线到 `0.3.8`。
 
 ## 0.3.7
