@@ -80,14 +80,6 @@ function toErrorMessage(error, fallbackMessage = 'Unexpected import workflow err
   return fallbackMessage
 }
 
-function shouldIgnoreRowSelection(target) {
-  return Boolean(
-    target &&
-      typeof target.closest === 'function' &&
-      target.closest('input, textarea, select, button, a, [contenteditable="true"]'),
-  )
-}
-
 function computeNextRowSelection({
   orderedPaths,
   prevSelected,
@@ -824,6 +816,14 @@ export function ImportWorkflowPage({ context, host }) {
     : step === 2
       ? tImport(context, 'page.next.run')
       : ''
+  const createSelectableCellProps = (filePath, className, width, extra = {}) => ({
+    ...extra,
+    className,
+    style: { width: `${width}px` },
+    onMouseDown: (event) => {
+      toggleRowSelection(filePath, event)
+    },
+  })
 
   const renderPreparedFileCell = (column, row) => {
     const columnId = column.id
@@ -833,7 +833,7 @@ export function ImportWorkflowPage({ context, host }) {
     if (columnId === 'file') {
       return h(
         'td',
-        { className: 'iw-table-cell iw-table-cell--file', style: { width: `${width}px` } },
+        createSelectableCellProps(row.filePath, 'iw-table-cell iw-table-cell--file', width),
         h('div', { className: 'iw-file-name iw-table-static', title: basenameOf(row.filePath) }, basenameOf(row.filePath)),
         h('div', { className: 'iw-file-path iw-table-static', title: row.filePath }, row.filePath),
       )
@@ -842,7 +842,7 @@ export function ImportWorkflowPage({ context, host }) {
     if (columnId === 'category') {
       return h(
         'td',
-        cellProps,
+        { ...cellProps, 'data-row-selection-ignore': 'true' },
         h(WorkflowSelect, {
           className: 'iw-table-select',
           'aria-label': tImport(context, 'page.column.category'),
@@ -856,7 +856,7 @@ export function ImportWorkflowPage({ context, host }) {
     if (columnId === 'aiName') {
       return h(
         'td',
-        { className: 'iw-table-cell iw-table-static iw-table-cell--ellipsis', style: { width: `${width}px` }, title: row.aiName },
+        createSelectableCellProps(row.filePath, 'iw-table-cell iw-table-static iw-table-cell--ellipsis', width, { title: row.aiName }),
         row.aiName,
       )
     }
@@ -864,7 +864,7 @@ export function ImportWorkflowPage({ context, host }) {
     if (columnId === 'finalName') {
       return h(
         'td',
-        cellProps,
+        { ...cellProps, 'data-row-selection-ignore': 'true' },
         h('input', {
           className: 'iw-input',
           value: row.finalName,
@@ -875,7 +875,7 @@ export function ImportWorkflowPage({ context, host }) {
 
     return h(
       'td',
-      cellProps,
+      createSelectableCellProps(row.filePath, cellProps.className, width),
       h(StatusPill, { status: row.status }),
       row.errorMessage
         ? h('div', { className: 'iw-cell-help iw-table-static', title: row.errorMessage }, row.errorMessage)
@@ -1041,12 +1041,6 @@ export function ImportWorkflowPage({ context, host }) {
                               className: selected ? 'iw-row is-selected' : 'iw-row',
                               style: {
                                 background: selected ? tintFromHex(category?.previewHex, 0.18) : tintFromHex(category?.previewHex, 0.08),
-                              },
-                              onMouseDown: (event) => {
-                                if (shouldIgnoreRowSelection(event.target)) {
-                                  return
-                                }
-                                toggleRowSelection(row.filePath, event)
                               },
                             },
                             PREPARED_FILE_COLUMNS.map((column) =>

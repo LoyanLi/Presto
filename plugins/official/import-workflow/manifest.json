@@ -61,6 +61,7 @@
           "analyzeCacheEnabled": true,
           "stripAfterImport": true,
           "importAudioMode": "copy",
+          "deleteIxmlIfPresent": false,
           "fadeAfterStrip": false,
           "fadePresetName": "",
           "fadeAutoAdjustBounds": true,
@@ -91,10 +92,11 @@
               "label": "Import audio mode",
               "path": "ui.importAudioMode",
               "options": [
-                { "value": "copy", "label": "Copy audio into session" },
+                { "value": "copy", "label": "Copy into Audio Files folder" },
                 { "value": "link", "label": "Link to source media" }
               ]
             },
+            { "fieldId": "ui-delete-ixml-if-present", "kind": "toggle", "label": "Delete iXML sidecar files after import", "path": "ui.deleteIxmlIfPresent" },
             { "fieldId": "ui-strip-after-import", "kind": "toggle", "label": "Apply Strip Silence after import", "path": "ui.stripAfterImport" },
             { "fieldId": "ui-fade-after-strip", "kind": "toggle", "label": "Apply fades after Strip Silence", "path": "ui.fadeAfterStrip" },
             { "fieldId": "ui-fade-preset-name", "kind": "text", "label": "Fade preset name", "path": "ui.fadePresetName" },

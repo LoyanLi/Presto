@@ -304,6 +304,7 @@ export interface ImportAnalyzeRow {
   finalName: string
   status: string
   errorMessage: string | null
+  hasIxml: boolean
 }
 
 export interface ImportAnalyzeResponse {

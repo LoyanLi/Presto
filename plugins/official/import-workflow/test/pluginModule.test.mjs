@@ -689,6 +689,179 @@ test('main page applies category changes to all selected rows when editing one s
   }
 })
 
+test('main page keeps multi-selection when clicking interactive cells in the prepared file list', async () => {
+  const initialRows = [
+    {
+      filePath: '/Imports/Drums/kick.wav',
+      categoryId: 'drums',
+      aiName: 'Kick In',
+      finalName: 'Kick In',
+      status: 'ready',
+      errorMessage: null,
+    },
+    {
+      filePath: '/Imports/Drums/snare.wav',
+      categoryId: 'drums',
+      aiName: 'Snare Top',
+      finalName: 'Snare Top',
+      status: 'ready',
+      errorMessage: null,
+    },
+  ]
+  const initialSelectedPaths = new Set(initialRows.map((row) => row.filePath))
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [
+        { id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' },
+        { id: 'fx', name: 'FX', colorSlot: 33, previewHex: '#333333' },
+      ],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'copy',
+        deleteIxmlIfPresent: false,
+        fadeAfterStrip: false,
+        fadePresetName: '',
+        fadeAutoAdjustBounds: true,
+      },
+    },
+    2: initialRows,
+    3: ['/Imports/Drums'],
+    4: 1,
+    5: false,
+    8: initialSelectedPaths,
+    9: initialRows[0].filePath,
+  })
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+    const categoryCell = findElement(
+      tree,
+      (node) => node.type === 'td' && node.props?.['data-row-selection-ignore'] === 'true',
+    )
+
+    assert.ok(categoryCell, 'expected interactive prepared file cell')
+    assert.equal(typeof categoryCell.props?.onMouseDown, 'undefined')
+
+    const nextSelectedPaths = resolveLatestStateValue(stateUpdates, 8, initialSelectedPaths)
+    assert.deepEqual([...nextSelectedPaths], [...initialSelectedPaths])
+  } finally {
+    restore()
+  }
+})
+
+test('main page still updates row selection when clicking non-interactive row area', async () => {
+  const initialRows = [
+    {
+      filePath: '/Imports/Drums/kick.wav',
+      categoryId: 'drums',
+      aiName: 'Kick In',
+      finalName: 'Kick In',
+      status: 'ready',
+      errorMessage: null,
+    },
+    {
+      filePath: '/Imports/Drums/snare.wav',
+      categoryId: 'drums',
+      aiName: 'Snare Top',
+      finalName: 'Snare Top',
+      status: 'ready',
+      errorMessage: null,
+    },
+  ]
+  const initialSelectedPaths = new Set(initialRows.map((row) => row.filePath))
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [
+        { id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' },
+        { id: 'fx', name: 'FX', colorSlot: 33, previewHex: '#333333' },
+      ],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'copy',
+        deleteIxmlIfPresent: false,
+        fadeAfterStrip: false,
+        fadePresetName: '',
+        fadeAutoAdjustBounds: true,
+      },
+    },
+    2: initialRows,
+    3: ['/Imports/Drums'],
+    4: 1,
+    5: false,
+    8: initialSelectedPaths,
+    9: initialRows[0].filePath,
+  })
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+    const selectableCell = findElement(
+      tree,
+      (node) => node.type === 'td' && node.props?.className === 'iw-table-cell iw-table-cell--file',
+    )
+
+    assert.ok(selectableCell, 'expected non-interactive prepared file cell with selection handler')
+    assert.equal(typeof selectableCell.props?.onMouseDown, 'function')
+
+    selectableCell.props.onMouseDown({
+      target: {
+        closest() {
+          return null
+        },
+      },
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+    })
+
+    const nextSelectedPaths = resolveLatestStateValue(stateUpdates, 8, initialSelectedPaths)
+    assert.deepEqual([...nextSelectedPaths], [initialRows[0].filePath])
+  } finally {
+    restore()
+  }
+})
+
 test('main page does not render a plugin logs panel', async () => {
   const pluginModule = await loadPluginModule()
   const markup = renderToStaticMarkup(

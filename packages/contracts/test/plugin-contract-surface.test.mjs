@@ -221,12 +221,14 @@ test('generated capability registry includes full vendor-neutral public daw sema
   assert.match(source, /implementations: \{\"pro_tools\":\{\"kind\":\"ptsl_command\",\"command\":\"CId_CreateSession\"\}\} as const/)
 })
 
-test('import workflow capability metadata declares import mode and fade coverage explicitly', async () => {
+test('import workflow capability metadata declares import mode, ixml cleanup, and fade coverage explicitly', async () => {
   const manifest = JSON.parse(
     await readFile(path.join(repoRoot, 'packages/contracts-manifest/capabilities.json'), 'utf8'),
   )
+  const requestsSource = await readFile(path.join(repoRoot, 'packages/contracts/src/capabilities/requests.ts'), 'utf8')
   const responsesSource = await readFile(path.join(repoRoot, 'packages/contracts/src/capabilities/responses.ts'), 'utf8')
   const registrySource = await readFile(path.join(repoRoot, 'packages/contracts/src/generated/capabilityRegistry.ts'), 'utf8')
+  const clientsSource = await readFile(path.join(repoRoot, 'packages/contracts/src/capabilities/clients.ts'), 'utf8')
 
   const planRunItems = manifest.find((capability) => capability.id === 'daw.import.planRunItems')
   assert.deepEqual(planRunItems?.fieldSupport?.pro_tools, {
@@ -236,10 +238,13 @@ test('import workflow capability metadata declares import mode and fade coverage
 
   const importRunStart = manifest.find((capability) => capability.id === 'daw.import.run.start')
   assert.deepEqual(importRunStart?.fieldSupport?.pro_tools, {
-    requestFields: ['folderPaths', 'orderedFilePaths', 'importMode', 'host', 'port', 'timeoutSeconds'],
+    requestFields: ['folderPaths', 'orderedFilePaths', 'importMode', 'deleteIxmlIfPresent', 'host', 'port', 'timeoutSeconds'],
     responseFields: ['jobId', 'capability', 'state'],
   })
 
+  assert.match(requestsSource, /deleteIxmlIfPresent\?: boolean/)
+  assert.match(responsesSource, /hasIxml: boolean/)
+  assert.match(clientsSource, /analyze\(request: ImportAnalyzeRequest\): Promise<ImportAnalyzeResponse>/)
   assert.match(responsesSource, /fadeAfterStrip:\s*boolean/)
   assert.match(
     registrySource,

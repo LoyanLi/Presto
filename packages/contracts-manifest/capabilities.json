@@ -1665,6 +1665,7 @@
           "folderPaths",
           "orderedFilePaths",
           "importMode",
+          "deleteIxmlIfPresent",
           "host",
           "port",
           "timeoutSeconds"

@@ -726,7 +726,7 @@ export const CAPABILITY_REGISTRY = [
     portability: "canonical",
     supportedDaws: ["pro_tools"] as const,
     canonicalSource: "pro_tools",
-    fieldSupport: {"pro_tools":{"requestFields":["folderPaths","orderedFilePaths","importMode","host","port","timeoutSeconds"],"responseFields":["jobId","capability","state"]}} as const,
+    fieldSupport: {"pro_tools":{"requestFields":["folderPaths","orderedFilePaths","importMode","deleteIxmlIfPresent","host","port","timeoutSeconds"],"responseFields":["jobId","capability","state"]}} as const,
     implementations: {"pro_tools":{"kind":"handler","handler":"daw.import.run.start"}} as const,
     handler: 'daw.import.run.start',
   },

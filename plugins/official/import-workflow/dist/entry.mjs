@@ -71,9 +71,15 @@ export const manifest = {
               label: 'Import audio mode',
               path: 'ui.importAudioMode',
               options: [
-                { value: 'copy', label: 'Copy audio into session' },
+                { value: 'copy', label: 'Copy into Audio Files folder' },
                 { value: 'link', label: 'Link to source media' },
               ],
+            },
+            {
+              fieldId: 'ui-delete-ixml-if-present',
+              kind: 'toggle',
+              label: 'Delete iXML sidecar files after import',
+              path: 'ui.deleteIxmlIfPresent',
             },
             {
               fieldId: 'ui-strip-after-import',

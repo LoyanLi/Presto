@@ -14,6 +14,9 @@
         "importMode": {
           "$ref": "input.ui.importAudioMode"
         },
+        "deleteIxmlIfPresent": {
+          "$ref": "input.ui.deleteIxmlIfPresent"
+        },
         "orderedFilePaths": {
           "$ref": "input.orderedFilePaths"
         }

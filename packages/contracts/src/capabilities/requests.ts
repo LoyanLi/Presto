@@ -175,6 +175,7 @@ export interface ImportRunStartRequest {
   folderPaths: string[]
   orderedFilePaths?: string[]
   importMode?: 'copy' | 'link'
+  deleteIxmlIfPresent?: boolean
   host?: string
   port?: number
   timeoutSeconds?: number
