@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { AppLatestReleaseInfo } from '@presto/sdk-runtime/clients/app'
+import {
+  createDefaultRequiredHostPermissions,
+  getMissingRequiredHostPermissions,
+  scanRequiredHostPermissions,
+  type HostPermissionStatus,
+} from './requiredPermissions'
 
 export interface UseHostShellRuntimeStateInput {
   developerRuntime: PrestoRuntime
@@ -21,12 +27,16 @@ export interface UseHostShellRuntimeStateResult {
   hasUpdate: boolean
   showUpdateDialog: boolean
   showMacAccessibilityDialog: boolean
+  checkingPermissions: boolean
+  permissionStatus: HostPermissionStatus[]
+  missingRequiredPermissions: HostPermissionStatus[]
   setShowUpdateDialog(next: boolean): void
   setShowMacAccessibilityDialog(next: boolean): void
   setLatestRelease(next: AppLatestReleaseInfo | null): void
   setHasUpdate(next: boolean): void
   setUpdateError(next: string): void
   checkForUpdates(options?: { silent?: boolean }): Promise<void>
+  checkRequiredPermissions(options?: { promptWhenMissing?: boolean }): Promise<HostPermissionStatus[]>
   openReleasePage(): Promise<boolean>
   openMacAccessibilitySettings(): Promise<boolean>
 }
@@ -47,8 +57,12 @@ export function useHostShellRuntimeState({
   const [hasUpdate, setHasUpdate] = useState(false)
   const [showUpdateDialog, setShowUpdateDialog] = useState(false)
   const [showMacAccessibilityDialog, setShowMacAccessibilityDialog] = useState(false)
+  const [checkingPermissions, setCheckingPermissions] = useState(false)
+  const [permissionStatus, setPermissionStatus] = useState<HostPermissionStatus[]>(() =>
+    createDefaultRequiredHostPermissions({ macAccessibilityAvailable: true }),
+  )
   const startupUpdateCheckCompleteRef = useRef(false)
-  const startupMacAccessibilityCheckCompleteRef = useRef(false)
+  const startupPermissionCheckCompleteRef = useRef(false)
   const updatePromptShownRef = useRef(false)
 
   useEffect(() => {
@@ -134,6 +148,36 @@ export function useHostShellRuntimeState({
     }
   }
 
+  const checkRequiredPermissions = async ({
+    promptWhenMissing = false,
+  }: {
+    promptWhenMissing?: boolean
+  } = {}): Promise<HostPermissionStatus[]> => {
+    try {
+      setCheckingPermissions(true)
+      const permissions = await scanRequiredHostPermissions({
+        macAccessibilityPreflight,
+        macAccessibilityPermissionRequiredCode,
+      })
+      const missingPermissions = getMissingRequiredHostPermissions(permissions)
+
+      setPermissionStatus(permissions)
+      if (!missingPermissions.some((permission) => permission.id === 'macAccessibility')) {
+        setShowMacAccessibilityDialog(false)
+      } else if (promptWhenMissing) {
+        setShowMacAccessibilityDialog(true)
+      }
+
+      return permissions
+    } catch {
+      const fallbackPermissions = createDefaultRequiredHostPermissions({ macAccessibilityAvailable: true })
+      setPermissionStatus(fallbackPermissions)
+      return fallbackPermissions
+    } finally {
+      setCheckingPermissions(false)
+    }
+  }
+
   useEffect(() => {
     if (!preferencesHydrated || startupUpdateCheckCompleteRef.current) {
       return
@@ -148,31 +192,15 @@ export function useHostShellRuntimeState({
   }, [developerRuntime, preferencesHydrated, includePrereleaseUpdates])
 
   useEffect(() => {
-    if (startupMacAccessibilityCheckCompleteRef.current) {
-      return
-    }
-    if (!macAccessibilityPreflight) {
-      startupMacAccessibilityCheckCompleteRef.current = true
+    if (startupPermissionCheckCompleteRef.current) {
       return
     }
 
-    startupMacAccessibilityCheckCompleteRef.current = true
-    let cancelled = false
-    void macAccessibilityPreflight()
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        if ((!result.ok || !result.trusted) && result.error === macAccessibilityPermissionRequiredCode) {
-          setShowMacAccessibilityDialog(true)
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
+    startupPermissionCheckCompleteRef.current = true
+    void checkRequiredPermissions({ promptWhenMissing: true })
   }, [macAccessibilityPermissionRequiredCode, macAccessibilityPreflight])
+
+  const missingRequiredPermissions = getMissingRequiredHostPermissions(permissionStatus)
 
   return {
     appVersion,
@@ -182,12 +210,16 @@ export function useHostShellRuntimeState({
     hasUpdate,
     showUpdateDialog,
     showMacAccessibilityDialog,
+    checkingPermissions,
+    permissionStatus,
+    missingRequiredPermissions,
     setShowUpdateDialog,
     setShowMacAccessibilityDialog,
     setLatestRelease,
     setHasUpdate,
     setUpdateError,
     checkForUpdates,
+    checkRequiredPermissions,
     openReleasePage,
     openMacAccessibilitySettings,
   }

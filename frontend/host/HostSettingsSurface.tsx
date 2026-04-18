@@ -17,6 +17,25 @@ import type {
 } from './pluginHostTypes'
 import { WorkflowSettingsPage } from './settings/WorkflowSettingsPage'
 
+type HostSettingsNavGroupId = 'configuration' | 'extensions' | 'workflowViews' | 'diagnostics'
+
+interface HostSettingsNavItem {
+  key: string
+  title: string
+  isActive: boolean
+  kind: 'builtin' | 'plugin'
+  pageId: string
+  pluginId?: string
+}
+
+interface HostSettingsNavGroup {
+  id: HostSettingsNavGroupId
+  title: string
+  isActive: boolean
+  items: HostSettingsNavItem[]
+  defaultItem: HostSettingsNavItem | null
+}
+
 export interface BuiltinSettingsEntry {
   pageId: HostBuiltinSettingsPageId
   title: string
@@ -42,6 +61,10 @@ export interface HostSettingsSurfaceProps {
   onToggleSidebar(): void
   onBackToWorkspace(): void
   generalPage: ReactElement
+  dawPage: ReactElement
+  permissionsPage: ReactElement
+  updatesPage: ReactElement
+  diagnosticsPage: ReactElement
   workflowExtensionsPage: ReactElement
   automationExtensionsPage: ReactElement
   toolExtensionsPage: ReactElement
@@ -86,42 +109,30 @@ const bodyStyle: CSSProperties = {
 
 const navStyle: CSSProperties = {
   display: 'grid',
-  alignContent: 'start',
-  gap: 20,
+  gridTemplateRows: 'minmax(0, 1fr) auto',
+  gap: 24,
   minWidth: 0,
   padding: 28,
   background: hostShellColors.surfaceMuted,
   borderRight: `1px solid ${hostShellColors.border}`,
   minHeight: 0,
+}
+
+const navGroupListStyle: CSSProperties = {
+  display: 'grid',
+  alignContent: 'start',
+  gap: 10,
+  minHeight: 0,
   overflowY: 'auto',
   scrollbarGutter: 'stable',
 }
 
-const navTitleStyle: CSSProperties = {
-  margin: 0,
-  color: hostShellColors.accent,
-  fontSize: 12,
-  fontWeight: 600,
-}
-
-const navDescriptionStyle: CSSProperties = {
-  margin: 0,
-  color: hostShellColors.textMuted,
-  fontSize: 14,
-  lineHeight: 1.55,
-}
-
-const navListStyle: CSSProperties = {
-  display: 'grid',
-  gap: 8,
-}
-
-const navItemStyle = (active = false): CSSProperties => ({
+const navGroupButtonStyle = (active = false): CSSProperties => ({
   width: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '12px 16px',
+  padding: '14px 16px',
   border: 'none',
   borderRadius: 18,
   background: active ? hostShellColors.accentSoft : 'transparent',
@@ -131,6 +142,89 @@ const navItemStyle = (active = false): CSSProperties => ({
   textAlign: 'left',
   cursor: active ? 'default' : 'pointer',
 })
+
+const navGroupLabelStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 10,
+  minWidth: 0,
+  flex: 1,
+}
+
+const navGroupLeadingIndicatorStyle = (active = false): CSSProperties => ({
+  width: 3,
+  height: 14,
+  borderRadius: 999,
+  flexShrink: 0,
+  background: active ? hostShellColors.accent : hostShellColors.borderStrong,
+})
+
+const navGroupChevronStyle = (active = false): CSSProperties => ({
+  width: 12,
+  height: 12,
+  display: 'block',
+  flexShrink: 0,
+  color: active ? hostShellColors.accent : hostShellColors.textMuted,
+  transform: active ? 'rotate(90deg)' : 'rotate(0deg)',
+  transformOrigin: '50% 50%',
+  transformBox: 'fill-box',
+  transition: 'transform 140ms ease',
+  opacity: active ? 0.95 : 0.7,
+})
+
+function NavGroupChevron({ active }: { active: boolean }): ReactElement {
+  return (
+    <svg viewBox="0 0 12 12" fill="none" style={navGroupChevronStyle(active)}>
+      <path d="M4 2.75L8.5 6L4 9.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+const navChildListStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  paddingLeft: 12,
+  marginLeft: 16,
+  borderLeft: `1px solid ${hostShellColors.border}`,
+}
+
+const navChildButtonStyle = (active = false): CSSProperties => ({
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  padding: '10px 14px',
+  border: 'none',
+  borderRadius: 14,
+  background: active ? hostShellColors.accentSoft : 'transparent',
+  color: active ? hostShellColors.text : hostShellColors.textMuted,
+  fontSize: 14,
+  fontWeight: active ? 600 : 500,
+  textAlign: 'left',
+  cursor: active ? 'default' : 'pointer',
+})
+
+const navChildLabelStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 10,
+  minWidth: 0,
+}
+
+const navChildIndicatorStyle = (active = false): CSSProperties => ({
+  width: 4,
+  height: 4,
+  borderRadius: 999,
+  flexShrink: 0,
+  background: active ? hostShellColors.accent : hostShellColors.textSubtle,
+})
+
+const navUtilityStyle: CSSProperties = {
+  display: 'grid',
+  gap: 10,
+  paddingTop: 4,
+  borderTop: `1px solid ${hostShellColors.border}`,
+}
 
 const contentStyle: CSSProperties = {
   display: 'grid',
@@ -171,6 +265,15 @@ const contentHeaderMetaStyle: CSSProperties = {
   minWidth: 0,
 }
 
+const contentSectionLabelStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.accent,
+  fontSize: 12,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+}
+
 const contentTitleStyle: CSSProperties = {
   margin: 0,
   color: hostShellColors.text,
@@ -201,6 +304,22 @@ function isSameSettingsRoute(left: HostSettingsPageRoute, right: HostSettingsPag
 function settingsDescription(locale: HostLocale, pageId: HostBuiltinSettingsPageId): string {
   if (pageId === 'general') {
     return translateHost(locale, 'settings.general.description')
+  }
+
+  if (pageId === 'daw') {
+    return translateHost(locale, 'settings.daw.description')
+  }
+
+  if (pageId === 'permissions') {
+    return translateHost(locale, 'settings.permissions.description')
+  }
+
+  if (pageId === 'updates') {
+    return translateHost(locale, 'settings.updates.description')
+  }
+
+  if (pageId === 'diagnostics') {
+    return translateHost(locale, 'settings.diagnostics.description')
   }
 
   if (pageId === 'workflowExtensions') {
@@ -236,6 +355,19 @@ function BuiltinPlaceholder({ title, description }: { title: string; description
   )
 }
 
+function selectSettingsNavItem(
+  item: HostSettingsNavItem,
+  onSelectBuiltin: (pageId: HostBuiltinSettingsPageId) => void,
+  onSelectPlugin: (pluginId: string, pageId: string) => void,
+) {
+  if (item.kind === 'builtin') {
+    onSelectBuiltin(item.pageId as HostBuiltinSettingsPageId)
+    return
+  }
+
+  onSelectPlugin(item.pluginId ?? '', item.pageId)
+}
+
 export function HostSettingsSurface({
   settingsRoute,
   settingsTitle,
@@ -255,12 +387,17 @@ export function HostSettingsSurface({
   onToggleSidebar,
   onBackToWorkspace,
   generalPage,
+  dawPage,
+  permissionsPage,
+  updatesPage,
+  diagnosticsPage,
   workflowExtensionsPage,
   automationExtensionsPage,
   toolExtensionsPage,
 }: HostSettingsSurfaceProps) {
   const builtinSettingsNavItems = builtinSettingsNav.filter(
     (entry) =>
+      entry.pageId !== 'diagnostics' &&
       entry.pageId !== 'workflowExtensions' &&
       entry.pageId !== 'automationExtensions' &&
       entry.pageId !== 'toolExtensions',
@@ -272,13 +409,87 @@ export function HostSettingsSurface({
       entry.pageId === 'toolExtensions',
   )
   const showTopbarReturnAction = settingsRoute.kind === 'plugin' && settingsReturnsToWorkspace
-  const hasPluginExtensions =
-    extensionSettingsNavItems.length > 0 ||
-    pluginSettingsEntries.length > 0 ||
-    (settingsRoute.kind === 'builtin' &&
-      (settingsRoute.pageId === 'workflowExtensions' ||
-        settingsRoute.pageId === 'automationExtensions' ||
-        settingsRoute.pageId === 'toolExtensions'))
+  const configurationItems: HostSettingsNavItem[] = builtinSettingsNavItems.map((entry) => ({
+    key: entry.pageId,
+    title: entry.title,
+    isActive: settingsRoute.kind === 'builtin' && settingsRoute.pageId === entry.pageId,
+    kind: 'builtin',
+    pageId: entry.pageId,
+  }))
+  const extensionItems: HostSettingsNavItem[] = extensionSettingsNavItems.map((entry) => ({
+    key: entry.pageId,
+    title: entry.title,
+    isActive: settingsRoute.kind === 'builtin' && settingsRoute.pageId === entry.pageId,
+    kind: 'builtin',
+    pageId: entry.pageId,
+  }))
+  const workflowViewItems: HostSettingsNavItem[] = pluginSettingsEntries.map((entry) => ({
+    key: `${entry.pluginId}:${entry.pageId}`,
+    title: entry.title,
+    isActive: isSameSettingsRoute(settingsRoute, {
+      kind: 'plugin',
+      pluginId: entry.pluginId,
+      pageId: entry.pageId,
+    }),
+    kind: 'plugin',
+    pluginId: entry.pluginId,
+    pageId: entry.pageId,
+  }))
+  const diagnosticsItems: HostSettingsNavItem[] = [
+    {
+      key: 'diagnostics',
+      title: translateHost(locale, 'settings.diagnostics.title'),
+      isActive: settingsRoute.kind === 'builtin' && settingsRoute.pageId === 'diagnostics',
+      kind: 'builtin',
+      pageId: 'diagnostics',
+    },
+  ]
+  const activeSettingsNavGroupId: HostSettingsNavGroupId | null =
+    settingsRoute.kind === 'plugin'
+      ? 'workflowViews'
+      : settingsRoute.pageId === 'workflowExtensions' ||
+          settingsRoute.pageId === 'automationExtensions' ||
+          settingsRoute.pageId === 'toolExtensions'
+        ? 'extensions'
+        : settingsRoute.pageId === 'diagnostics'
+          ? 'diagnostics'
+          : 'configuration'
+  const settingsNavGroups: HostSettingsNavGroup[] = [
+    {
+      id: 'configuration',
+      title: translateHost(locale, 'settings.configuration'),
+      isActive: activeSettingsNavGroupId === 'configuration',
+      items: configurationItems,
+      defaultItem: configurationItems[0] ?? null,
+    },
+    extensionItems.length > 0
+      ? {
+          id: 'extensions',
+          title: translateHost(locale, 'settings.extensions'),
+          isActive: activeSettingsNavGroupId === 'extensions',
+          items: extensionItems,
+          defaultItem: extensionItems[0] ?? null,
+        }
+      : null,
+    workflowViewItems.length > 0
+      ? {
+          id: 'workflowViews',
+          title: translateHost(locale, 'settings.workflowPages'),
+          isActive: activeSettingsNavGroupId === 'workflowViews',
+          items: workflowViewItems,
+          defaultItem: workflowViewItems[0] ?? null,
+        }
+      : null,
+    {
+      id: 'diagnostics',
+      title: translateHost(locale, 'settings.diagnostics'),
+      isActive: activeSettingsNavGroupId === 'diagnostics',
+      items: diagnosticsItems,
+      defaultItem: diagnosticsItems[0] ?? null,
+    },
+  ].filter((group): group is HostSettingsNavGroup => group !== null)
+  const activeSettingsNavGroup = settingsNavGroups.find((group) => group.id === activeSettingsNavGroupId) ?? null
+  const activeSettingsNavItems = activeSettingsNavGroup?.items ?? []
 
   const renderSettingsContent = (): ReactElement => {
     if (settingsRoute.kind === 'plugin') {
@@ -296,6 +507,22 @@ export function HostSettingsSurface({
 
     if (settingsRoute.pageId === 'general') {
       return generalPage
+    }
+
+    if (settingsRoute.pageId === 'daw') {
+      return dawPage
+    }
+
+    if (settingsRoute.pageId === 'permissions') {
+      return permissionsPage
+    }
+
+    if (settingsRoute.pageId === 'updates') {
+      return updatesPage
+    }
+
+    if (settingsRoute.pageId === 'diagnostics') {
+      return diagnosticsPage
     }
 
     if (settingsRoute.pageId === 'workflowExtensions') {
@@ -326,102 +553,88 @@ export function HostSettingsSurface({
               onToggleCollapse={onToggleSidebar}
             />
         <div style={settingsViewportStyle}>
-          <div style={screenFrameStyle}>
-            <div style={bodyStyle}>
-                  <aside style={navStyle}>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      <p style={navTitleStyle}>{translateHost(locale, 'settings.configuration')}</p>
-                      <p style={navDescriptionStyle}>
-                        {translateHost(locale, 'settings.configuration.body')}
-                      </p>
-                    </div>
-
-                <div style={navListStyle}>
-                  {builtinSettingsNavItems.map((entry) => (
-                    <button
-                      key={entry.pageId}
-                      type="button"
-                      style={navItemStyle(settingsRoute.kind === 'builtin' && settingsRoute.pageId === entry.pageId)}
-                      onClick={() => onSelectBuiltin(entry.pageId)}
-                    >
-                      {entry.title}
-                    </button>
-                  ))}
-                </div>
-
-                    {hasPluginExtensions ? (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <p style={navTitleStyle}>{translateHost(locale, 'settings.extensions')}</p>
-                        {extensionSettingsNavItems.map((entry) => (
-                          <button
-                            key={entry.pageId}
-                            type="button"
-                            style={navItemStyle(settingsRoute.kind === 'builtin' && settingsRoute.pageId === entry.pageId)}
-                            onClick={() => onSelectBuiltin(entry.pageId)}
-                          >
-                            {entry.title}
-                          </button>
-                        ))}
+            <div style={screenFrameStyle}>
+              <div style={bodyStyle}>
+                <aside style={navStyle}>
+                  <div style={navGroupListStyle}>
+                    {settingsNavGroups.map((group) => (
+                      <div key={group.id} style={{ display: 'grid', gap: 8 }}>
+                        <button
+                          type="button"
+                          style={navGroupButtonStyle(group.isActive)}
+                          onClick={() => {
+                            if (group.defaultItem) {
+                              selectSettingsNavItem(group.defaultItem, onSelectBuiltin, onSelectPlugin)
+                            }
+                          }}
+                        >
+                          <span style={navGroupLabelStyle}>
+                            <span aria-hidden="true" style={navGroupLeadingIndicatorStyle(group.isActive)} />
+                            <span>{group.title}</span>
+                          </span>
+                          {group.items.length > 1 ? (
+                            <span aria-hidden="true">
+                              <NavGroupChevron active={group.isActive} />
+                            </span>
+                          ) : (
+                            <span aria-hidden="true" style={{ width: 8, height: 8, flexShrink: 0 }} />
+                          )}
+                        </button>
+                        {group.isActive && group.items.length > 1 ? (
+                          <div style={navChildListStyle}>
+                            {group.items.map((item) => (
+                              <button
+                                key={item.key}
+                                type="button"
+                                style={navChildButtonStyle(item.isActive)}
+                                onClick={() => selectSettingsNavItem(item, onSelectBuiltin, onSelectPlugin)}
+                              >
+                                <span style={navChildLabelStyle}>
+                                  <span aria-hidden="true" style={navChildIndicatorStyle(item.isActive)} />
+                                  <span>{item.title}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-
-                    {pluginSettingsEntries.length > 0 ? (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <p style={navTitleStyle}>{translateHost(locale, 'settings.workflowPages')}</p>
-                    {pluginSettingsEntries.map((entry) => (
-                      <button
-                        key={`${entry.pluginId}:${entry.pageId}`}
-                        type="button"
-                        style={navItemStyle(
-                          isSameSettingsRoute(settingsRoute, {
-                            kind: 'plugin',
-                            pluginId: entry.pluginId,
-                            pageId: entry.pageId,
-                          }),
-                        )}
-                        onClick={() => onSelectPlugin(entry.pluginId, entry.pageId)}
-                      >
-                        {entry.title}
-                      </button>
                     ))}
                   </div>
-                ) : null}
-
-                    {developerMode ? (
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        <p style={navTitleStyle}>{translateHost(locale, 'settings.diagnostics')}</p>
-                        <button type="button" style={navItemStyle(surface === 'developer')} onClick={onOpenDeveloper}>
-                          {translateHost(locale, 'general.developer')}
-                        </button>
-                      </div>
-                    ) : null}
-              </aside>
-
-              <div style={contentStyle}>
-                <div style={contentHeaderStyle}>
-                  <div style={contentHeaderMetaStyle}>
-                    <h1 style={contentTitleStyle}>{settingsTitle}</h1>
-                    <p style={contentDescriptionStyle}>
-                      {settingsRoute.kind === 'builtin'
-                        ? settingsDescription(locale, settingsRoute.pageId)
-                        : translateHost(locale, 'settings.plugin.description')}
-                    </p>
-                  </div>
-                  {showTopbarReturnAction ? (
-                    <Button variant="secondary" size="sm" onClick={onBackToWorkspace}>
-                      {translateHost(locale, 'settings.back')}
-                    </Button>
+                  {developerMode ? (
+                    <div style={navUtilityStyle}>
+                      <Button variant="secondary" size="sm" onClick={onOpenDeveloper}>
+                        {translateHost(locale, 'general.developer')}
+                      </Button>
+                    </div>
                   ) : null}
-                </div>
+                </aside>
 
-                <div style={contentBodyStyle}>
-                  {renderSettingsContent()}
+                <div style={contentStyle}>
+                  <div style={contentHeaderStyle}>
+                    <div style={contentHeaderMetaStyle}>
+                      <p style={contentSectionLabelStyle}>{activeSettingsNavGroup?.title ?? translateHost(locale, 'sidebar.settings')}</p>
+                      <h1 style={contentTitleStyle}>{settingsTitle}</h1>
+                      <p style={contentDescriptionStyle}>
+                        {settingsRoute.kind === 'builtin'
+                          ? settingsDescription(locale, settingsRoute.pageId)
+                          : translateHost(locale, 'settings.plugin.description')}
+                      </p>
+                    </div>
+                    {showTopbarReturnAction ? (
+                      <Button variant="secondary" size="sm" onClick={onBackToWorkspace}>
+                        {translateHost(locale, 'settings.back')}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div style={contentBodyStyle}>
+                    {renderSettingsContent()}
+                  </div>
+                </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </ShellSurface>
+        </ShellSurface>
   )
 }

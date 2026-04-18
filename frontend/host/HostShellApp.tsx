@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 
@@ -32,6 +32,10 @@ import type {
   HostWorkspacePageRoute,
 } from './pluginHostTypes'
 import { GeneralSettingsPage, type GeneralSettingsPageProps } from './settings/GeneralSettingsPage'
+import { DawSettingsPage } from './settings/DawSettingsPage'
+import { PermissionsSettingsPage } from './settings/PermissionsSettingsPage'
+import { UpdatesSettingsPage } from './settings/UpdatesSettingsPage'
+import { DiagnosticsSettingsPage } from './settings/DiagnosticsSettingsPage'
 import { ExtensionsSettingsPage } from './settings/ExtensionsSettingsPage'
 import { useHostShellNavigationState } from './useHostShellNavigationState'
 import { useHostShellPreferencesState } from './useHostShellPreferencesState'
@@ -156,12 +160,16 @@ export function HostShellApp({
     hasUpdate,
     showUpdateDialog,
     showMacAccessibilityDialog,
+    checkingPermissions,
+    permissionStatus,
+    missingRequiredPermissions,
     setShowUpdateDialog,
     setShowMacAccessibilityDialog,
     setLatestRelease,
     setHasUpdate,
     setUpdateError,
     checkForUpdates,
+    checkRequiredPermissions,
     openReleasePage,
     openMacAccessibilitySettings,
   } = useHostShellRuntimeState({
@@ -173,9 +181,18 @@ export function HostShellApp({
     macAccessibilityPermissionRequiredCode,
     macAccessibilityPreflight,
   })
+  const startupPermissionRedirectRef = useRef(false)
 
   useEffect(() => subscribeThemeMode((mode) => setThemeModeState(mode)), [])
   useEffect(() => subscribeThemePreference((preferenceMode) => setThemePreferenceState(preferenceMode)), [])
+  useEffect(() => {
+    if (missingRequiredPermissions.length === 0 || startupPermissionRedirectRef.current) {
+      return
+    }
+
+    startupPermissionRedirectRef.current = true
+    openSettings({ kind: 'builtin', pageId: 'general' })
+  }, [missingRequiredPermissions.length, openSettings])
 
   const muiTheme = useMemo(() => createHostMuiTheme(themeMode), [themeMode])
 
@@ -251,6 +268,26 @@ export function HostShellApp({
       description: translateHost(resolvedLocale, 'settings.general.body'),
     },
     {
+      pageId: 'daw',
+      title: translateHost(resolvedLocale, 'settings.daw.title'),
+      description: translateHost(resolvedLocale, 'settings.daw.body'),
+    },
+    {
+      pageId: 'permissions',
+      title: translateHost(resolvedLocale, 'settings.permissions.title'),
+      description: translateHost(resolvedLocale, 'settings.permissions.navBody'),
+    },
+    {
+      pageId: 'updates',
+      title: translateHost(resolvedLocale, 'settings.updates.title'),
+      description: translateHost(resolvedLocale, 'settings.updates.body'),
+    },
+    {
+      pageId: 'diagnostics',
+      title: translateHost(resolvedLocale, 'settings.diagnostics.title'),
+      description: translateHost(resolvedLocale, 'settings.diagnostics.body'),
+    },
+    {
       pageId: 'workflowExtensions',
       title: translateHost(resolvedLocale, 'settings.extensions.workflows.title'),
       description: translateHost(resolvedLocale, 'settings.extensions.workflows.body'),
@@ -279,19 +316,6 @@ export function HostShellApp({
       locale={resolvedLocale}
       preferences={preferences}
       themePreference={themePreference}
-      dawStatus={dawStatus}
-      checkingConnection={checkingDawConnection}
-      runtime={developerRuntime as GeneralSettingsPageProps['runtime']}
-      appVersion={appVersion}
-      latestRelease={latestRelease}
-      checkingUpdate={checkingUpdate}
-      updateError={updateError}
-      hasNewRelease={hasUpdate}
-      onDeveloperModeChange={(selected) => {
-        void persistHostShellPreferences({
-          developerMode: selected,
-        })
-      }}
       onThemePreferenceChange={(preferenceMode) => {
         setThemePreference(preferenceMode)
       }}
@@ -299,16 +323,16 @@ export function HostShellApp({
         void persistHostShellPreferences({
           language,
         })
-        refreshDawStatus()
       }}
-      onIncludePrereleaseUpdatesChange={(selected) => {
-        setLatestRelease(null)
-        setHasUpdate(false)
-        setUpdateError('')
-        void persistHostShellPreferences({
-          includePrereleaseUpdates: selected,
-        })
-      }}
+    />
+  )
+
+  const dawPage = (
+    <DawSettingsPage
+      locale={resolvedLocale}
+      dawTarget={preferences.dawTarget}
+      dawStatus={dawStatus}
+      checkingConnection={checkingDawConnection}
       onDawTargetChange={async (target) => {
         setCheckingDawConnection(true)
         try {
@@ -333,11 +357,60 @@ export function HostShellApp({
         }))
         refreshDawStatus()
       }}
+    />
+  )
+
+  const permissionsPage = (
+    <PermissionsSettingsPage
+      locale={resolvedLocale}
+      checkingPermissions={checkingPermissions}
+      permissionStatus={permissionStatus}
+      onRecheckPermissions={() => {
+        void checkRequiredPermissions()
+      }}
+      onOpenPermissionSettings={(permissionId) => {
+        if (permissionId === 'macAccessibility') {
+          void openMacAccessibilitySettings()
+        }
+      }}
+    />
+  )
+
+  const updatesPage = (
+    <UpdatesSettingsPage
+      locale={resolvedLocale}
+      appVersion={appVersion}
+      latestRelease={latestRelease}
+      checkingUpdate={checkingUpdate}
+      updateError={updateError}
+      hasNewRelease={hasUpdate}
+      includePrereleaseUpdates={preferences.includePrereleaseUpdates}
+      onIncludePrereleaseUpdatesChange={(selected) => {
+        setLatestRelease(null)
+        setHasUpdate(false)
+        setUpdateError('')
+        void persistHostShellPreferences({
+          includePrereleaseUpdates: selected,
+        })
+      }}
       onCheckForUpdates={() => {
         void checkForUpdates()
       }}
       onOpenReleasePage={() => {
         void openReleasePage()
+      }}
+    />
+  )
+
+  const diagnosticsPage = (
+    <DiagnosticsSettingsPage
+      locale={resolvedLocale}
+      developerMode={preferences.developerMode}
+      runtime={developerRuntime as GeneralSettingsPageProps['runtime']}
+      onDeveloperModeChange={(selected) => {
+        void persistHostShellPreferences({
+          developerMode: selected,
+        })
       }}
     />
   )
@@ -419,6 +492,10 @@ export function HostShellApp({
       onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
       onBackToWorkspace={() => setSurface(settingsReturnSurface ?? 'home')}
       generalPage={generalPage}
+      dawPage={dawPage}
+      permissionsPage={permissionsPage}
+      updatesPage={updatesPage}
+      diagnosticsPage={diagnosticsPage}
       workflowExtensionsPage={workflowExtensionsPage}
       automationExtensionsPage={automationExtensionsPage}
       toolExtensionsPage={toolExtensionsPage}

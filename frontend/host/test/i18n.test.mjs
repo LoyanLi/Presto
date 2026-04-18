@@ -74,8 +74,16 @@ test('desktop-facing copy avoids page and app wording in key host surfaces', asy
     'View Release Notes',
   )
   assert.equal(
+    translateHost('en', 'settings.permissions.title'),
+    'Permissions',
+  )
+  assert.equal(
     translateHost('zh-CN', 'general.developer.toggleBody'),
     '显示专门的开发者界面和插件诊断导航。',
+  )
+  assert.equal(
+    translateHost('zh-CN', 'settings.permissions.macAccessibility.openSettings'),
+    '打开系统设置',
   )
   assert.equal(
     translateHost('zh-CN', 'settings.accessibility.dialog.help'),

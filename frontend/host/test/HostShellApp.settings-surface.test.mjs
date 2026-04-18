@@ -303,13 +303,16 @@ test('settings surface renders second-level navigation with required entries', a
 
   assert.match(markup, />Settings</)
   assert.match(markup, /General/)
+  assert.match(markup, /DAW/)
+  assert.match(markup, /Permissions/)
+  assert.match(markup, /Updates/)
+  assert.match(markup, /Diagnostics/)
   assert.match(markup, /Extensions/)
-  assert.match(markup, /Import Workflow/)
-  assert.match(markup, /Export Workflow/)
+  assert.match(markup, /Workflow Views/)
   assert.match(markup, /Developer/)
-  assert.match(markup, /Developer Mode/)
   assert.doesNotMatch(markup, /Find a setting/)
   assert.doesNotMatch(markup, /Updated just now/)
+  assert.doesNotMatch(markup, /Only implemented host settings appear here/)
   assert.doesNotMatch(markup, />Workspace</)
   assert.doesNotMatch(markup, />Audio</)
   assert.doesNotMatch(markup, />Exports</)
@@ -324,30 +327,126 @@ test('settings surface renders second-level navigation with required entries', a
   assert.doesNotMatch(markup, /Export Naming Rule/)
   assert.doesNotMatch(markup, /Operator Notes Template/)
   assert.doesNotMatch(markup, /Recovery Snapshot Location/)
-  assert.match(markup, /DAW/)
   assert.match(markup, /Language/)
   assert.match(markup, /ui-select/)
-  assert.match(markup, /Pro Tools/)
-  assert.match(markup, /Check Connection/)
-  assert.match(markup, /Current version: -/)
-  assert.match(markup, /Latest release: not checked/)
-  assert.match(markup, /Include prerelease updates/)
-  assert.match(markup, /Check for Updates/)
-  assert.match(markup, /View Release Notes/)
-  assert.match(markup, /View Log/)
   assert.doesNotMatch(markup, /Export Logs/)
-  assert.match(markup, /Disconnected/)
   assert.match(markup, /Developer/)
-  assert.match(markup, /Developer Mode/)
   assert.doesNotMatch(markup, /Set host identity, launch behavior, file handling rules, and safety confirmations/)
   assert.doesNotMatch(markup, />Reset</)
   assert.doesNotMatch(markup, /Restore Defaults/)
   assert.doesNotMatch(markup, />Save Changes</)
   const themeSelectorRegion = sliceAfterMatch(markup, /aria-label="Theme"/, 20000)
   assert.match(themeSelectorRegion, />System</)
+  assert.doesNotMatch(themeSelectorRegion, /Check Connection/)
+  assert.doesNotMatch(themeSelectorRegion, /Recheck Permissions/)
+  assert.doesNotMatch(themeSelectorRegion, /Check for Updates/)
+  assert.doesNotMatch(themeSelectorRegion, /View Log/)
+  assert.doesNotMatch(themeSelectorRegion, /Developer Mode/)
 })
 
-test('settings keeps log access inside general settings instead of opening a dedicated host page', async () => {
+test('settings surface renders top-level sidebar groups and expands configuration items inside the sidebar', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...createPluginProps(),
+      initialSettingsPageRoute: {
+        kind: 'builtin',
+        pageId: 'general',
+      },
+    }),
+  )
+
+  assert.match(markup, /Configuration/)
+  assert.match(markup, /Extensions/)
+  assert.match(markup, /Workflow Views/)
+  assert.match(markup, /Diagnostics/)
+  assert.match(markup, />General</)
+  assert.match(markup, />DAW</)
+  assert.match(markup, />Permissions</)
+  assert.match(markup, />Updates</)
+  assert.doesNotMatch(markup, />Workflow Extensions</)
+  assert.doesNotMatch(markup, />Automation Extensions</)
+})
+
+test('settings surface switches the sidebar child items to workflow views for plugin settings routes', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...createPluginProps(),
+      initialSettingsPageRoute: {
+        kind: 'plugin',
+        pluginId: 'official.import-workflow',
+        pageId: 'import-workflow.page.settings',
+      },
+    }),
+  )
+
+  assert.match(markup, /Workflow Views/)
+  assert.match(markup, />Import Workflow</)
+  assert.match(markup, />Export Workflow</)
+  assert.doesNotMatch(markup, />Permissions</)
+  assert.doesNotMatch(markup, />Updates</)
+})
+
+test('settings surface source derives sidebar child items from the active group only and adds explicit hierarchy markers without changing size', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostSettingsSurface.tsx'), 'utf8')
+
+  assert.match(source, /type HostSettingsNavGroupId = 'configuration' \| 'extensions' \| 'workflowViews' \| 'diagnostics'/)
+  assert.match(source, /const activeSettingsNavGroupId: HostSettingsNavGroupId \| null =/)
+  assert.match(source, /const activeSettingsNavGroup = settingsNavGroups\.find\(\(group\) => group\.id === activeSettingsNavGroupId\) \?\? null/)
+  assert.match(source, /const activeSettingsNavItems = activeSettingsNavGroup\?\.items \?\? \[\]/)
+  assert.match(source, /settingsNavGroups\.map\(\(group\) => \(/)
+  assert.match(source, /group\.isActive && group\.items\.length > 1/)
+  assert.match(source, /const navGroupLeadingIndicatorStyle = \(active = false\): CSSProperties => \(\{/)
+  assert.match(source, /const navGroupChevronStyle = \(active = false\): CSSProperties => \(\{/)
+  assert.match(source, /function NavGroupChevron\(\{ active \}: \{ active: boolean \}\): ReactElement \{/)
+  assert.match(source, /<svg viewBox="0 0 12 12" fill="none" style=\{navGroupChevronStyle\(active\)\}>/)
+  assert.match(source, /<path d="M4 2\.75L8\.5 6L4 9\.25"/)
+  assert.match(source, /const navChildIndicatorStyle = \(active = false\): CSSProperties => \(\{/)
+  assert.match(source, /const navChildListStyle:[\s\S]*borderLeft: `1px solid/)
+  assert.match(source, /const navGroupButtonStyle = \(active = false\): CSSProperties => \(\{[\s\S]*padding: '14px 16px'/)
+  assert.match(source, /const navChildButtonStyle = \(active = false\): CSSProperties => \(\{[\s\S]*padding: '10px 14px'/)
+  assert.match(source, /const navGroupLeadingIndicatorStyle = \(active = false\): CSSProperties => \(\{[\s\S]*width: 3,[\s\S]*height: 14,/)
+  assert.doesNotMatch(source, /const navGroupLeadingIndicatorStyle = \(active = false\): CSSProperties => \(\{[\s\S]*boxShadow:/)
+  assert.match(source, /const navChildIndicatorStyle = \(active = false\): CSSProperties => \(\{[\s\S]*width: 4,[\s\S]*height: 4,/)
+  assert.doesNotMatch(source, /const navGroupChevronStyle = \(active = false\): CSSProperties => \(\{[\s\S]*borderRight:/)
+  assert.doesNotMatch(source, /const navGroupChevronStyle = \(active = false\): CSSProperties => \(\{[\s\S]*borderBottom:/)
+})
+
+test('permissions settings render a flat permission checklist with status and a system settings action', async () => {
+  const { PermissionsSettingsPage } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(PermissionsSettingsPage, {
+      locale: 'en',
+      checkingPermissions: false,
+      permissionStatus: [
+        {
+          id: 'macAccessibility',
+          checked: true,
+          granted: false,
+          required: true,
+          errorCode: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+        },
+      ],
+      onRecheckPermissions() {},
+      onOpenPermissionSettings() {},
+    }),
+  )
+
+  assert.match(markup, /Permissions/)
+  assert.match(markup, /Accessibility Access/)
+  assert.match(markup, /Missing/)
+  assert.match(markup, /Recheck Permissions/)
+  assert.match(markup, /Open System Settings/)
+})
+
+test('general settings only keep appearance controls after builtin host pages are split', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const markup = renderToStaticMarkup(
     React.createElement(HostShellApp, {
@@ -365,8 +464,41 @@ test('settings keeps log access inside general settings instead of opening a ded
     }),
   )
 
+  assert.match(markup, /General/)
+  assert.match(markup, /Language/)
+  assert.match(markup, /Theme/)
+  assert.doesNotMatch(markup, /Check Connection/)
+  assert.doesNotMatch(markup, /Recheck Permissions/)
+  assert.doesNotMatch(markup, /Check for Updates/)
+  assert.doesNotMatch(markup, /View Log/)
+  assert.doesNotMatch(markup, /Developer Mode/)
+})
+
+test('settings keeps log access in a dedicated diagnostics page instead of the general page', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {
+        app: {
+          viewLog: async () => ({
+            ok: true,
+            filePath: '/tmp/current.log',
+          }),
+        },
+      },
+      ...createPluginProps(),
+      initialSettingsPageRoute: {
+        kind: 'builtin',
+        pageId: 'diagnostics',
+      },
+    }),
+  )
+
+  assert.match(markup, /Diagnostics/)
   assert.match(markup, /View Log/)
-  assert.doesNotMatch(markup, />Logs</)
+  assert.match(markup, /Developer Mode/)
   assert.doesNotMatch(markup, /Recent Logs/)
   assert.doesNotMatch(markup, /Refresh/)
 })
@@ -404,7 +536,7 @@ test('extensions settings page renders through a single root stack container', a
   assert.match(source, /return \(\s*<div style=\{pageStackStyle\}>/)
 })
 
-test('automation extensions settings page keeps full management controls and workflow page navigation visible', async () => {
+test('automation extensions settings page keeps management controls scoped to the active extensions group', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const markup = renderToStaticMarkup(
     React.createElement(HostShellApp, {
@@ -423,8 +555,10 @@ test('automation extensions settings page keeps full management controls and wor
   assert.match(markup, /Split Stereo To Mono/)
   assert.match(markup, /Install Local Directory/)
   assert.match(markup, /Install Local Zip/)
-  assert.match(markup, /Import Workflow/)
-  assert.match(markup, /Export Workflow/)
+  assert.match(markup, /Workflow Extensions/)
+  assert.match(markup, /Tool Extensions/)
+  assert.doesNotMatch(markup, /Import Workflow/)
+  assert.doesNotMatch(markup, /Export Workflow/)
 })
 
 test('tool extensions settings page keeps extension management controls scoped to tool plugins', async () => {
@@ -523,16 +657,20 @@ test('settings surface renders declarative workflow settings through shared host
 })
 
 test('general and workflow settings reuse the shared ui Select used by automation cards', async () => {
-  const [generalSource, workflowFieldsSource] = await Promise.all([
+  const [generalSource, dawSource, workflowFieldsSource] = await Promise.all([
     readFile(path.join(repoRoot, 'frontend/host/settings/GeneralSettingsPage.tsx'), 'utf8'),
+    readFile(path.join(repoRoot, 'frontend/host/settings/DawSettingsPage.tsx'), 'utf8'),
     readFile(path.join(repoRoot, 'frontend/host/settings/workflowSettingsFields.tsx'), 'utf8'),
   ])
 
   assert.match(generalSource, /from '\.\.\/\.\.\/ui'/)
+  assert.match(dawSource, /from '\.\.\/\.\.\/ui'/)
   assert.match(workflowFieldsSource, /from '\.\.\/\.\.\/ui'/)
   assert.match(generalSource, /Select/)
+  assert.match(dawSource, /Select/)
   assert.match(workflowFieldsSource, /Select/)
   assert.doesNotMatch(generalSource, /HostSelect/)
+  assert.doesNotMatch(dawSource, /HostSelect/)
   assert.doesNotMatch(workflowFieldsSource, /HostSelect/)
   assert.match(generalSource, /general\.language\.followSystem/)
   assert.match(generalSource, /general\.language\.zh-CN/)
@@ -540,9 +678,10 @@ test('general and workflow settings reuse the shared ui Select used by automatio
   assert.match(generalSource, /general\.theme\.system/)
   assert.match(generalSource, /general\.theme\.light/)
   assert.match(generalSource, /general\.theme\.dark/)
+  assert.match(dawSource, /SUPPORTED_DAW_TARGETS/)
 })
 
-test('general settings markup keeps shared select styling for language and DAW controls', async () => {
+test('general settings markup keeps shared select styling for appearance controls after the split', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   globalThis.localStorage = {
     getItem() {
@@ -574,7 +713,7 @@ test('general settings markup keeps shared select styling for language and DAW c
 
   assert.match(markup, /ui-select/)
   assert.match(markup, /Follow System/)
-  assert.match(markup, /Pro Tools/)
+  assert.doesNotMatch(markup, /Check Connection/)
 })
 
 test.afterEach(() => {
@@ -645,6 +784,14 @@ test('host shell settings surfaces share centralized host color tokens', async (
   assert.match(homeSource, /from '\.\/hostShellColors'/)
 })
 
+test('permissions settings rows no longer render nested permission cards inside the page section', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/settings/PermissionsSettingsPage.tsx'), 'utf8')
+
+  assert.doesNotMatch(source, /const permissionCardStyle/)
+  assert.doesNotMatch(source, /background:\s*hostShellColors\.surface/)
+  assert.doesNotMatch(source, /border:\s*`1px solid \$\{hostShellColors\.border\}`/)
+})
+
 test('host shell color tokens stay theme-reactive through css variables', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/hostShellColors.ts'), 'utf8')
 
@@ -703,4 +850,14 @@ test('host shell centralizes startup accessibility checks and renders a dedicate
   assert.match(i18nSource, /settings\.accessibility\.dialog\.title/)
   assert.match(i18nSource, /settings\.accessibility\.dialog\.body/)
   assert.match(i18nSource, /settings\.accessibility\.dialog\.openSettings/)
+})
+
+test('host shell redirects startup permission failures into general settings and passes permission state into the page', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/HostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /permissionStatus/)
+  assert.match(source, /checkingPermissions/)
+  assert.match(source, /onRecheckPermissions=/)
+  assert.match(source, /onOpenPermissionSettings=/)
+  assert.match(source, /openSettings\(\{\s*kind:\s*'builtin',\s*pageId:\s*'general'\s*\}\)/)
 })

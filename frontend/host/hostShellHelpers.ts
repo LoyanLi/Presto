@@ -22,6 +22,10 @@ export type LegacySettingsRouteInput = {
 
 export const builtinSettingsPageIds = new Set<HostBuiltinSettingsPageId>([
   'general',
+  'daw',
+  'permissions',
+  'updates',
+  'diagnostics',
   'workflowExtensions',
   'automationExtensions',
   'toolExtensions',

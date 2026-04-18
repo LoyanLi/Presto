@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(currentDir, '../../..')
 
-test('general settings build DAW options from the shared supported target list instead of inline literals', async () => {
-  const source = await readFile(path.join(repoRoot, 'frontend/host/settings/GeneralSettingsPage.tsx'), 'utf8')
+test('daw settings build DAW options from the shared supported target list instead of inline literals', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/settings/DawSettingsPage.tsx'), 'utf8')
 
   assert.match(source, /SUPPORTED_DAW_TARGETS/)
   assert.match(source, /SUPPORTED_DAW_TARGETS\.map\(\(target\) =>/)

@@ -43,6 +43,10 @@ export interface HostToolPageRoute {
 
 export type HostBuiltinSettingsPageId =
   | 'general'
+  | 'daw'
+  | 'permissions'
+  | 'updates'
+  | 'diagnostics'
   | 'workflowExtensions'
   | 'automationExtensions'
   | 'toolExtensions'
