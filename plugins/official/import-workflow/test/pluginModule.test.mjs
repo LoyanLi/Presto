@@ -206,6 +206,17 @@ function hasFolderSelectionUpdate(stateUpdates, expectedFolders) {
   )
 }
 
+function resolveLatestStateValue(stateUpdates, stateIndex, initialValue) {
+  let currentValue = initialValue
+  for (const update of stateUpdates) {
+    if (update.index !== stateIndex) {
+      continue
+    }
+    currentValue = typeof update.value === 'function' ? update.value(currentValue) : update.value
+  }
+  return currentValue
+}
+
 async function loadPluginModule() {
   if (!pluginModulePromise) {
     const previousWindow = globalThis.window
@@ -297,7 +308,10 @@ test('workflow definition batches post-import operations in the same order shown
   assert.equal(definition.steps[3]?.foreach?.as, 'item')
   assert.equal(definition.steps[4]?.foreach?.as, 'item')
   assert.equal(definition.steps[5]?.foreach?.as, 'item')
-  assert.deepEqual(Object.keys(definition.steps[0]?.input ?? {}).sort(), ['folderPaths', 'importMode', 'orderedFilePaths'])
+  assert.deepEqual(
+    Object.keys(definition.steps[0]?.input ?? {}).sort(),
+    ['deleteIxmlIfPresent', 'folderPaths', 'importMode', 'orderedFilePaths'],
+  )
   assert.deepEqual(renameSteps.map((step) => step.stepId), ['rename_track'])
   assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['daw.track.rename'])
   assert.deepEqual(colorSteps.map((step) => step.stepId), ['apply_color'])
@@ -350,13 +364,14 @@ test('settings schema stays declarative and keeps the implemented import control
   assert.equal(settingsPage.sections[0]?.fields.some((field) => field.path === 'aiConfig.prompt'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.analyzeCacheEnabled'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.importAudioMode'), true)
+  assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.deleteIxmlIfPresent'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadeAfterStrip'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadePresetName'), true)
   assert.equal(settingsPage.sections[1]?.fields.some((field) => field.path === 'ui.fadeAutoAdjustBounds'), true)
   assert.equal(settingsPage.sections.flatMap((section) => section.fields).some((field) => field.path === 'silenceProfile.thresholdDb'), false)
 })
 
-test('main page passes import mode and fade options into workflow run input', async () => {
+test('main page only passes ixml cleanup through workflow run input when import mode is copy', async () => {
   const { pageModule, restore } = await loadPageModuleWithHookHarness({
     1: {
       categories: [
@@ -382,6 +397,7 @@ test('main page passes import mode and fade options into workflow run input', as
         stripAfterImport: true,
         autoSaveSession: true,
         importAudioMode: 'link',
+        deleteIxmlIfPresent: true,
         fadeAfterStrip: true,
         fadePresetName: 'Short Vocal Fade',
         fadeAutoAdjustBounds: false,
@@ -395,6 +411,7 @@ test('main page passes import mode and fade options into workflow run input', as
         finalName: 'Kick In',
         status: 'ready',
         errorMessage: null,
+        hasIxml: true,
       },
     ],
     3: ['/Imports/Drums'],
@@ -434,6 +451,7 @@ test('main page passes import mode and fade options into workflow run input', as
       stripAfterImport: true,
       autoSaveSession: true,
       importAudioMode: 'link',
+      deleteIxmlIfPresent: false,
       fadeAfterStrip: true,
       fadePresetName: 'Short Vocal Fade',
       fadeAutoAdjustBounds: false,
@@ -469,6 +487,7 @@ test('main page allows workflow start when fade is enabled without a preset name
         stripAfterImport: true,
         autoSaveSession: true,
         importAudioMode: 'copy',
+        deleteIxmlIfPresent: false,
         fadeAfterStrip: true,
         fadePresetName: '',
         fadeAutoAdjustBounds: true,
@@ -516,6 +535,154 @@ test('main page allows workflow start when fade is enabled without a preset name
     assert.equal(
       stateUpdates.some((update) => update.index === 7 && update.value === 'Fade preset name is required when post-strip fade is enabled.'),
       false,
+    )
+  } finally {
+    restore()
+  }
+})
+
+test('main page step 3 does not render import mode or ixml cleanup controls', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [{ id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' }],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'copy',
+        deleteIxmlIfPresent: false,
+        fadeAfterStrip: false,
+        fadePresetName: '',
+        fadeAutoAdjustBounds: true,
+      },
+    },
+    2: [
+      {
+        filePath: '/Imports/Drums/kick.wav',
+        categoryId: 'drums',
+        aiName: 'Kick In',
+        finalName: 'Kick In',
+        status: 'ready',
+        errorMessage: null,
+        hasIxml: true,
+      },
+    ],
+    3: ['/Imports/Drums'],
+    4: 3,
+    5: false,
+  })
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+    const markup = renderToStaticMarkup(tree)
+
+    assert.doesNotMatch(markup, /Import audio mode/)
+    assert.doesNotMatch(markup, /Copy into Audio Files folder/)
+    assert.doesNotMatch(markup, /Link to source media/)
+    assert.doesNotMatch(markup, /Delete iXML sidecar files after import/)
+  } finally {
+    restore()
+  }
+})
+
+test('main page applies category changes to all selected rows when editing one selected file', async () => {
+  const initialRows = [
+    {
+      filePath: '/Imports/Drums/kick.wav',
+      categoryId: 'drums',
+      aiName: 'Kick In',
+      finalName: 'Kick In',
+      status: 'ready',
+      errorMessage: null,
+    },
+    {
+      filePath: '/Imports/Drums/snare.wav',
+      categoryId: 'drums',
+      aiName: 'Snare Top',
+      finalName: 'Snare Top',
+      status: 'ready',
+      errorMessage: null,
+    },
+  ]
+  const selectedPaths = new Set(initialRows.map((row) => row.filePath))
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: {
+      categories: [
+        { id: 'drums', name: 'Drums', colorSlot: 3, previewHex: '#111111' },
+        { id: 'fx', name: 'FX', colorSlot: 33, previewHex: '#333333' },
+      ],
+      silenceProfile: {
+        thresholdDb: -48,
+        minStripMs: 120,
+        minSilenceMs: 120,
+        startPadMs: 5,
+        endPadMs: 20,
+      },
+      aiConfig: {
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        timeoutSeconds: 30,
+        apiKey: '',
+        prompt: 'test',
+      },
+      ui: {
+        analyzeCacheEnabled: true,
+        stripAfterImport: true,
+        autoSaveSession: true,
+        importAudioMode: 'copy',
+        deleteIxmlIfPresent: false,
+        fadeAfterStrip: false,
+        fadePresetName: '',
+        fadeAutoAdjustBounds: true,
+      },
+    },
+    2: initialRows,
+    3: ['/Imports/Drums'],
+    4: 1,
+    5: false,
+    8: selectedPaths,
+    9: initialRows[0].filePath,
+  })
+
+  try {
+    const tree = pageModule.ImportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+    const categorySelect = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && node.props?.['aria-label'] === 'Category' && node.props?.value === 'drums',
+    )
+
+    assert.ok(categorySelect, 'expected category select in prepared file table')
+
+    categorySelect.props.onChange({ target: { value: 'fx' } })
+
+    const nextRows = resolveLatestStateValue(stateUpdates, 2, initialRows)
+    assert.deepEqual(
+      nextRows.map((row) => row.categoryId),
+      ['fx', 'fx'],
     )
   } finally {
     restore()
@@ -969,7 +1136,7 @@ test('main page source removes the checkbox column and table configuration ui wh
     readFile(new URL('../dist/import-workflow.css', import.meta.url), 'utf8'),
   ])
 
-  assert.doesNotMatch(pageSource, /type:\s*'checkbox'/)
+  assert.doesNotMatch(pageSource, /id:\s*'selected'/)
   assert.doesNotMatch(pageSource, /h\('th', null, ''\)/)
   assert.doesNotMatch(pageSource, /iw-table-config/)
   assert.doesNotMatch(pageSource, /updatePreparedColumnVisibility/)

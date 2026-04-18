@@ -269,6 +269,10 @@ function resolveRunStageKey(stageKeys, phase) {
   return stageKeys.includes(phase) ? phase : 'import'
 }
 
+function hasIxmlRows(rows) {
+  return rows.some((row) => row?.hasIxml === true)
+}
+
 export function ImportWorkflowPage({ context, host }) {
   const [settings, setSettings] = React.useState(() => createDefaultImportWorkflowSettings())
   const [rows, setRows] = React.useState([])
@@ -305,6 +309,17 @@ export function ImportWorkflowPage({ context, host }) {
   const readyRows = React.useMemo(() => sortedRows.filter((row) => row.status === 'ready'), [sortedRows])
   const failedRows = React.useMemo(() => sortedRows.filter((row) => row.status === 'failed'), [sortedRows])
   const validationIssues = React.useMemo(() => buildRunValidation(readyRows), [readyRows])
+  const hasDetectedIxml = React.useMemo(() => hasIxmlRows(rows), [rows])
+  const effectiveRunUi = React.useMemo(
+    () => ({
+      ...settings.ui,
+      deleteIxmlIfPresent:
+        hasDetectedIxml &&
+        settings.ui.importAudioMode === 'copy' &&
+        Boolean(settings.ui.deleteIxmlIfPresent),
+    }),
+    [hasDetectedIxml, settings.ui],
+  )
 
   const appendLog = React.useCallback(
     (message, level = 'info') => {
@@ -725,7 +740,7 @@ export function ImportWorkflowPage({ context, host }) {
           rows: finalized.executionRows,
           categories: settings.categories,
           silenceProfile: settings.silenceProfile,
-          ui: settings.ui,
+          ui: effectiveRunUi,
         },
       })
       const queuedMessage = tImport(context, 'page.state.importQueued')
@@ -763,7 +778,7 @@ export function ImportWorkflowPage({ context, host }) {
     } finally {
       setBusy(false)
     }
-  }, [appendLog, categoryColorSlotById, context.presto.track, context.presto.workflow.run, pollJob, readyRows.length, replaceRows, settings.categories, settings.silenceProfile, settings.ui, sortedRows, sourceFolders, validationIssues])
+  }, [appendLog, categoryColorSlotById, context.presto.track, context.presto.workflow.run, effectiveRunUi, pollJob, readyRows.length, replaceRows, settings.categories, settings.silenceProfile, sortedRows, sourceFolders, validationIssues])
 
   const cancelRun = React.useCallback(async () => {
     if (!runState.jobId || runState.phase !== 'backend') {

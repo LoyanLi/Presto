@@ -86,6 +86,7 @@ export function createDefaultImportWorkflowSettings() {
       analyzeCacheEnabled: true,
       stripAfterImport: true,
       importAudioMode: 'copy',
+      deleteIxmlIfPresent: false,
       fadeAfterStrip: false,
       fadePresetName: '',
       fadeAutoAdjustBounds: true,
@@ -127,6 +128,7 @@ export function mergeImportWorkflowSettings(raw) {
   const categories = (categoriesInput.length > 0 ? categoriesInput : defaults.categories).map((category, index) =>
     normalizeCategory(category, index, usedIds),
   )
+  const importAudioMode = normalizeImportAudioMode(raw?.ui?.importAudioMode ?? defaults.ui.importAudioMode)
   return {
     categories,
     silenceProfile: {
@@ -153,7 +155,12 @@ export function mergeImportWorkflowSettings(raw) {
         raw?.ui?.stripAfterImport !== undefined
           ? Boolean(raw.ui.stripAfterImport)
           : defaults.ui.stripAfterImport,
-      importAudioMode: normalizeImportAudioMode(raw?.ui?.importAudioMode ?? defaults.ui.importAudioMode),
+      importAudioMode,
+      deleteIxmlIfPresent:
+        importAudioMode === 'copy' &&
+        (raw?.ui?.deleteIxmlIfPresent !== undefined
+          ? Boolean(raw.ui.deleteIxmlIfPresent)
+          : defaults.ui.deleteIxmlIfPresent),
       fadeAfterStrip:
         raw?.ui?.fadeAfterStrip !== undefined
           ? Boolean(raw.ui.fadeAfterStrip)
@@ -298,6 +305,7 @@ export function analyzeFilePaths(filePaths, categories = [], sourceFolders = [])
       finalName: displayName,
       status: 'ready',
       errorMessage: null,
+      hasIxml: false,
     }
   })
 }

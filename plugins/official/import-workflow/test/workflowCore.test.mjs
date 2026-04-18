@@ -27,13 +27,48 @@ test('analyzeFilePaths builds ready proposals with normalized stems', () => {
   assert.equal(proposals[1]?.aiName, 'Lead Vox')
 })
 
-test('default import workflow settings include import mode and post-strip fade options', () => {
+test('default import workflow settings include import mode, ixml cleanup, and post-strip fade options', () => {
   const defaults = workflowCore.createDefaultImportWorkflowSettings()
 
   assert.equal(defaults.ui.importAudioMode, 'copy')
+  assert.equal(defaults.ui.deleteIxmlIfPresent, false)
   assert.equal(defaults.ui.fadeAfterStrip, false)
   assert.equal(defaults.ui.fadePresetName, '')
   assert.equal(defaults.ui.fadeAutoAdjustBounds, true)
+})
+
+test('mergeImportWorkflowSettings disables ixml cleanup unless import mode is copy', () => {
+  const normalized = workflowCore.mergeImportWorkflowSettings({
+    ui: {
+      importAudioMode: 'link',
+      deleteIxmlIfPresent: true,
+    },
+  })
+
+  assert.equal(normalized.ui.importAudioMode, 'link')
+  assert.equal(normalized.ui.deleteIxmlIfPresent, false)
+})
+
+test('saveImportWorkflowSettings persists normalized import mode and ixml cleanup settings', async () => {
+  const writes = []
+  const storage = {
+    async set(key, value) {
+      writes.push({ key, value })
+    },
+  }
+
+  const saved = await workflowCore.saveImportWorkflowSettings(storage, {
+    ui: {
+      importAudioMode: 'link',
+      deleteIxmlIfPresent: true,
+    },
+  })
+
+  assert.equal(saved.ui.importAudioMode, 'link')
+  assert.equal(saved.ui.deleteIxmlIfPresent, false)
+  assert.equal(writes.length, 1)
+  assert.equal(writes[0]?.value?.ui?.importAudioMode, 'link')
+  assert.equal(writes[0]?.value?.ui?.deleteIxmlIfPresent, false)
 })
 
 test('buildRunValidation reports duplicate and empty final names', () => {
