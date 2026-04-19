@@ -109,7 +109,7 @@ function randomFragment() {
 }
 
 export function sanitizeExportFileNameComponent(value) {
-  return [...String(value ?? '').trim()].filter((char) => /[A-Za-z0-9 _-]/.test(char)).join('').trimEnd()
+  return [...String(value ?? '').trim()].filter((char) => /[\p{L}\p{N}\p{M} _-]/u.test(char)).join('').trimEnd()
 }
 
 export function createDefaultExportSettings(sessionInfo) {

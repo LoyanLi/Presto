@@ -128,6 +128,13 @@ test('extended export filename wildcards validate without collisions', () => {
   assert.equal(validationMessage, '')
 })
 
+test('export filename sanitizer keeps Chinese characters in rendered names', () => {
+  assert.equal(
+    workflowCore.sanitizeExportFileNameComponent('48000_主歌_了'),
+    '48000_主歌_了',
+  )
+})
+
 test('deriveExportJobView maps backend job metadata and completed_with_errors result', () => {
   const view = deriveExportJobView({
     jobId: 'export-123',

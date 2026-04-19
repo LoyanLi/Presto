@@ -487,6 +487,48 @@ test('step 3 preview label uses Chinese for generic zh locale variants', async (
   assert.doesNotMatch(markup, /File Name Preview/)
 })
 
+test('step 3 preview keeps Chinese literal text in the rendered file name', async () => {
+  const idleModule = await loadPageModuleWithStateOverrides({
+    1: 3,
+    2: {
+      loading: false,
+      connected: true,
+      session: {
+        sessionName: 'Demo Session',
+        sessionPath: '/Sessions/Demo Session.ptx',
+        sampleRate: 48000,
+        bitDepth: 24,
+      },
+      tracks: [],
+      error: '',
+    },
+    4: [createSampleSnapshot({ name: '主歌' })],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{sample_rate}_{snapshot}_了',
+      output_path: '/Exports',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+  const markup = renderToStaticMarkup(
+    React.createElement(idleModule.ExportWorkflowPage, {
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    }),
+  )
+
+  assert.match(markup, /48000_主歌_了\.wav/)
+})
+
 test('main page renders the formal three-step export workflow shell', async () => {
   const pluginModule = await loadPluginModule()
   const markup = renderToStaticMarkup(
