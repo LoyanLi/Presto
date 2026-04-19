@@ -243,8 +243,8 @@ export interface ExportRunSnapshot {
 export interface ExportRunSettings {
   outputPath?: string
   output_path?: string
-  filePrefix?: string
-  file_prefix?: string
+  fileNameTemplate?: string
+  file_name_template?: string
   fileFormat?: 'wav' | 'aiff' | 'mp3' | string
   file_format?: 'wav' | 'aiff' | 'mp3' | string
   mixSources?: Array<{

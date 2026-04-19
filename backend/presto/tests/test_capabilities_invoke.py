@@ -1493,7 +1493,7 @@ def test_invoke_export_run_start_returns_job_for_snapshot_batch_export() -> None
                 ],
                 "exportSettings": {
                     "outputPath": "/Users/test/Exports",
-                    "filePrefix": "Mix_",
+                    "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
                     "fileFormat": "wav",
                     "mixSources": [
                         {
@@ -1534,7 +1534,7 @@ def test_invoke_export_run_start_rejects_mp3_when_multiple_mix_sources_are_selec
                     ],
                     "exportSettings": {
                         "outputPath": "/Users/test/Exports",
-                        "filePrefix": "Mix_",
+                        "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
                         "fileFormat": "mp3",
                         "mixSources": [
                             {"name": "Out 1-2", "type": "physicalOut"},

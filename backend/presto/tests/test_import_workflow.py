@@ -12,6 +12,8 @@ from presto.application.capabilities.registry import build_default_capability_re
 from presto.application.errors.normalizer import ErrorNormalizer
 from presto.application.handlers.import_workflow import (
     ImportAnalysisCache,
+    _render_export_file_name_template,
+    _sanitize_export_component,
     _update_export_run_progress,
     analyze_import,
     finalize_import,
@@ -231,7 +233,7 @@ def _build_export_run_payload(output_path: Path, *, snapshots: list[dict[str, ob
         "snapshots": snapshots,
         "exportSettings": {
             "outputPath": str(output_path),
-            "filePrefix": "Mix_",
+            "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
             "fileFormat": "wav",
             "mixSources": [
                 {
@@ -324,7 +326,7 @@ def test_export_run_start_rejects_mp3_with_multiple_mix_sources(tmp_path: Path) 
                 ],
                 "exportSettings": {
                     "outputPath": str(tmp_path / "Exports"),
-                    "filePrefix": "Mix_",
+                    "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
                     "fileFormat": "mp3",
                     "mixSources": [
                         {"name": "Out 1-2", "type": "physicalOut"},
@@ -757,23 +759,23 @@ def test_export_run_start_processes_snapshots_and_moves_files_to_output_path(tmp
         "currentFileProgressPercent": 100.0,
         "overallProgressPercent": 100.0,
         "etaSeconds": 0,
-        "lastExportedFile": str(output_path / "Mix_Chorus.wav"),
+        "lastExportedFile": str(output_path / "Demo Session_Chorus.wav"),
         "exportedCount": 2,
     }
     assert job.result == {
         "status": "completed",
         "success": True,
         "exportedFiles": [
-            str(output_path / "Mix_Verse A.wav"),
-            str(output_path / "Mix_Chorus.wav"),
+            str(output_path / "Demo Session_Verse A.wav"),
+            str(output_path / "Demo Session_Chorus.wav"),
         ],
         "failedSnapshots": [],
         "failedSnapshotDetails": [],
         "totalDuration": job.result["totalDuration"],
         "errorMessage": None,
     }
-    assert (output_path / "Mix_Verse A.wav").is_file()
-    assert (output_path / "Mix_Chorus.wav").is_file()
+    assert (output_path / "Demo Session_Verse A.wav").is_file()
+    assert (output_path / "Demo Session_Chorus.wav").is_file()
     assert sorted(path.name for path in output_path.glob("temp_export_*.wav")) == []
     assert ("Kick", True) in app.state.services.daw.mute_updates
     assert ("Kick", False) in app.state.services.daw.mute_updates
@@ -801,7 +803,7 @@ def test_export_run_start_uses_file_level_progress_for_running_job_state(tmp_pat
         ],
         "exportSettings": {
             "outputPath": str(output_path),
-            "filePrefix": "Mix_",
+            "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
             "fileFormat": "wav",
             "mixSources": [
                 _build_mix_source("Out 1-2"),
@@ -847,7 +849,7 @@ def test_export_run_start_records_mix_source_progress_metadata_on_success(tmp_pa
         ],
         "exportSettings": {
             "outputPath": str(output_path),
-            "filePrefix": "Mix_",
+            "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
             "fileFormat": "wav",
             "mixSources": [
                 _build_mix_source("Out 1-2"),
@@ -873,7 +875,7 @@ def test_export_run_start_records_mix_source_progress_metadata_on_success(tmp_pa
         "currentFileProgressPercent": 100.0,
         "overallProgressPercent": 100.0,
         "etaSeconds": 0,
-        "lastExportedFile": str(output_path / "Mix_Verse A_Bus Print.wav"),
+        "lastExportedFile": str(output_path / "Demo Session_Verse A_Bus Print.wav"),
         "exportedCount": 2,
     }
 
@@ -899,7 +901,7 @@ def test_export_run_start_keeps_overall_progress_monotonic_after_failed_file(tmp
         ],
         "exportSettings": {
             "outputPath": str(output_path),
-            "filePrefix": "Mix_",
+            "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
             "fileFormat": "wav",
             "mixSources": [
                 _build_mix_source("Out 1-2"),
@@ -946,7 +948,7 @@ def test_export_run_start_marks_completed_with_errors_and_keeps_successful_expor
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
     assert job.result["status"] == "completed_with_errors"
     assert job.result["success"] is False
-    assert job.result["exportedFiles"] == [str(output_path / "Mix_Verse.wav")]
+    assert job.result["exportedFiles"] == [str(output_path / "Demo Session_Verse.wav")]
     assert job.result["failedSnapshots"] == ["Bridge"]
     assert job.result["failedSnapshotDetails"][0]["snapshotName"] == "Bridge"
     assert "export failed for temp_export_Bridge" in job.result["failedSnapshotDetails"][0]["error"]
@@ -978,9 +980,37 @@ def test_export_run_start_waits_for_bounced_file_to_appear(tmp_path: Path) -> No
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
     assert job.result["status"] == "completed"
     assert job.result["failedSnapshots"] == []
-    assert job.result["exportedFiles"] == [str(output_path / "Mix_Verse.wav")]
-    assert (output_path / "Mix_Verse.wav").is_file()
-    assert not (output_path / "Mix_Bridge.wav").exists()
+    assert job.result["exportedFiles"] == [str(output_path / "Demo Session_Verse.wav")]
+    assert (output_path / "Demo Session_Verse.wav").is_file()
+    assert not (output_path / "Demo Session_Bridge.wav").exists()
+
+
+def test_export_file_name_template_renders_extended_wildcards() -> None:
+    rendered = _render_export_file_name_template(
+        template="{session}_{sample_rate}_{bit_depth}_{snapshot_index}_{snapshot_count}_{source_index}_{source_count}_{source_type}_{file_format}_{date}_{time}_{datetime}_{year}_{month}_{day}",
+        session_info=SimpleNamespace(
+            session_name="Demo Session",
+            session_path="/Sessions/Demo Session.ptx",
+            sample_rate=96000,
+            bit_depth=32,
+        ),
+        snapshot_name="Verse",
+        mix_source_name="Ref Print",
+        mix_source_type="physical_out",
+        snapshot_index=2,
+        snapshot_count=5,
+        source_index=3,
+        source_count=4,
+        total_mix_sources=4,
+        file_format="wav",
+        rendered_at="2026-04-18T13:14:15Z",
+    )
+
+    assert rendered == "Demo Session_96000_32_2_5_3_4_physical_out_wav_2026-04-18_13-14-15_2026-04-18_13-14-15_2026_04_18"
+
+
+def test_export_file_name_sanitizer_keeps_chinese_characters() -> None:
+    assert _sanitize_export_component("48000_主歌_了", fallback="") == "48000_主歌_了"
 
 
 def test_update_export_run_progress_promotes_job_to_running_state() -> None:

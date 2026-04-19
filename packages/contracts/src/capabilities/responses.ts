@@ -93,7 +93,7 @@ export interface Snapshot {
 
 export interface ExportSettings {
   outputPath: string
-  filePrefix: string
+  fileNameTemplate: string
   fileFormat: 'wav' | 'aiff'
   mixSourceName: string
   mixSourceType: 'bus' | 'output' | 'physicalOut' | 'renderer'

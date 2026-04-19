@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import json
+import re
 import shutil
 import threading
 import time
@@ -901,6 +902,160 @@ def _sanitize_export_component(value: Any, *, fallback: str) -> str:
     return sanitized or fallback
 
 
+_EXPORT_FILE_NAME_TEMPLATE_TOKENS = {
+    "session",
+    "sample_rate",
+    "bit_depth",
+    "date",
+    "time",
+    "datetime",
+    "year",
+    "month",
+    "day",
+    "snapshot",
+    "source",
+    "snapshot_index",
+    "snapshot_count",
+    "source_index",
+    "source_count",
+    "source_type",
+    "source_suffix",
+    "file_format",
+}
+
+
+def _bare_export_session_name(session_info: Any) -> str:
+    session_name = str(getattr(session_info, "session_name", "") or getattr(session_info, "sessionName", "")).strip()
+    if not session_name:
+        session_name = Path(str(getattr(session_info, "session_path", "") or getattr(session_info, "sessionPath", ""))).stem
+    return session_name or "Project"
+
+
+def _normalize_export_file_name_source_type(value: Any) -> str:
+    return _normalize_export_run_source_type(value)
+
+
+def _resolve_export_file_name_rendered_at(rendered_at: Any) -> datetime:
+    if isinstance(rendered_at, datetime):
+        return rendered_at if rendered_at.tzinfo is not None else rendered_at.replace(tzinfo=timezone.utc)
+    raw = str(rendered_at or "").strip()
+    if raw:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc)
+
+
+def _build_export_file_name_date_parts(rendered_at: Any) -> dict[str, str]:
+    timestamp = _resolve_export_file_name_rendered_at(rendered_at).astimezone(timezone.utc)
+    year = f"{timestamp.year:04d}"
+    month = f"{timestamp.month:02d}"
+    day = f"{timestamp.day:02d}"
+    time_text = f"{timestamp.hour:02d}-{timestamp.minute:02d}-{timestamp.second:02d}"
+    date_text = f"{year}-{month}-{day}"
+    return {
+        "date": date_text,
+        "time": time_text,
+        "datetime": f"{date_text}_{time_text}",
+        "year": year,
+        "month": month,
+        "day": day,
+    }
+
+
+def _render_export_file_name_template(
+    *,
+    template: str,
+    session_info: Any,
+    snapshot_name: str,
+    mix_source_name: str,
+    mix_source_type: str,
+    snapshot_index: int,
+    snapshot_count: int,
+    source_index: int,
+    source_count: int,
+    total_mix_sources: int,
+    file_format: str,
+    rendered_at: Any = None,
+) -> str:
+    source_name = str(mix_source_name or "").strip()
+    date_parts = _build_export_file_name_date_parts(rendered_at)
+    values = {
+        "session": _bare_export_session_name(session_info),
+        "sample_rate": str(getattr(session_info, "sample_rate", "") or getattr(session_info, "sampleRate", "")).strip(),
+        "bit_depth": str(getattr(session_info, "bit_depth", "") or getattr(session_info, "bitDepth", "")).strip(),
+        "date": date_parts["date"],
+        "time": date_parts["time"],
+        "datetime": date_parts["datetime"],
+        "year": date_parts["year"],
+        "month": date_parts["month"],
+        "day": date_parts["day"],
+        "snapshot": str(snapshot_name or "").strip(),
+        "source": source_name,
+        "snapshot_index": str(snapshot_index),
+        "snapshot_count": str(snapshot_count),
+        "source_index": str(source_index),
+        "source_count": str(source_count),
+        "source_type": _normalize_export_file_name_source_type(mix_source_type),
+        "source_suffix": f"_{source_name}" if total_mix_sources > 1 and source_name else "",
+        "file_format": str(file_format or "").strip().lower(),
+    }
+    return re.sub(r"\{([a-z_]+)\}", lambda match: str(values.get(match.group(1), "")), str(template or "")).strip()
+
+
+def _validate_export_file_name_template(
+    *,
+    template: str,
+    session_info: Any,
+    snapshots: list[dict[str, Any]],
+    mix_sources: list[dict[str, str]],
+    file_format: str,
+    rendered_at: Any = None,
+) -> None:
+    normalized_template = str(template or "").strip()
+    if not normalized_template:
+        raise _validation_error("exportSettings.fileNameTemplate is required.", field="exportSettings.fileNameTemplate")
+
+    tokens = re.findall(r"\{([a-z_]+)\}", normalized_template)
+    unsupported_token = next((token for token in tokens if token not in _EXPORT_FILE_NAME_TEMPLATE_TOKENS), None)
+    if unsupported_token is not None:
+        raise _validation_error(
+            f"exportSettings.fileNameTemplate contains unsupported token {{{unsupported_token}}}.",
+            field="exportSettings.fileNameTemplate",
+        )
+
+    normalized_mix_sources = mix_sources or [{"name": "", "type": "physical_out"}]
+    rendered_names: set[str] = set()
+    for snapshot_index, snapshot in enumerate(snapshots, start=1):
+        for source_index, mix_source in enumerate(normalized_mix_sources, start=1):
+            rendered_name = _render_export_file_name_template(
+                template=normalized_template,
+                session_info=session_info,
+                snapshot_name=snapshot["name"],
+                mix_source_name=mix_source["name"],
+                mix_source_type=mix_source["type"],
+                snapshot_index=snapshot_index,
+                snapshot_count=len(snapshots),
+                source_index=source_index,
+                source_count=len(normalized_mix_sources),
+                total_mix_sources=len(normalized_mix_sources),
+                file_format=file_format,
+                rendered_at=rendered_at,
+            )
+            safe_name = _sanitize_export_component(rendered_name, fallback="")
+            if not safe_name:
+                raise _validation_error(
+                    "exportSettings.fileNameTemplate must render at least one filename character.",
+                    field="exportSettings.fileNameTemplate",
+                )
+            dedupe_key = safe_name.casefold()
+            if dedupe_key in rendered_names:
+                raise _validation_error(
+                    "exportSettings.fileNameTemplate produces duplicate file names. Add {snapshot}, {source}, or an index token.",
+                    field="exportSettings.fileNameTemplate",
+                )
+            rendered_names.add(dedupe_key)
+
+
 def _metadata_export_run(
     *,
     total_snapshots: int,
@@ -960,6 +1115,8 @@ def _normalize_export_run_source_type(value: Any) -> str:
         return "bus"
     if compact == "output":
         return "output"
+    if compact == "renderer":
+        return "renderer"
     return "physical_out"
 
 
@@ -985,7 +1142,7 @@ def _normalize_export_run_settings(payload: dict[str, Any]) -> dict[str, Any]:
         raise _validation_error("exportSettings is required.", field="exportSettings")
 
     output_path = str(settings_payload.get("outputPath") or settings_payload.get("output_path") or "").strip()
-    file_prefix = str(settings_payload.get("filePrefix") or settings_payload.get("file_prefix") or "")
+    file_name_template = str(settings_payload.get("fileNameTemplate") or settings_payload.get("file_name_template") or "").strip()
     file_format = str(settings_payload.get("fileFormat") or settings_payload.get("file_format") or "wav").strip().lower() or "wav"
     raw_mix_sources = settings_payload.get("mixSources")
     if raw_mix_sources is None:
@@ -993,8 +1150,16 @@ def _normalize_export_run_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
     if not output_path:
         raise _validation_error("exportSettings.outputPath is required.", field="exportSettings.outputPath")
+    if not file_name_template:
+        raise _validation_error("exportSettings.fileNameTemplate is required.", field="exportSettings.fileNameTemplate")
     if file_format not in {"wav", "aiff", "mp3"}:
         raise _validation_error("exportSettings.fileFormat must be wav, aiff, or mp3.", field="exportSettings.fileFormat")
+    unsupported_token = next((token for token in re.findall(r"\{([a-z_]+)\}", file_name_template) if token not in _EXPORT_FILE_NAME_TEMPLATE_TOKENS), None)
+    if unsupported_token is not None:
+        raise _validation_error(
+            f"exportSettings.fileNameTemplate contains unsupported token {{{unsupported_token}}}.",
+            field="exportSettings.fileNameTemplate",
+        )
 
     normalized_mix_sources: list[dict[str, str]] = []
     if isinstance(raw_mix_sources, list):
@@ -1021,7 +1186,7 @@ def _normalize_export_run_settings(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "output_path": str(Path(output_path).expanduser().resolve()),
-        "file_prefix": file_prefix,
+        "file_name_template": file_name_template,
         "file_format": file_format,
         "mix_sources": normalized_mix_sources,
         "online_export": bool(settings_payload.get("onlineExport", settings_payload.get("online_export", False))),
@@ -1289,6 +1454,15 @@ def _run_export_workflow_job(
         output_root = Path(settings["output_path"]).expanduser().resolve()
         output_root.mkdir(parents=True, exist_ok=True)
         session_info = get_session_info()
+        export_rendered_at = datetime.now(timezone.utc)
+        _validate_export_file_name_template(
+            template=settings["file_name_template"],
+            session_info=session_info,
+            snapshots=request["snapshots"],
+            mix_sources=settings["mix_sources"],
+            file_format=settings["file_format"],
+            rendered_at=export_rendered_at,
+        )
         total_mix_sources = max(len(settings["mix_sources"]), 1)
         total_files = _compute_export_file_counts(total_snapshots=total_snapshots, total_mix_sources=total_mix_sources)
 
@@ -1380,8 +1554,22 @@ def _run_export_workflow_job(
                     f"temp_export_{snapshot_name}_{source_suffix}_{int(time.time())}" if source_suffix else f"temp_export_{snapshot_name}_{int(time.time())}",
                     fallback=f"temp_export_{snapshot_index + 1}_{mix_source_index + 1}",
                 )
+                rendered_final_name = _render_export_file_name_template(
+                    template=settings["file_name_template"],
+                    session_info=session_info,
+                    snapshot_name=snapshot_name,
+                    mix_source_name=mix_source["name"],
+                    mix_source_type=mix_source["type"],
+                    snapshot_index=snapshot_index + 1,
+                    snapshot_count=total_snapshots,
+                    source_index=current_mix_source_index,
+                    source_count=len(selected_mix_sources),
+                    total_mix_sources=len(selected_mix_sources),
+                    file_format=file_extension,
+                    rendered_at=export_rendered_at,
+                )
                 safe_final_name = _sanitize_export_component(
-                    f"{settings['file_prefix']}{snapshot_name}_{source_suffix}" if source_suffix else f"{settings['file_prefix']}{snapshot_name}",
+                    rendered_final_name,
                     fallback=f"export_{snapshot_index + 1}_{mix_source_index + 1}",
                 )
                 temp_output_path = output_root / f"{safe_temp_name}.{file_extension}"
