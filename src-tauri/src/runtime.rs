@@ -707,6 +707,30 @@ fn execute_bundled_process(
         ));
     };
 
+    let tool_runtime_permissions = plugin
+        .manifest
+        .get("toolRuntimePermissions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let allows_bundled_process = tool_runtime_permissions.iter().any(|value| {
+        value
+            .as_str()
+            .map(|permission| permission == "process.execBundled")
+            .unwrap_or(false)
+    });
+    if !allows_bundled_process {
+        let mut details = Map::new();
+        details.insert("pluginId".to_string(), Value::String(plugin_id.clone()));
+        details.insert("resourceId".to_string(), Value::String(resource_id.clone()));
+        return Ok(build_process_error(
+            "PLUGIN_TOOL_PERMISSION_DENIED",
+            format!("Plugin \"{plugin_id}\" is not allowed to access process.execBundled."),
+            Some(details),
+            None,
+        ));
+    }
+
     let bundled_resources = plugin
         .manifest
         .get("bundledResources")
@@ -750,21 +774,21 @@ fn execute_bundled_process(
         ));
     }
 
-    let relative_resource_path = PathBuf::from(&relative_path);
-    if relative_resource_path.is_absolute()
-        || relative_resource_path
-            .components()
-            .any(|component| matches!(component, std::path::Component::ParentDir))
-    {
-        return Ok(build_process_error(
-            "BUNDLED_RESOURCE_PATH_INVALID",
-            format!("Bundled resource \"{resource_id}\" has an invalid relativePath."),
-            None,
-            None,
-        ));
-    }
-
-    let executable_path = plugin.plugin_root.join(&relative_resource_path);
+    let executable_path = match plugins::resolve_plugin_relative_path(
+        &plugin.plugin_root,
+        &relative_path,
+        true,
+    ) {
+        Ok(path) => path,
+        Err(_) => {
+            return Ok(build_process_error(
+                "BUNDLED_RESOURCE_PATH_INVALID",
+                format!("Bundled resource \"{resource_id}\" has an invalid relativePath."),
+                None,
+                None,
+            ));
+        }
+    };
     if !executable_path.exists() {
         let mut details = Map::new();
         details.insert(

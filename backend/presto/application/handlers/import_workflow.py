@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -12,8 +13,8 @@ from typing import Any
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from ...domain.errors import PrestoError, PrestoErrorPayload, PrestoValidationError
-from ...domain.jobs import JobProgress, JobRecord
+from ...domain.errors import JobNotFoundError, PrestoError, PrestoErrorPayload, PrestoValidationError
+from ...domain.jobs import JobProgress, JobRecord, JobsUpdateRequest
 from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.ports import CapabilityExecutionContext
 from ..runtime_state import ImportAnalysisStore, ThreadedJobHandle
@@ -547,19 +548,43 @@ def _clone_job(record: JobRecord) -> JobRecord:
             percent=record.progress.percent,
             message=record.progress.message,
         ),
-        metadata=record.metadata,
-        result=record.result,
-        error=record.error,
+        metadata=deepcopy(record.metadata),
+        result=deepcopy(record.result),
+        error=deepcopy(record.error),
         created_at=record.created_at,
         started_at=record.started_at,
         finished_at=record.finished_at,
     )
 
 
+def _progress_payload(progress: JobProgress) -> dict[str, Any]:
+    return {
+        "phase": progress.phase,
+        "current": progress.current,
+        "total": progress.total,
+        "percent": progress.percent,
+        "message": progress.message,
+    }
+
+
 def _upsert_job(services: "ServiceContainer", job: JobRecord) -> None:
-    upsert = getattr(services.job_manager, "upsert", None)
-    if callable(upsert):
-        upsert(job)
+    try:
+        services.job_manager.update(
+            JobsUpdateRequest(
+                job_id=job.job_id,
+                state=job.state,
+                progress=_progress_payload(job.progress),
+                metadata=deepcopy(job.metadata),
+                result=deepcopy(job.result),
+                error=deepcopy(job.error),
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+            )
+        )
+    except JobNotFoundError:
+        upsert = getattr(services.job_manager, "upsert", None)
+        if callable(upsert):
+            upsert(job)
 
 
 def _set_job_cancelled(

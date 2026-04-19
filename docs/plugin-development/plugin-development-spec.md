@@ -146,12 +146,17 @@ export interface WorkflowPluginModule {
 
 - workflow 页面：`host.pickFolder()`
 - tool 页面：
-  - `host.dialog.openFile()`
-  - `host.dialog.openDirectory()`
-  - `host.fs.readFile()/writeFile()/exists()/readdir()/deleteFile()`
-  - `host.shell.openPath()`
+  - `host.dialog.openFile()`，前提是声明 `dialog.openFile`
+  - `host.dialog.openDirectory()`，前提是声明 `dialog.openDirectory`
+  - `host.fs.readFile()/exists()`，前提是声明 `fs.read`
+  - `host.fs.writeFile()`，前提是声明 `fs.write`
+  - `host.fs.readdir()`，前提是声明 `fs.list`
+  - `host.fs.deleteFile()`，前提是声明 `fs.delete`
+  - `host.shell.openPath()`，前提是声明 `shell.openPath`
 
 这条边界必须始终保持清楚：页面 host 是页面渲染时的宿主辅助能力，不是插件通用 runtime。
+未声明的 tool host 能力会在运行时被直接拒绝，不再静默返回空结果。
+如果权限已声明但宿主当前没有对应 runtime，错误码会明确标成 `PLUGIN_TOOL_HOST_UNAVAILABLE`。
 
 ### 6.3 tool runner 上下文
 
@@ -163,6 +168,8 @@ tool runner 的上下文会在 `PluginContext` 基础上增加：
 - `process.execBundled(...)`
 
 `process.execBundled` 只用于执行 manifest 已声明的 `bundledResources`。
+同时还要求 manifest 明确声明 `toolRuntimePermissions: ["process.execBundled"]`。
+未声明权限时会抛出 `PLUGIN_TOOL_PERMISSION_DENIED`；宿主缺少 bundled process runtime 时会抛出 `PLUGIN_TOOL_HOST_UNAVAILABLE`。
 
 ## 7. 权限与守卫
 
@@ -189,6 +196,10 @@ tool runner 的上下文会在 `PluginContext` 基础上增加：
 
 - `supportedDaws` 是否为空
 - `pages[].mount` 是否为 `tools`
+- `entry` / `styleEntry` / `workflowDefinition.definitionEntry` / `bundledResources[].relativePath` 是否仍在插件根目录内
+- `toolRuntimePermissions` 是否全部来自已知枚举
+- `bundledResources` 是否结构完整且 `resourceId` 不重复
+- 插件目录树是否包含 symbolic link
 
 只有通过这些校验后，插件才会进入可挂载状态。
 

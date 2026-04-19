@@ -162,17 +162,17 @@ async function createAutomationPluginFixture(root) {
   }
 }
 
-async function createToolPluginFixture(root) {
+async function createToolPluginFixture(root, overrides = {}) {
   const pluginRoot = path.join(root, 'installed.audio-tools')
   const entryPath = path.join(pluginRoot, 'dist/index.mjs')
   await mkdir(path.dirname(entryPath), { recursive: true })
 
-  const manifest = {
+  const baseManifest = {
     pluginId: 'installed.audio-tools',
     extensionType: 'tool',
     version: '1.0.0',
     hostApiVersion: '0.1.0',
-    supportedDaws: ['pro_tools'],
+    supportedDaws: [],
     uiRuntime: 'react18',
     displayName: 'Audio Tools',
     description: 'Standalone host-side utility pages.',
@@ -195,9 +195,23 @@ async function createToolPluginFixture(root) {
         runnerExport: 'runEc3Decode',
       },
     ],
+    toolRuntimePermissions: [
+      'dialog.openFile',
+      'dialog.openDirectory',
+      'fs.read',
+      'fs.write',
+      'fs.list',
+      'fs.delete',
+      'shell.openPath',
+      'process.execBundled',
+    ],
     requiredCapabilities: [],
     adapterModuleRequirements: [],
     capabilityRequirements: [],
+  }
+  const manifest = {
+    ...baseManifest,
+    ...overrides,
   }
 
   await writeFile(
@@ -618,6 +632,82 @@ test('loadHostPlugins injects tool page host services and excludes tools from wo
   ])
 })
 
+test('loadHostPlugins only exposes manifest-declared tool page host permissions', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox, {
+    toolRuntimePermissions: ['dialog.openFile', 'fs.read'],
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
+        openFile: async () => ({ canceled: false, paths: ['/input.wav'] }),
+        openDirectory: async () => ({ canceled: false, paths: ['/output'] }),
+      },
+      fs: {
+        readFile: async () => 'source',
+        writeFile: async () => true,
+        exists: async () => true,
+        readdir: async () => ['a.wav'],
+        deleteFile: async () => true,
+      },
+      shell: {
+        openPath: async () => '',
+        openExternal: async () => true,
+      },
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+  assert.deepEqual(await renderedPage?.props?.host?.dialog?.openFile(), {
+    canceled: false,
+    paths: ['/input.wav'],
+  })
+  assert.equal(await renderedPage?.props?.host?.fs?.readFile('/tmp/source.wav'), 'source')
+  assert.equal(await renderedPage?.props?.host?.fs?.exists('/tmp/source.wav'), true)
+
+  await assert.rejects(
+    () => renderedPage?.props?.host?.dialog?.openDirectory(),
+    (error) =>
+      error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' &&
+      /dialog\.openDirectory/.test(error.message),
+  )
+  await assert.rejects(
+    () => renderedPage?.props?.host?.fs?.writeFile('/tmp/output.wav', 'content'),
+    (error) => error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' && /fs\.write/.test(error.message),
+  )
+  await assert.rejects(
+    () => renderedPage?.props?.host?.fs?.readdir('/tmp'),
+    (error) => error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' && /fs\.list/.test(error.message),
+  )
+  await assert.rejects(
+    () => renderedPage?.props?.host?.fs?.deleteFile('/tmp/output.wav'),
+    (error) => error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' && /fs\.delete/.test(error.message),
+  )
+  await assert.rejects(
+    () => renderedPage?.props?.host?.shell?.openPath('/tmp'),
+    (error) =>
+      error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' &&
+      /shell\.openPath/.test(error.message),
+  )
+})
+
 test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (t) => {
   const { loadHostPlugins } = await loadPluginHostRuntime()
   const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
@@ -742,6 +832,255 @@ test('loadHostPlugins runs tool pages through host-owned tool.run jobs', async (
       args: ['--input', '/tmp/source.ec3'],
     },
   ])
+})
+
+test('loadHostPlugins rejects tool runs when process.execBundled is not declared', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox, {
+    toolRuntimePermissions: ['dialog.openFile'],
+  })
+  const nowIso = new Date().toISOString()
+  const jobsCreateCalls = []
+  const jobsUpdateCalls = []
+  const processCalls = []
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {
+      jobs: {
+        async create(request) {
+          jobsCreateCalls.push(request)
+          return {
+            job: {
+              jobId: 'job-tool-no-process',
+              capability: request.capability,
+              targetDaw: request.targetDaw,
+              state: request.state ?? 'queued',
+              progress: request.progress ?? { phase: 'queued', current: 0, total: 1, percent: 0 },
+              metadata: request.metadata,
+              createdAt: nowIso,
+            },
+          }
+        },
+        async update(request) {
+          jobsUpdateCalls.push(request)
+          return {
+            job: {
+              jobId: request.jobId,
+              capability: 'tool.run',
+              targetDaw: 'pro_tools',
+              state: request.state ?? 'running',
+              progress: request.progress ?? { phase: 'running', current: 0, total: 1, percent: 10 },
+              metadata: request.metadata,
+              result: request.result,
+              error: request.error,
+              createdAt: nowIso,
+              startedAt: request.startedAt,
+              finishedAt: request.finishedAt,
+            },
+          }
+        },
+      },
+    },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
+        openFile: async () => ({ canceled: false, paths: ['/input.wav'] }),
+        openDirectory: async () => ({ canceled: false, paths: ['/output'] }),
+      },
+      process: {
+        async execBundled(pluginId, resourceId, args) {
+          processCalls.push({ pluginId, resourceId, args })
+          return {
+            ok: true,
+            exitCode: 0,
+            stdout: 'done',
+            stderr: '',
+          }
+        },
+      },
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+
+  await assert.rejects(
+    () =>
+      renderedPage.props.host.runTool({
+        toolId: 'ec3-decode',
+        input: {
+          inputPath: '/tmp/source.ec3',
+        },
+      }),
+    (error) =>
+      error?.code === 'PLUGIN_TOOL_PERMISSION_DENIED' &&
+      /process\.execBundled/.test(error.message),
+  )
+
+  assert.equal(jobsCreateCalls.length, 1)
+  assert.equal(jobsUpdateCalls.length, 2)
+  assert.equal(jobsUpdateCalls[0]?.state, 'running')
+  assert.equal(jobsUpdateCalls[1]?.state, 'failed')
+  assert.equal(jobsUpdateCalls[1]?.error?.code, 'PLUGIN_TOOL_PERMISSION_DENIED')
+  assert.match(jobsUpdateCalls[1]?.error?.message ?? '', /process\.execBundled/)
+  assert.deepEqual(processCalls, [])
+})
+
+test('loadHostPlugins rejects tool page host calls when declared runtime services are unavailable', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox, {
+    toolRuntimePermissions: [
+      'dialog.openFile',
+      'dialog.openDirectory',
+      'fs.read',
+      'fs.write',
+      'fs.list',
+      'fs.delete',
+      'shell.openPath',
+    ],
+  })
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {},
+    runtime: {
+      dialog: {},
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+
+  for (const invoke of [
+    () => renderedPage?.props?.host?.dialog?.openFile(),
+    () => renderedPage?.props?.host?.dialog?.openDirectory(),
+    () => renderedPage?.props?.host?.fs?.readFile('/tmp/source.wav'),
+    () => renderedPage?.props?.host?.fs?.writeFile('/tmp/output.wav', 'content'),
+    () => renderedPage?.props?.host?.fs?.exists('/tmp/source.wav'),
+    () => renderedPage?.props?.host?.fs?.readdir('/tmp'),
+    () => renderedPage?.props?.host?.fs?.deleteFile('/tmp/output.wav'),
+    () => renderedPage?.props?.host?.shell?.openPath('/tmp'),
+  ]) {
+    await assert.rejects(
+      invoke,
+      (error) => error?.code === 'PLUGIN_TOOL_HOST_UNAVAILABLE',
+    )
+  }
+})
+
+test('loadHostPlugins rejects tool runs when bundled process runtime is unavailable', async (t) => {
+  const { loadHostPlugins } = await loadPluginHostRuntime()
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'presto-plugin-host-runtime-'))
+  const pluginRecord = await createToolPluginFixture(sandbox, {
+    toolRuntimePermissions: ['process.execBundled'],
+  })
+  const nowIso = new Date().toISOString()
+  const jobsCreateCalls = []
+  const jobsUpdateCalls = []
+
+  t.after(async () => {
+    await rm(sandbox, { recursive: true, force: true })
+  })
+
+  const result = await loadHostPlugins({
+    catalog: {
+      managedPluginsRoot: sandbox,
+      plugins: [pluginRecord],
+      issues: [],
+    },
+    locale: {
+      locale: 'en',
+      messages: {},
+    },
+    presto: {
+      jobs: {
+        async create(request) {
+          jobsCreateCalls.push(request)
+          return {
+            job: {
+              jobId: 'job-tool-no-runtime-process',
+              capability: request.capability,
+              targetDaw: request.targetDaw,
+              state: request.state ?? 'queued',
+              progress: request.progress ?? { phase: 'queued', current: 0, total: 1, percent: 0 },
+              metadata: request.metadata,
+              createdAt: nowIso,
+            },
+          }
+        },
+        async update(request) {
+          jobsUpdateCalls.push(request)
+          return {
+            job: {
+              jobId: request.jobId,
+              capability: 'tool.run',
+              targetDaw: 'pro_tools',
+              state: request.state ?? 'running',
+              progress: request.progress ?? { phase: 'running', current: 0, total: 1, percent: 10 },
+              metadata: request.metadata,
+              result: request.result,
+              error: request.error,
+              createdAt: nowIso,
+              startedAt: request.startedAt,
+              finishedAt: request.finishedAt,
+            },
+          }
+        },
+      },
+    },
+    runtime: {
+      dialog: {
+        openFolder: async () => ({ canceled: false, paths: ['/ignored'] }),
+      },
+    },
+  })
+
+  const renderedPage = result.pages[0]?.render()
+
+  await assert.rejects(
+    () =>
+      renderedPage.props.host.runTool({
+        toolId: 'ec3-decode',
+        input: {
+          inputPath: '/tmp/source.ec3',
+        },
+      }),
+    (error) =>
+      error?.code === 'PLUGIN_TOOL_HOST_UNAVAILABLE' &&
+      /process\.execBundled/.test(error.message),
+  )
+
+  assert.equal(jobsCreateCalls.length, 1)
+  assert.equal(jobsUpdateCalls.length, 2)
+  assert.equal(jobsUpdateCalls[0]?.state, 'running')
+  assert.equal(jobsUpdateCalls[1]?.state, 'failed')
+  assert.equal(jobsUpdateCalls[1]?.error?.code, 'PLUGIN_TOOL_HOST_UNAVAILABLE')
+  assert.match(jobsUpdateCalls[1]?.error?.message ?? '', /process\.execBundled/)
 })
 
 test('loadHostPlugins keeps workflow library entries visible when the workflow page module fails to load', async () => {

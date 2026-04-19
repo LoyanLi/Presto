@@ -2,7 +2,7 @@ use serde_json::{json, Map, Value};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Command,
     sync::Arc,
 };
@@ -12,6 +12,17 @@ use super::{
     managed_plugins_root, official_plugins_root, unique_suffix, PluginCandidate, RuntimeState,
     WorkflowDefinitionRef, DEFAULT_DAW_TARGET,
 };
+
+const TOOL_RUNTIME_PERMISSIONS: &[&str] = &[
+    "dialog.openFile",
+    "dialog.openDirectory",
+    "fs.read",
+    "fs.write",
+    "fs.list",
+    "fs.delete",
+    "shell.openPath",
+    "process.execBundled",
+];
 
 pub(super) fn sync_official_plugins(state: &Arc<RuntimeState>) -> Result<(), String> {
     let source_root = official_plugins_root(state)?;
@@ -326,13 +337,108 @@ fn sanitize_plugin_folder_name(plugin_id: &str) -> String {
         .collect()
 }
 
+fn normalize_plugin_relative_path(path_value: &str) -> Option<PathBuf> {
+    let trimmed = path_value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let path = PathBuf::from(trimmed);
+    if path.is_absolute() {
+        return None;
+    }
+
+    if path.components().any(|component| {
+        !matches!(component, Component::Normal(_))
+    }) {
+        return None;
+    }
+
+    Some(path)
+}
+
+fn plugin_path_validation_error(field: &str) -> String {
+    format!("manifest_validation:{field}:must_be_relative_path_inside_plugin_root")
+}
+
+pub(super) fn resolve_plugin_relative_path(
+    plugin_root: &Path,
+    path_value: &str,
+    require_existing: bool,
+) -> Result<PathBuf, &'static str> {
+    let relative_path = normalize_plugin_relative_path(path_value).ok_or("invalid_relative_path")?;
+    let resolved_path = plugin_root.join(relative_path);
+
+    if require_existing && !resolved_path.exists() {
+        return Err("path_missing");
+    }
+
+    if resolved_path.exists() {
+        let canonical_root = fs::canonicalize(plugin_root).map_err(|_| "path_outside_plugin_root")?;
+        let canonical_resolved = fs::canonicalize(&resolved_path).map_err(|_| "path_outside_plugin_root")?;
+        if !canonical_resolved.starts_with(&canonical_root) {
+            return Err("path_outside_plugin_root");
+        }
+    }
+
+    Ok(resolved_path)
+}
+
+fn validate_declared_plugin_path(
+    plugin_root: &Path,
+    path_value: &str,
+    field: &str,
+) -> Result<(), String> {
+    resolve_plugin_relative_path(plugin_root, path_value, false)
+        .map(|_| ())
+        .map_err(|_| plugin_path_validation_error(field))
+}
+
+fn validate_plugin_tree_contains_no_symbolic_links(root: &Path) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(root).map_err(|error| error.to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err(format!(
+            "symbolic_link_not_allowed:{}",
+            root.to_string_lossy()
+        ));
+    }
+    if !metadata.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(root).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let entry_path = entry.path();
+        let entry_metadata = fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
+        if entry_metadata.file_type().is_symlink() {
+            return Err(format!(
+                "symbolic_link_not_allowed:{}",
+                entry_path.to_string_lossy()
+            ));
+        }
+        if entry_metadata.is_dir() {
+            validate_plugin_tree_contains_no_symbolic_links(&entry_path)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
+    validate_plugin_tree_contains_no_symbolic_links(source)?;
     fs::create_dir_all(destination).map_err(|error| error.to_string())?;
     for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let entry_path = entry.path();
         let destination_path = destination.join(entry.file_name());
-        if entry_path.is_dir() {
+        let entry_metadata = fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
+        if entry_metadata.file_type().is_symlink() {
+            return Err(format!(
+                "symbolic_link_not_allowed:{}",
+                entry_path.to_string_lossy()
+            ));
+        }
+        if entry_metadata.is_dir() {
             copy_dir_recursive(&entry_path, &destination_path)?;
         } else {
             if let Some(parent) = destination_path.parent() {
@@ -400,6 +506,7 @@ fn validate_plugin_manifest(
     let display_name = required_string_field_at(manifest_object, "displayName", "displayName")?;
     let version = required_string_field_at(manifest_object, "version", "version")?;
     let entry = required_string_field_at(manifest_object, "entry", "entry")?;
+    validate_declared_plugin_path(plugin_root, &entry, "entry")?;
     let extension_type =
         required_string_field_at(manifest_object, "extensionType", "extensionType")?;
     let host_api_version =
@@ -450,7 +557,21 @@ fn validate_plugin_manifest(
         if !style_entry.is_string() {
             return Err("manifest_validation:styleEntry:must_be_string_when_present".to_string());
         }
+        validate_declared_plugin_path(
+            plugin_root,
+            style_entry.as_str().unwrap_or_default(),
+            "styleEntry",
+        )?;
     }
+
+    validate_tool_runtime_permissions(optional_array_field(
+        manifest_object,
+        "toolRuntimePermissions",
+    )?)?;
+    validate_bundled_resources(plugin_root, optional_array_field(
+        manifest_object,
+        "bundledResources",
+    )?)?;
 
     let workflow_definition = if extension_type == "workflow" {
         let workflow = manifest_object
@@ -889,6 +1010,78 @@ fn validate_settings_field(
     Ok(())
 }
 
+fn validate_tool_runtime_permissions(items: Option<&Vec<Value>>) -> Result<(), String> {
+    let Some(items) = items else {
+        return Ok(());
+    };
+    let values = items
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    "manifest_validation:toolRuntimePermissions:must_contain_non_empty_strings"
+                        .to_string()
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_unique_string_values(&values, "toolRuntimePermissions")?;
+    for value in values {
+        if !TOOL_RUNTIME_PERMISSIONS.contains(&value.as_str()) {
+            return Err(format!(
+                "manifest_validation:toolRuntimePermissions:unknown_permission:{value}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_bundled_resources(
+    plugin_root: &Path,
+    items: Option<&Vec<Value>>,
+) -> Result<(), String> {
+    let Some(items) = items else {
+        return Ok(());
+    };
+    let mut seen_resource_ids = HashSet::new();
+    for (index, item) in items.iter().enumerate() {
+        let field_prefix = format!("bundledResources[{index}]");
+        let item_object = item
+            .as_object()
+            .ok_or_else(|| format!("manifest_validation:{field_prefix}:must_be_object"))?;
+        let resource_id = required_string_field_at(
+            item_object,
+            "resourceId",
+            &format!("{field_prefix}.resourceId"),
+        )?;
+        if !seen_resource_ids.insert(resource_id.clone()) {
+            return Err(format!(
+                "manifest_validation:bundledResources:duplicate_resource_id:{resource_id}"
+            ));
+        }
+        let kind =
+            required_string_field_at(item_object, "kind", &format!("{field_prefix}.kind"))?;
+        if !matches!(kind.as_str(), "script" | "binary") {
+            return Err(format!(
+                "manifest_validation:{field_prefix}.kind:must_be_script_or_binary"
+            ));
+        }
+        let relative_path = required_string_field_at(
+            item_object,
+            "relativePath",
+            &format!("{field_prefix}.relativePath"),
+        )?;
+        validate_declared_plugin_path(
+            plugin_root,
+            &relative_path,
+            &format!("{field_prefix}.relativePath"),
+        )?;
+    }
+    Ok(())
+}
+
 fn is_primitive_value(value: &Value) -> bool {
     value.is_string() || value.is_number() || value.is_boolean()
 }
@@ -900,12 +1093,19 @@ fn validate_workflow_definition_file(
     definition_entry: &str,
     required_capabilities: &[String],
 ) -> Result<(), String> {
-    let definition_path = plugin_root.join(definition_entry);
-    if !definition_path.exists() {
-        return Err(
-            "manifest_validation:workflowDefinition.definitionEntry:file_not_found".to_string(),
-        );
-    }
+    let definition_path = match resolve_plugin_relative_path(plugin_root, definition_entry, true) {
+        Ok(path) => path,
+        Err("path_missing") => {
+            return Err(
+                "manifest_validation:workflowDefinition.definitionEntry:file_not_found".to_string(),
+            )
+        }
+        Err(_) => {
+            return Err(plugin_path_validation_error(
+                "workflowDefinition.definitionEntry",
+            ))
+        }
+    };
     let definition_text = fs::read_to_string(&definition_path).map_err(|_| {
         "manifest_validation:workflowDefinition.definitionEntry:definition_read_failed".to_string()
     })?;
@@ -1010,6 +1210,10 @@ fn discover_plugins(
                 continue;
             }
             visited.insert(normalized);
+            if let Err(reason) = validate_plugin_tree_contains_no_symbolic_links(&plugin_root) {
+                issues.push(create_issue(&reason, Some(&plugin_root), None));
+                continue;
+            }
             let manifest_path = plugin_root.join("manifest.json");
             let manifest_text = match fs::read_to_string(&manifest_path) {
                 Ok(text) => text,
@@ -1089,7 +1293,7 @@ fn write_plugin_enabled_state(
 
 #[cfg(test)]
 mod tests {
-    use super::validate_plugin_manifest;
+    use super::{copy_dir_recursive, validate_plugin_manifest};
     use serde_json::json;
     use std::{
         fs,
@@ -1113,6 +1317,27 @@ mod tests {
 
     fn write_workflow_definition(path: &Path, definition: serde_json::Value) {
         fs::write(path, format!("{definition}\n")).unwrap();
+    }
+
+    fn base_tool_manifest() -> serde_json::Value {
+        json!({
+            "pluginId": "plugin.tools.example",
+            "extensionType": "tool",
+            "version": "1.0.0",
+            "hostApiVersion": "1.0.0",
+            "uiRuntime": "react18",
+            "supportedDaws": [],
+            "displayName": "Tools Example",
+            "entry": "dist/index.js",
+            "requiredCapabilities": [],
+            "pages": [{
+                "pageId": "main",
+                "path": "/tools-example",
+                "title": "Tools Example",
+                "mount": "tools",
+                "componentExport": "MainPage"
+            }]
+        })
     }
 
     #[test]
@@ -1202,24 +1427,7 @@ mod tests {
     #[test]
     fn plugin_manifest_validation_accepts_tool_plugins_with_empty_supported_daws() {
         let plugin_root = temp_plugin_root();
-        let manifest = json!({
-            "pluginId": "plugin.tools.example",
-            "extensionType": "tool",
-            "version": "1.0.0",
-            "hostApiVersion": "1.0.0",
-            "uiRuntime": "react18",
-            "supportedDaws": [],
-            "displayName": "Tools Example",
-            "entry": "dist/index.js",
-            "requiredCapabilities": [],
-            "pages": [{
-                "pageId": "main",
-                "path": "/tools-example",
-                "title": "Tools Example",
-                "mount": "tools",
-                "componentExport": "MainPage"
-            }]
-        });
+        let manifest = base_tool_manifest();
 
         let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
         let _ = fs::remove_dir_all(&plugin_root);
@@ -1230,24 +1438,8 @@ mod tests {
     #[test]
     fn plugin_manifest_validation_rejects_tool_plugins_with_non_empty_supported_daws() {
         let plugin_root = temp_plugin_root();
-        let manifest = json!({
-            "pluginId": "plugin.tools.example",
-            "extensionType": "tool",
-            "version": "1.0.0",
-            "hostApiVersion": "1.0.0",
-            "uiRuntime": "react18",
-            "supportedDaws": ["pro_tools"],
-            "displayName": "Tools Example",
-            "entry": "dist/index.js",
-            "requiredCapabilities": [],
-            "pages": [{
-                "pageId": "main",
-                "path": "/tools-example",
-                "title": "Tools Example",
-                "mount": "tools",
-                "componentExport": "MainPage"
-            }]
-        });
+        let mut manifest = base_tool_manifest();
+        manifest["supportedDaws"] = json!(["pro_tools"]);
 
         let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
         let _ = fs::remove_dir_all(&plugin_root);
@@ -1264,24 +1456,8 @@ mod tests {
     #[test]
     fn plugin_manifest_validation_rejects_tool_plugins_with_workspace_mount() {
         let plugin_root = temp_plugin_root();
-        let manifest = json!({
-            "pluginId": "plugin.tools.example",
-            "extensionType": "tool",
-            "version": "1.0.0",
-            "hostApiVersion": "1.0.0",
-            "uiRuntime": "react18",
-            "supportedDaws": [],
-            "displayName": "Tools Example",
-            "entry": "dist/index.js",
-            "requiredCapabilities": [],
-            "pages": [{
-                "pageId": "main",
-                "path": "/tools-example",
-                "title": "Tools Example",
-                "mount": "workspace",
-                "componentExport": "MainPage"
-            }]
-        });
+        let mut manifest = base_tool_manifest();
+        manifest["pages"][0]["mount"] = json!("workspace");
 
         let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
         let _ = fs::remove_dir_all(&plugin_root);
@@ -1289,6 +1465,163 @@ mod tests {
         match result {
             Ok(_) => panic!("expected manifest validation failure"),
             Err(error) => assert_eq!(error, "manifest_validation:pages[0].mount:must_be_tools"),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_entry_paths_outside_plugin_root() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = base_tool_manifest();
+        manifest["entry"] = json!("../outside/index.mjs");
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(error, "manifest_validation:entry:must_be_relative_path_inside_plugin_root"),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_style_paths_outside_plugin_root() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = base_tool_manifest();
+        manifest["styleEntry"] = json!("../outside/styles.css");
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(error, "manifest_validation:styleEntry:must_be_relative_path_inside_plugin_root"),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_workflow_definition_paths_outside_plugin_root() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = json!({
+            "pluginId": "plugin.workflow.example",
+            "extensionType": "workflow",
+            "version": "1.0.0",
+            "hostApiVersion": "1.0.0",
+            "uiRuntime": "react18",
+            "supportedDaws": ["pro_tools"],
+            "displayName": "Workflow Example",
+            "entry": "dist/index.js",
+            "requiredCapabilities": ["system.health"],
+            "pages": [{
+                "pageId": "main",
+                "path": "/workflow-example",
+                "title": "Workflow Example",
+                "mount": "workspace",
+                "componentExport": "MainPage"
+            }],
+            "workflowDefinition": {
+                "workflowId": "plugin.workflow.example.run",
+                "inputSchemaId": "plugin.workflow.example.input.v1",
+                "definitionEntry": "../outside/workflow-definition.json"
+            }
+        });
+        manifest["workflowDefinition"]["definitionEntry"] = json!("../outside/workflow-definition.json");
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:workflowDefinition.definitionEntry:must_be_relative_path_inside_plugin_root"
+            ),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_invalid_tool_runtime_permissions() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = base_tool_manifest();
+        manifest["toolRuntimePermissions"] = json!(["dialog.openFile", "fs.execute"]);
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:toolRuntimePermissions:unknown_permission:fs.execute"
+            ),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_duplicate_bundled_resource_ids() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = base_tool_manifest();
+        manifest["bundledResources"] = json!([
+            {
+                "resourceId": "ffmpeg",
+                "kind": "binary",
+                "relativePath": "resources/bin/ffmpeg"
+            },
+            {
+                "resourceId": "ffmpeg",
+                "kind": "binary",
+                "relativePath": "resources/bin/ffmpeg-copy"
+            }
+        ]);
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:bundledResources:duplicate_resource_id:ffmpeg"
+            ),
+        }
+    }
+
+    #[test]
+    fn plugin_manifest_validation_rejects_bundled_resource_paths_outside_plugin_root() {
+        let plugin_root = temp_plugin_root();
+        let mut manifest = base_tool_manifest();
+        manifest["bundledResources"] = json!([{
+            "resourceId": "ffmpeg",
+            "kind": "binary",
+            "relativePath": "../outside/ffmpeg"
+        }]);
+
+        let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
+        let _ = fs::remove_dir_all(&plugin_root);
+
+        match result {
+            Ok(_) => panic!("expected manifest validation failure"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:bundledResources[0].relativePath:must_be_relative_path_inside_plugin_root"
+            ),
+        }
+    }
+
+    #[test]
+    fn copy_dir_recursive_rejects_symbolic_links() {
+        let source_root = temp_plugin_root();
+        let destination_root = temp_plugin_root();
+        let linked_file_path = source_root.join("dist/linked-script.sh");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/tmp/linked-script.sh", &linked_file_path).unwrap();
+
+        let result = copy_dir_recursive(&source_root, &destination_root);
+        let _ = fs::remove_dir_all(&source_root);
+        let _ = fs::remove_dir_all(&destination_root);
+
+        match result {
+            Ok(_) => panic!("expected copy failure"),
+            Err(error) => assert!(error.contains("symbolic_link_not_allowed")),
         }
     }
 }

@@ -4,6 +4,7 @@ import type {
   PluginAutomationRunner,
   PluginLocaleContext,
   PluginToolDefinition,
+  PluginToolRuntimePermission,
   PluginToolRunner,
   PluginToolRunnerContext,
   PrestoErrorPayload,
@@ -153,12 +154,35 @@ function toErrorMessage(error: unknown): string {
   return 'tool_run_failed'
 }
 
+function isErrorRecord(error: unknown): error is Record<string, unknown> {
+  return typeof error === 'object' && error !== null
+}
+
 function toToolRunErrorPayload(error: unknown): PrestoErrorPayload {
+  const preservedCode =
+    isErrorRecord(error) && typeof error.code === 'string' && error.code.trim().length > 0
+      ? error.code.trim()
+      : null
+  const preservedSource =
+    isErrorRecord(error) && typeof error.source === 'string' && error.source.trim().length > 0
+      ? error.source.trim()
+      : 'runtime'
+  const preservedRetryable =
+    isErrorRecord(error) && typeof error.retryable === 'boolean' ? error.retryable : false
+  const preservedDetails =
+    isErrorRecord(error) &&
+    typeof error.details === 'object' &&
+    error.details !== null &&
+    !Array.isArray(error.details)
+      ? (error.details as Record<string, unknown>)
+      : undefined
+
   return {
-    code: 'TOOL_RUN_FAILED',
+    code: preservedCode ?? 'TOOL_RUN_FAILED',
     message: toErrorMessage(error),
-    source: 'runtime',
-    retryable: false,
+    source: preservedSource,
+    retryable: preservedRetryable,
+    ...(preservedDetails ? { details: preservedDetails } : {}),
   }
 }
 
@@ -169,19 +193,21 @@ function resolveToolTargetDaw(supportedDaws: readonly DawTarget[]): DawTarget {
   return 'pro_tools'
 }
 
+function resolveToolRuntimePermissions(
+  manifest: PluginRuntimeListResult['plugins'][number]['manifest'],
+): ReadonlySet<PluginToolRuntimePermission> {
+  return new Set((manifest.toolRuntimePermissions ?? []) as PluginToolRuntimePermission[])
+}
+
 function createUnavailableBundledProcessHost(pluginId: string): PluginToolRunnerContext['process'] {
   return {
     async execBundled(resourceId) {
-      return {
-        ok: false,
-        exitCode: -1,
-        stdout: '',
-        stderr: '',
-        error: {
-          code: 'TOOL_PROCESS_UNAVAILABLE',
-          message: `Bundled process runtime is unavailable for plugin "${pluginId}" and resource "${resourceId}".`,
-        },
-      }
+      throw Object.assign(
+        new Error(
+          `Plugin "${pluginId}" cannot access process.execBundled because the required host runtime is unavailable for resource "${resourceId}".`,
+        ),
+        { code: 'PLUGIN_TOOL_HOST_UNAVAILABLE' as const },
+      )
     },
   }
 }
@@ -199,12 +225,22 @@ function createToolRunHost(input: {
     (tool) => tool.pageId === page.pageId,
   )
   const toolById = new Map(pageTools.map((tool) => [tool.toolId, tool]))
-  const runtimeToolHost = createPluginToolPageHost(runtime)
+  const toolRuntimePermissions = resolveToolRuntimePermissions(plugin.manifest)
+  const runtimeToolHost = createPluginToolPageHost(runtime, plugin.pluginId, toolRuntimePermissions)
   const toolProcessHost: PluginToolRunnerContext['process'] = runtime.process
-    ? {
-        execBundled: (resourceId, args, options) =>
-          runtime.process!.execBundled(plugin.pluginId, resourceId, args, options),
-      }
+    ? toolRuntimePermissions.has('process.execBundled')
+      ? {
+          execBundled: (resourceId, args, options) =>
+            runtime.process!.execBundled(plugin.pluginId, resourceId, args, options),
+        }
+      : {
+          async execBundled() {
+            throw Object.assign(
+              new Error(`Plugin "${plugin.pluginId}" is not allowed to access process.execBundled.`),
+              { code: 'PLUGIN_TOOL_PERMISSION_DENIED' as const },
+            )
+          },
+        }
     : createUnavailableBundledProcessHost(plugin.pluginId)
   const jobsClient = presto.jobs
 
@@ -327,7 +363,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const storage = createHostPluginStorage()
   const logger = createHostPluginLogger()
   const workflowHost = createPluginWorkflowPageHost(input.runtime)
-  const fallbackToolHost = createPluginToolPageHost(input.runtime)
+  const fallbackToolHost = createPluginToolPageHost(input.runtime, 'unknown-plugin', new Set())
 
   for (const plugin of input.catalog.plugins) {
     const loaded = plugin.loadable ? await loadRendererPluginModule(plugin.entryPath) : { ok: false }
@@ -415,6 +451,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
 
     ensurePluginStyle(plugin.pluginId, resolvedManifest.styleEntry, plugin.pluginRoot)
     const automationRunnerContext = createAutomationRunnerContext(context, input.runtime)
+    const toolRuntimePermissions = resolveToolRuntimePermissions(resolvedManifest)
 
     for (const automationItem of (resolvedManifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {
       const runner = loaded.module[automationItem.runnerExport]
@@ -454,6 +491,8 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
         page.mount === 'tools'
           ? createPluginToolPageHost(
               input.runtime,
+              plugin.pluginId,
+              toolRuntimePermissions,
               createToolRunHost({
                 page,
                 plugin: resolvedPlugin,

@@ -11,7 +11,7 @@ from ..service_container import ServiceContainer
 from ..runtime_state import ThreadedJobHandle
 from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.errors import PrestoError, PrestoErrorPayload, PrestoValidationError
-from ...domain.jobs import JobProgress, JobRecord
+from ...domain.jobs import JobProgress, JobRecord, JobsUpdateRequest
 from .common import runtime_from_context
 
 
@@ -73,6 +73,42 @@ def _job_record_payload(record: JobRecord) -> dict[str, Any]:
         "startedAt": record.started_at,
         "finishedAt": record.finished_at,
     }
+
+
+def _progress_payload(progress: JobProgress) -> dict[str, Any]:
+    return {
+        "phase": progress.phase,
+        "current": progress.current,
+        "total": progress.total,
+        "percent": progress.percent,
+        "message": progress.message,
+    }
+
+
+def _update_job(
+    services: ServiceContainer,
+    job_id: str,
+    *,
+    state: str | None = None,
+    progress: JobProgress | None = None,
+    metadata: dict[str, Any] | None = None,
+    result: dict[str, Any] | None = None,
+    error: PrestoErrorPayload | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> JobRecord:
+    return services.job_manager.update(
+        JobsUpdateRequest(
+            job_id=job_id,
+            state=state,
+            progress=_progress_payload(progress) if progress is not None else None,
+            metadata=metadata,
+            result=result,
+            error=error,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+    ).job
 
 
 def _record_successful_command(command_counts: dict[str, int], capability_id: str) -> None:
@@ -147,16 +183,19 @@ def _await_child_job(
         child_job = services.job_manager.get(child_job_id)
         parent_job = services.job_manager.get(parent_job_id)
         if parent_job.state in {"queued", "running"}:
-            parent_job.state = "running"
-            parent_job.started_at = parent_job.started_at or _utc_now()
-            parent_job.progress = JobProgress(
-                phase=phase,
-                current=child_job.progress.current,
-                total=child_job.progress.total,
-                percent=child_job.progress.percent,
-                message=child_job.progress.message,
+            _update_job(
+                services,
+                parent_job_id,
+                state="running",
+                started_at=parent_job.started_at or _utc_now(),
+                progress=JobProgress(
+                    phase=phase,
+                    current=child_job.progress.current,
+                    total=child_job.progress.total,
+                    percent=child_job.progress.percent,
+                    message=child_job.progress.message,
+                ),
             )
-            services.job_manager.upsert(parent_job)
         if child_job.state == "succeeded":
             return _job_record_payload(child_job)
         if child_job.state == "failed":
@@ -202,16 +241,19 @@ def _execute_steps(
             if not isinstance(nested_steps, list):
                 raise _validation_error("workflow foreach requires nested steps.", field="definition")
             total_items = max(len(items), 1)
-            parent_job.state = "running"
-            parent_job.started_at = parent_job.started_at or _utc_now()
-            parent_job.progress = JobProgress(
-                phase=effective_phase,
-                current=0,
-                total=total_items,
-                percent=0.0,
-                message=f"Workflow step {effective_phase} is running.",
+            _update_job(
+                services,
+                parent_job_id,
+                state="running",
+                started_at=parent_job.started_at or _utc_now(),
+                progress=JobProgress(
+                    phase=effective_phase,
+                    current=0,
+                    total=total_items,
+                    percent=0.0,
+                    message=f"Workflow step {effective_phase} is running.",
+                ),
             )
-            services.job_manager.upsert(parent_job)
             for index, item in enumerate(items, start=1):
                 context[item_name] = item
                 _execute_steps(
@@ -227,16 +269,19 @@ def _execute_steps(
                 )
                 parent_job = services.job_manager.get(parent_job_id)
                 if parent_job.state in {"queued", "running"}:
-                    parent_job.state = "running"
-                    parent_job.started_at = parent_job.started_at or _utc_now()
-                    parent_job.progress = JobProgress(
-                        phase=effective_phase,
-                        current=index,
-                        total=total_items,
-                        percent=round((index / total_items) * 100, 1),
-                        message=f"Workflow step {effective_phase} is running.",
+                    _update_job(
+                        services,
+                        parent_job_id,
+                        state="running",
+                        started_at=parent_job.started_at or _utc_now(),
+                        progress=JobProgress(
+                            phase=effective_phase,
+                            current=index,
+                            total=total_items,
+                            percent=round((index / total_items) * 100, 1),
+                            message=f"Workflow step {effective_phase} is running.",
+                        ),
                     )
-                    services.job_manager.upsert(parent_job)
             context.pop(item_name, None)
             continue
 
@@ -249,16 +294,19 @@ def _execute_steps(
             raise _validation_error("workflow step input must resolve to an object.", field="definition")
 
         if report_step_progress:
-            parent_job.state = "running"
-            parent_job.started_at = parent_job.started_at or _utc_now()
-            parent_job.progress = JobProgress(
-                phase=effective_phase,
-                current=0,
-                total=1,
-                percent=0.0,
-                message=f"Workflow step {effective_phase} is running.",
+            _update_job(
+                services,
+                parent_job_id,
+                state="running",
+                started_at=parent_job.started_at or _utc_now(),
+                progress=JobProgress(
+                    phase=effective_phase,
+                    current=0,
+                    total=1,
+                    percent=0.0,
+                    message=f"Workflow step {effective_phase} is running.",
+                ),
             )
-            services.job_manager.upsert(parent_job)
         result = invoke_capability(capability_id, payload)
 
         if step.get("awaitJob") is True:
@@ -270,16 +318,19 @@ def _execute_steps(
         if report_step_progress:
             parent_job = services.job_manager.get(parent_job_id)
             if parent_job.state in {"queued", "running"}:
-                parent_job.state = "running"
-                parent_job.started_at = parent_job.started_at or _utc_now()
-                parent_job.progress = JobProgress(
-                    phase=effective_phase,
-                    current=1,
-                    total=1,
-                    percent=100.0,
-                    message=f"Workflow step {effective_phase} completed.",
+                _update_job(
+                    services,
+                    parent_job_id,
+                    state="running",
+                    started_at=parent_job.started_at or _utc_now(),
+                    progress=JobProgress(
+                        phase=effective_phase,
+                        current=1,
+                        total=1,
+                        percent=100.0,
+                        message=f"Workflow step {effective_phase} completed.",
+                    ),
                 )
-                services.job_manager.upsert(parent_job)
 
         save_as = str(step.get("saveAs", "")).strip()
         if save_as:
@@ -311,10 +362,19 @@ def _run_workflow_job(
 ) -> None:
     job = services.job_manager.get(job_id)
     try:
-        job.state = "running"
-        job.started_at = job.started_at or _utc_now()
-        job.progress = JobProgress(phase="running", current=0, total=max(len(definition["steps"]), 1), percent=0.0, message="Workflow is running.")
-        services.job_manager.upsert(job)
+        _update_job(
+            services,
+            job_id,
+            state="running",
+            started_at=job.started_at or _utc_now(),
+            progress=JobProgress(
+                phase="running",
+                current=0,
+                total=max(len(definition["steps"]), 1),
+                percent=0.0,
+                message="Workflow is running.",
+            ),
+        )
 
         context: dict[str, Any] = {
             "input": workflow_input,
@@ -330,39 +390,46 @@ def _run_workflow_job(
             cancel_event=cancel_event,
         )
 
-        job.state = "succeeded"
-        job.progress = JobProgress(
-            phase="succeeded",
-            current=max(len(definition["steps"]), 1),
-            total=max(len(definition["steps"]), 1),
-            percent=100.0,
-            message="Workflow completed.",
-        )
-        job.result = {
-            "workflowId": definition["workflowId"],
-            "steps": {key: value for key, value in final_context.items() if key != "input"},
-            "metrics": {
-                "schemaVersion": 1,
+        _update_job(
+            services,
+            job_id,
+            state="succeeded",
+            progress=JobProgress(
+                phase="succeeded",
+                current=max(len(definition["steps"]), 1),
+                total=max(len(definition["steps"]), 1),
+                percent=100.0,
+                message="Workflow completed.",
+            ),
+            result={
                 "workflowId": definition["workflowId"],
-                "commandCounts": command_counts,
+                "steps": {key: value for key, value in final_context.items() if key != "input"},
+                "metrics": {
+                    "schemaVersion": 1,
+                    "workflowId": definition["workflowId"],
+                    "commandCounts": command_counts,
+                },
             },
-        }
-        job.finished_at = _utc_now()
-        services.job_manager.upsert(job)
+            finished_at=_utc_now(),
+        )
     except Exception as error:
         normalized_error = _normalize_error(services, error, capability_id="workflow.run.start")
         job = services.job_manager.get(job_id)
-        job.state = "failed" if normalized_error.code != "WORKFLOW_CANCELLED" else "cancelled"
-        job.progress = JobProgress(
-            phase=job.state,
-            current=job.progress.current,
-            total=job.progress.total,
-            percent=job.progress.percent,
-            message=normalized_error.message,
+        failure_state = "failed" if normalized_error.code != "WORKFLOW_CANCELLED" else "cancelled"
+        _update_job(
+            services,
+            job_id,
+            state=failure_state,
+            progress=JobProgress(
+                phase=failure_state,
+                current=job.progress.current,
+                total=job.progress.total,
+                percent=job.progress.percent,
+                message=normalized_error.message,
+            ),
+            error=normalized_error,
+            finished_at=_utc_now(),
         )
-        job.error = normalized_error
-        job.finished_at = _utc_now()
-        services.job_manager.upsert(job)
     finally:
         _run_handles_pop(services, job_id)
 

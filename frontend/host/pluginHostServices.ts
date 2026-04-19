@@ -4,6 +4,7 @@ import type {
   PluginToolPageHost,
   PluginToolRunRequest,
   PluginToolRunResponse,
+  PluginToolRuntimePermission,
   PluginWorkflowPageHost,
   PluginStorage,
 } from '@presto/contracts'
@@ -39,6 +40,33 @@ export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> &
 export type PluginToolRunHost = (request: PluginToolRunRequest) => Promise<PluginToolRunResponse>
 
 type MacAccessibilityClient = NonNullable<PrestoRuntime['macAccessibility']>
+type ToolPermissionSet = ReadonlySet<PluginToolRuntimePermission>
+
+class PluginToolPermissionError extends Error {
+  readonly code = 'PLUGIN_TOOL_PERMISSION_DENIED'
+  readonly pluginId: string
+  readonly permission: PluginToolRuntimePermission
+
+  constructor(pluginId: string, permission: PluginToolRuntimePermission) {
+    super(`Plugin "${pluginId}" is not allowed to access ${permission}.`)
+    this.name = 'PluginToolPermissionError'
+    this.pluginId = pluginId
+    this.permission = permission
+  }
+}
+
+class PluginToolHostUnavailableError extends Error {
+  readonly code = 'PLUGIN_TOOL_HOST_UNAVAILABLE'
+  readonly pluginId: string
+  readonly permission: PluginToolRuntimePermission
+
+  constructor(pluginId: string, permission: PluginToolRuntimePermission) {
+    super(`Plugin "${pluginId}" cannot access ${permission} because the required host runtime is unavailable.`)
+    this.name = 'PluginToolHostUnavailableError'
+    this.pluginId = pluginId
+    this.permission = permission
+  }
+}
 
 const unavailableMacAccessibility: MacAccessibilityClient = {
   async preflight() {
@@ -72,32 +100,43 @@ const unavailableMacAccessibility: MacAccessibilityClient = {
 
 const inMemoryStorage = new Map<string, string>()
 
-const unavailableToolFsHost: PluginToolPageHost['fs'] = {
-  async readFile() {
-    return null
-  },
-  async writeFile() {
-    return false
-  },
-  async exists() {
-    return false
-  },
-  async readdir() {
-    return []
-  },
-  async deleteFile() {
-    return false
-  },
-}
-
-const unavailableToolShellHost: PluginToolPageHost['shell'] = {
-  async openPath(path) {
-    return `shell runtime is unavailable in this host shell: ${path}`
-  },
-}
-
 const unavailableToolRunHost: PluginToolRunHost = async ({ toolId }) => {
   throw new Error(`tool.run is unavailable in this host shell: ${toolId}`)
+}
+
+function createToolPermissionError(
+  pluginId: string,
+  permission: PluginToolRuntimePermission,
+): PluginToolPermissionError {
+  return new PluginToolPermissionError(pluginId, permission)
+}
+
+function rejectToolPermission<T>(
+  pluginId: string,
+  permission: PluginToolRuntimePermission,
+): Promise<T> {
+  return Promise.reject(createToolPermissionError(pluginId, permission))
+}
+
+function createToolHostUnavailableError(
+  pluginId: string,
+  permission: PluginToolRuntimePermission,
+): PluginToolHostUnavailableError {
+  return new PluginToolHostUnavailableError(pluginId, permission)
+}
+
+function rejectToolHostUnavailable<T>(
+  pluginId: string,
+  permission: PluginToolRuntimePermission,
+): Promise<T> {
+  return Promise.reject(createToolHostUnavailableError(pluginId, permission))
+}
+
+function hasToolPermission(
+  permissions: ToolPermissionSet,
+  permission: PluginToolRuntimePermission,
+): boolean {
+  return permissions.has(permission)
 }
 
 export function createHostPluginStorage(): PluginStorage {
@@ -170,46 +209,74 @@ export function createPluginWorkflowPageHost(runtime: PluginHostRuntime): Plugin
 
 export function createPluginToolPageHost(
   runtime: PluginHostRuntime,
+  pluginId: string,
+  permissions: ToolPermissionSet,
   runToolHost: PluginToolRunHost = unavailableToolRunHost,
 ): PluginToolPageHost & { runTool: PluginToolRunHost } {
   return {
     dialog: {
       async openFile(options) {
+        if (!hasToolPermission(permissions, 'dialog.openFile')) {
+          return rejectToolPermission(pluginId, 'dialog.openFile')
+        }
         if (typeof runtime.dialog.openFile === 'function') {
           return runtime.dialog.openFile(options)
         }
-        return {
-          canceled: true,
-          paths: [],
-        }
+        return rejectToolHostUnavailable(pluginId, 'dialog.openFile')
       },
       async openDirectory() {
+        if (!hasToolPermission(permissions, 'dialog.openDirectory')) {
+          return rejectToolPermission(pluginId, 'dialog.openDirectory')
+        }
         if (typeof runtime.dialog.openDirectory === 'function') {
           return runtime.dialog.openDirectory()
         }
         if (typeof runtime.dialog.openFolder === 'function') {
           return runtime.dialog.openFolder()
         }
-        return {
-          canceled: true,
-          paths: [],
-        }
+        return rejectToolHostUnavailable(pluginId, 'dialog.openDirectory')
       },
     },
-    fs: runtime.fs
-      ? {
-          readFile: (path) => runtime.fs!.readFile(path),
-          writeFile: (path, content) => runtime.fs!.writeFile(path, content),
-          exists: (path) => runtime.fs!.exists(path),
-          readdir: (path) => runtime.fs!.readdir(path),
-          deleteFile: (path) => runtime.fs!.deleteFile(path),
-        }
-      : unavailableToolFsHost,
-    shell: runtime.shell
-      ? {
-          openPath: (path) => runtime.shell!.openPath(path),
-        }
-      : unavailableToolShellHost,
+    fs: {
+      readFile: (path) =>
+        !hasToolPermission(permissions, 'fs.read')
+          ? rejectToolPermission(pluginId, 'fs.read')
+          : runtime.fs
+            ? runtime.fs.readFile(path)
+            : rejectToolHostUnavailable(pluginId, 'fs.read'),
+      writeFile: (path, content) =>
+        !hasToolPermission(permissions, 'fs.write')
+          ? rejectToolPermission(pluginId, 'fs.write')
+          : runtime.fs
+            ? runtime.fs.writeFile(path, content)
+            : rejectToolHostUnavailable(pluginId, 'fs.write'),
+      exists: (path) =>
+        !hasToolPermission(permissions, 'fs.read')
+          ? rejectToolPermission(pluginId, 'fs.read')
+          : runtime.fs
+            ? runtime.fs.exists(path)
+            : rejectToolHostUnavailable(pluginId, 'fs.read'),
+      readdir: (path) =>
+        !hasToolPermission(permissions, 'fs.list')
+          ? rejectToolPermission(pluginId, 'fs.list')
+          : runtime.fs
+            ? runtime.fs.readdir(path)
+            : rejectToolHostUnavailable(pluginId, 'fs.list'),
+      deleteFile: (path) =>
+        !hasToolPermission(permissions, 'fs.delete')
+          ? rejectToolPermission(pluginId, 'fs.delete')
+          : runtime.fs
+            ? runtime.fs.deleteFile(path)
+            : rejectToolHostUnavailable(pluginId, 'fs.delete'),
+    },
+    shell: {
+      openPath: (path) =>
+        !hasToolPermission(permissions, 'shell.openPath')
+          ? rejectToolPermission(pluginId, 'shell.openPath')
+          : runtime.shell
+            ? runtime.shell.openPath(path)
+            : rejectToolHostUnavailable(pluginId, 'shell.openPath'),
+    },
     runTool: runToolHost,
   }
 }

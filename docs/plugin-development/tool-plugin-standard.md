@@ -26,6 +26,8 @@
   - `runnerExport`
 - 可选声明 `toolRuntimePermissions`
 - 可选声明 `bundledResources`
+- `entry`、`styleEntry`、`bundledResources[].relativePath` 只能指向插件根目录内的相对路径
+- 插件目录树内不能包含 symbolic link
 
 当前 `toolRuntimePermissions` 枚举：
 
@@ -48,16 +50,17 @@
 
 `tool` 页面组件收到 `PluginToolPageProps`，其中 `host` 允许的能力是：
 
-- `dialog.openFile()`
-- `dialog.openDirectory()`
-- `fs.readFile(path)`
-- `fs.writeFile(path, content)`
-- `fs.exists(path)`
-- `fs.readdir(path)`
-- `fs.deleteFile(path)`
-- `shell.openPath(path)`
+- `dialog.openFile()`，要求 `toolRuntimePermissions` 包含 `dialog.openFile`
+- `dialog.openDirectory()`，要求 `toolRuntimePermissions` 包含 `dialog.openDirectory`
+- `fs.readFile(path)` / `fs.exists(path)`，要求 `toolRuntimePermissions` 包含 `fs.read`
+- `fs.writeFile(path, content)`，要求 `toolRuntimePermissions` 包含 `fs.write`
+- `fs.readdir(path)`，要求 `toolRuntimePermissions` 包含 `fs.list`
+- `fs.deleteFile(path)`，要求 `toolRuntimePermissions` 包含 `fs.delete`
+- `shell.openPath(path)`，要求 `toolRuntimePermissions` 包含 `shell.openPath`
 
 这些能力只属于页面 host，不是 `activate(context)` 通用 runtime。
+未声明的页面 host 能力会在运行时被直接拒绝。
+如果 manifest 已声明，但当前宿主壳没有提供对应 runtime，则会返回 `PLUGIN_TOOL_HOST_UNAVAILABLE`，而不是伪造空结果。
 
 ## 4. runner 能力边界
 
@@ -78,6 +81,8 @@ type PluginToolRunner = (
 - `process.execBundled(resourceId, args?, options?)`
 
 `process.execBundled` 只能执行 manifest 已声明的 `bundledResources`。
+同时要求 `toolRuntimePermissions` 明确包含 `process.execBundled`。
+未声明权限时错误码是 `PLUGIN_TOOL_PERMISSION_DENIED`；宿主缺少 bundled process runtime 时错误码是 `PLUGIN_TOOL_HOST_UNAVAILABLE`。
 
 ## 5. Settings 管理边界
 
