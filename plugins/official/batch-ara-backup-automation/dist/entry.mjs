@@ -1,4 +1,58 @@
-export const manifest = {
+function isZhCnLocale(locale) {
+  const candidates = [locale?.resolved, locale?.requested, locale?.locale]
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+
+  return candidates.some((value) => value === 'zh-cn' || value === 'zh' || value.startsWith('zh-'))
+}
+
+function t(locale, key, replacements = {}) {
+  const messages = {
+    en: {
+      displayName: 'Batch Backup Rename',
+      description: 'Duplicate the selected tracks as backups, rename the duplicates to .bak, then hide and inactivate them.',
+      itemTitle: 'Batch Backup Rename',
+      itemDescription: 'Back up the selected tracks, rename the duplicates to .bak, then hide/inactivate them.',
+      hideBackupTracks: 'Hide backup tracks',
+      makeBackupTracksInactive: 'Make backup tracks inactive',
+      macNotTrusted: 'macAccessibility access is not trusted.',
+      noSourceTracks: 'No source tracks are selected.',
+      noDuplicatedTracks: 'No duplicated backup tracks are selected after duplication.',
+      mismatchCount: 'Duplicated backup track count does not match the source selection.',
+      selectedTracks: 'Selected {count} source tracks.',
+      duplicatedSelection: 'Duplicated the current track selection.',
+      resolvedBackups: 'Resolved {count} duplicated backup tracks from the current selection.',
+      renamedBackups: 'Renamed {count} duplicated backup tracks to .bak names.',
+      appliedState: 'Applied backup-track visibility and activation changes.',
+      summary: 'Backed up {count} selected tracks, renamed the duplicated backup tracks to .bak, then hid and inactivated them.',
+    },
+    'zh-CN': {
+      displayName: '批量备份重命名',
+      description: '把所选轨道复制成备份，将复制结果重命名为 .bak，然后隐藏并设为非激活。',
+      itemTitle: '批量备份重命名',
+      itemDescription: '备份所选轨道，把复制结果重命名为 .bak，然后隐藏并设为非激活。',
+      hideBackupTracks: '隐藏备份轨道',
+      makeBackupTracksInactive: '将备份轨道设为非激活',
+      macNotTrusted: 'macAccessibility 权限未被信任。',
+      noSourceTracks: '当前没有选中源轨道。',
+      noDuplicatedTracks: '复制完成后没有选中任何备份轨道。',
+      mismatchCount: '复制出来的备份轨道数量与源轨道选择不一致。',
+      selectedTracks: '已读取 {count} 条源轨道。',
+      duplicatedSelection: '已复制当前轨道选择。',
+      resolvedBackups: '已从当前选择中解析出 {count} 条复制的备份轨道。',
+      renamedBackups: '已将 {count} 条复制出来的备份轨道重命名为 .bak。',
+      appliedState: '已完成备份轨道的可见性和激活状态设置。',
+      summary: '已备份 {count} 条所选轨道，将复制出来的备份轨道重命名为 .bak，并执行隐藏和非激活。',
+    },
+  }
+  const localeKey = isZhCnLocale(locale) ? 'zh-CN' : 'en'
+  return Object.entries(replacements).reduce(
+    (message, [token, value]) => message.replaceAll(`{${token}}`, String(value)),
+    messages[localeKey][key] ?? messages.en[key] ?? key,
+  )
+}
+
+const baseManifest = {
   pluginId: 'official.batch-ara-backup-automation',
   extensionType: 'automation',
   version: '1.0.0',
@@ -45,6 +99,37 @@ export const manifest = {
   ],
 }
 
+export const manifest = baseManifest
+
+export function resolveManifest(locale) {
+  if (!isZhCnLocale(locale)) {
+    return baseManifest
+  }
+
+  return {
+    ...baseManifest,
+    displayName: t(locale, 'displayName'),
+    description: t(locale, 'description'),
+    automationItems: [
+      {
+        ...baseManifest.automationItems[0],
+        title: t(locale, 'itemTitle'),
+        description: t(locale, 'itemDescription'),
+        optionsSchema: [
+          {
+            ...baseManifest.automationItems[0].optionsSchema[0],
+            label: t(locale, 'hideBackupTracks'),
+          },
+          {
+            ...baseManifest.automationItems[0].optionsSchema[1],
+            label: t(locale, 'makeBackupTracksInactive'),
+          },
+        ],
+      },
+    ],
+  }
+}
+
 let activePluginId = ''
 
 export function activate(context) {
@@ -60,12 +145,12 @@ function toBoolean(value, fallback = true) {
   return typeof value === 'boolean' ? value : fallback
 }
 
-function ensureTrustedAccessibility(result) {
+function ensureTrustedAccessibility(result, locale) {
   if (!result?.ok) {
     throw new Error(`macAccessibility preflight failed: ${result?.error ?? 'unknown error'}`)
   }
   if (!result.trusted) {
-    throw new Error('macAccessibility access is not trusted.')
+    throw new Error(t(locale, 'macNotTrusted'))
   }
 }
 
@@ -138,22 +223,22 @@ export async function runBatchAraBackupAutomation(context, input = {}) {
   const hideBackupTracks = toBoolean(input.hideBackupTracks, true)
   const makeBackupTracksInactive = toBoolean(input.makeBackupTracksInactive, true)
 
-  ensureTrustedAccessibility(await context.macAccessibility.preflight())
+  ensureTrustedAccessibility(await context.macAccessibility.preflight(), context?.locale)
 
   const selection = await context.presto.track.selection.get()
   const sourceTrackNames = Array.isArray(selection?.trackNames) ? selection.trackNames.filter(Boolean) : []
   if (sourceTrackNames.length === 0) {
-    throw new Error('No source tracks are selected.')
+    throw new Error(t(context?.locale, 'noSourceTracks'))
   }
 
   await runMacScript(context.macAccessibility, buildDuplicateTracksScript())
   const backupSelection = await context.presto.track.selection.get()
   const backupTrackNames = Array.isArray(backupSelection?.trackNames) ? backupSelection.trackNames.filter(Boolean) : []
   if (backupTrackNames.length === 0) {
-    throw new Error('No duplicated backup tracks are selected after duplication.')
+    throw new Error(t(context?.locale, 'noDuplicatedTracks'))
   }
   if (backupTrackNames.length !== sourceTrackNames.length) {
-    throw new Error('Duplicated backup track count does not match the source selection.')
+    throw new Error(t(context?.locale, 'mismatchCount'))
   }
 
   const renamedBackupTrackNames = buildBackupTrackNames(sourceTrackNames)
@@ -162,25 +247,25 @@ export async function runBatchAraBackupAutomation(context, input = {}) {
 
   return {
     steps: [
-      { id: 'selection.read', status: 'succeeded', message: `Selected ${sourceTrackNames.length} source tracks.` },
-      { id: 'track.duplicate', status: 'succeeded', message: 'Duplicated the current track selection.' },
+      { id: 'selection.read', status: 'succeeded', message: t(context?.locale, 'selectedTracks', { count: sourceTrackNames.length }) },
+      { id: 'track.duplicate', status: 'succeeded', message: t(context?.locale, 'duplicatedSelection') },
       {
         id: 'backup.resolve',
         status: 'succeeded',
-        message: `Resolved ${backupTrackNames.length} duplicated backup tracks from the current selection.`,
+        message: t(context?.locale, 'resolvedBackups', { count: backupTrackNames.length }),
       },
       {
         id: 'backup.rename',
         status: 'succeeded',
-        message: `Renamed ${renamedBackupTrackNames.length} duplicated backup tracks to .bak names.`,
+        message: t(context?.locale, 'renamedBackups', { count: renamedBackupTrackNames.length }),
       },
       {
         id: 'backup.hideInactive',
         status: 'succeeded',
-        message: 'Applied backup-track visibility and activation changes.',
+        message: t(context?.locale, 'appliedState'),
       },
     ],
-    summary: `Backed up ${sourceTrackNames.length} selected tracks, renamed the duplicated backup tracks to .bak, then hid and inactivated them.`,
+    summary: t(context?.locale, 'summary', { count: sourceTrackNames.length }),
   }
 }
 

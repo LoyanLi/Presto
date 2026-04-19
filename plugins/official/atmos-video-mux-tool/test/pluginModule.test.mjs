@@ -356,6 +356,18 @@ test('tool manifest declares the expected runtime permissions and bundled resour
   assert.equal(pluginModule.manifest.tools[0]?.runnerExport, 'runAtmosVideoMuxTool')
 })
 
+test('plugin module resolves manifest strings from plugin-local zh-CN messages', async () => {
+  const pluginModule = await loadPluginModule()
+  const localizedManifest = pluginModule.resolveManifest({
+    requested: 'zh-CN',
+    resolved: 'zh-CN',
+  })
+
+  assert.equal(localizedManifest.displayName, 'Atmos 视频合成工具')
+  assert.equal(localizedManifest.pages[0]?.title, 'Atmos 视频合成')
+  assert.equal(localizedManifest.tools[0]?.title, 'Atmos 视频合成')
+})
+
 test('runner executes bundled script resource with expected args', async () => {
   const pluginModule = await loadPluginModule()
 
@@ -425,6 +437,26 @@ test('tool page renders the approved two-step workflow shell without the outer w
   assert.doesNotMatch(markup, /class=\"tm-path\"/)
   assert.doesNotMatch(markup, /Host-side tool execution wiring is pending/)
   assert.doesNotMatch(markup, /Runner payload preview/)
+})
+
+test('tool page renders Simplified Chinese through plugin-local locale messages', async () => {
+  const pluginModule = await loadPluginModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(pluginModule.AtmosVideoMuxToolPage, {
+      context: {
+        locale: {
+          requested: 'zh-CN',
+          resolved: 'zh-CN',
+        },
+      },
+      host: createHostMock(),
+    }),
+  )
+
+  assert.match(markup, /源文件/)
+  assert.match(markup, /输出 \/ 检查 \/ 执行/)
+  assert.match(markup, /选择视频 MP4/)
+  assert.match(markup, /允许 FPS 转换/)
 })
 
 test('tool page source routes runs through host.runTool and shared workflow ui helpers', async () => {

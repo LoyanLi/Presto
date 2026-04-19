@@ -5,7 +5,15 @@ import {
   saveExportWorkflowSettings,
 } from './workflowCore.mjs'
 
-export const manifest = {
+function isZhCnLocale(locale) {
+  const candidates = [locale?.resolved, locale?.requested, locale?.locale]
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+
+  return candidates.some((value) => value === 'zh-cn' || value === 'zh' || value.startsWith('zh-'))
+}
+
+const baseManifest = {
   pluginId: 'official.export-workflow',
   extensionType: 'workflow',
   version: '1.0.1',
@@ -84,6 +92,44 @@ export const manifest = {
     { capabilityId: 'jobs.get', minVersion: '2025.10.0' },
     { capabilityId: 'jobs.cancel', minVersion: '2025.10.0' },
   ],
+}
+
+export const manifest = baseManifest
+
+export function resolveManifest(locale) {
+  if (!isZhCnLocale(locale)) {
+    return baseManifest
+  }
+
+  return {
+    ...baseManifest,
+    displayName: '导出流程',
+    description: '捕捉轨道快照、管理导出预设，并执行官方批量导出流程。',
+    pages: [
+      {
+        ...baseManifest.pages[0],
+        title: '导出流程',
+      },
+    ],
+    settingsPages: [
+      {
+        ...baseManifest.settingsPages[0],
+        title: '导出流程',
+        sections: [
+          {
+            ...baseManifest.settingsPages[0].sections[0],
+            title: '默认快照选择',
+            fields: [
+              {
+                ...baseManifest.settingsPages[0].sections[0].fields[0],
+                label: '默认选中全部快照',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
 }
 
 let activePluginId = ''

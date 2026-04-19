@@ -354,6 +354,19 @@ test('plugin module exports manifest and page export', async () => {
   assert.equal(typeof pluginModule.saveExportWorkflowSettings, 'function')
 })
 
+test('plugin module resolves manifest strings from plugin-local zh-CN messages', async () => {
+  const pluginModule = await loadPluginModule()
+  const localizedManifest = pluginModule.resolveManifest({
+    requested: 'zh-CN',
+    resolved: 'zh-CN',
+  })
+
+  assert.equal(localizedManifest.displayName, '导出流程')
+  assert.equal(localizedManifest.pages[0]?.title, '导出流程')
+  assert.equal(localizedManifest.settingsPages[0]?.sections[0]?.title, '默认快照选择')
+  assert.equal(localizedManifest.settingsPages[0]?.sections[0]?.fields[0]?.label, '默认选中全部快照')
+})
+
 test('manifest.json stays aligned with module manifest essentials', async () => {
   const pluginModule = await loadPluginModule()
   const raw = await readFile(new URL('../manifest.json', import.meta.url), 'utf8')

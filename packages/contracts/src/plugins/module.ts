@@ -1,4 +1,4 @@
-import type { PluginContext } from './context'
+import type { PluginContext, PluginLocaleContext } from './context'
 import type { PluginManifest } from './manifest'
 import type { PluginToolDialogHost, PluginToolFsHost, PluginToolShellHost } from './page'
 
@@ -77,6 +77,7 @@ export type PluginToolRunner = (
 
 export interface PluginModule {
   manifest: PluginManifest
+  resolveManifest?(locale: PluginLocaleContext): PluginManifest
   activate(context: PluginContext): Promise<void> | void
   deactivate?(): Promise<void> | void
 }

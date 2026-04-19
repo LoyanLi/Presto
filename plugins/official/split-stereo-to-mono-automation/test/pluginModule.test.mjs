@@ -40,3 +40,40 @@ test('split stereo automation manifest stays aligned with dist entry essentials'
   assert.equal(pluginModule.manifest.requiredRuntimeServices, undefined)
   assert.deepEqual(fileManifest.automationItems, pluginModule.manifest.automationItems)
 })
+
+test('split stereo automation resolves zh-CN manifest and runner messages inside the plugin', async () => {
+  const pluginModule = await loadPluginModule()
+  const localizedManifest = pluginModule.resolveManifest({
+    requested: 'zh-CN',
+    resolved: 'zh-CN',
+  })
+
+  assert.equal(localizedManifest.displayName, '立体声拆分单声道')
+  assert.equal(localizedManifest.automationItems[0]?.title, '立体声拆分单声道')
+  assert.equal(localizedManifest.automationItems[0]?.optionsSchema[0]?.label, '保留声道')
+  assert.equal(localizedManifest.automationItems[0]?.optionsSchema[0]?.options[0]?.label, '左声道')
+
+  const result = await pluginModule.runSplitStereoToMono(
+    {
+      locale: {
+        requested: 'zh-CN',
+        resolved: 'zh-CN',
+      },
+      presto: {
+        automation: {
+          splitStereoToMono: {
+            async execute() {
+              return {
+                items: [{ keptTrackName: 'Lead Vox.L' }],
+              }
+            },
+          },
+        },
+      },
+    },
+    { keepChannel: 'left' },
+  )
+
+  assert.equal(result.steps[0]?.message, '立体声拆分单声道自动化已完成。')
+  assert.equal(result.summary, '自动化已完成。保留的轨道：Lead Vox.L')
+})

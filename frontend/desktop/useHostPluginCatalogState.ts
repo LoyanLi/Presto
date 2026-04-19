@@ -100,10 +100,7 @@ export function useHostPluginCatalogState({
       const catalog = await runtime.plugins.list()
       const loaded = await loadHostPlugins({
         catalog,
-        locale: {
-          locale: pluginLocale.resolved,
-          messages: {},
-        },
+        locale: pluginLocale,
         presto: client,
         runtime,
         metricsRecorder: {

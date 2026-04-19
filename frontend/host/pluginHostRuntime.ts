@@ -83,6 +83,43 @@ export interface LoadHostPluginsInput {
   }
 }
 
+function normalizePluginLocaleContext(locale: LoadHostPluginsInput['locale'] | Record<string, unknown> | null | undefined): PluginLocaleContext {
+  const resolved =
+    locale && typeof locale === 'object' && locale.resolved === 'zh-CN'
+      ? 'zh-CN'
+      : locale && typeof locale === 'object' && locale.locale === 'zh-CN'
+        ? 'zh-CN'
+        : 'en'
+  const requested =
+    locale && typeof locale === 'object' && (locale.requested === 'zh-CN' || locale.requested === 'en')
+      ? locale.requested
+      : resolved
+
+  return {
+    requested,
+    resolved,
+  }
+}
+
+function resolvePluginManifest(input: {
+  locale: LoadHostPluginsInput['locale']
+  moduleNamespace?: Record<string, unknown>
+  manifest: PluginRuntimeListResult['plugins'][number]['manifest']
+}): PluginRuntimeListResult['plugins'][number]['manifest'] {
+  const { locale, moduleNamespace, manifest } = input
+  const resolveManifest = moduleNamespace?.resolveManifest
+  if (typeof resolveManifest !== 'function') {
+    return manifest
+  }
+
+  const resolvedManifest = resolveManifest(normalizePluginLocaleContext(locale))
+  if (!resolvedManifest || typeof resolvedManifest !== 'object') {
+    return manifest
+  }
+
+  return resolvedManifest as PluginRuntimeListResult['plugins'][number]['manifest']
+}
+
 function resolveMountedPages(
   mountedPages: MountedPluginPage[],
   manifestPages: ReadonlyArray<{
@@ -286,20 +323,34 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const pages: HostRenderedPluginPage[] = []
   const settingsEntries: HostPluginSettingsEntry[] = []
   const issues: HostPluginIssue[] = input.catalog.issues.map(formatPluginIssue)
-  const pluginRecords = createPluginRecords(input.catalog.plugins)
+  const pluginRecords: HostPluginManagerModel['plugins'] = []
   const storage = createHostPluginStorage()
   const logger = createHostPluginLogger()
   const workflowHost = createPluginWorkflowPageHost(input.runtime)
   const fallbackToolHost = createPluginToolPageHost(input.runtime)
 
   for (const plugin of input.catalog.plugins) {
+    const loaded = plugin.loadable ? await loadRendererPluginModule(plugin.entryPath) : { ok: false }
+    const resolvedManifest = resolvePluginManifest({
+      locale: input.locale,
+      moduleNamespace: loaded.ok ? (loaded.module as Record<string, unknown>) : undefined,
+      manifest: plugin.manifest,
+    })
+    const resolvedPlugin = {
+      ...plugin,
+      displayName: resolvedManifest.displayName,
+      manifest: resolvedManifest,
+      settingsPages: resolvedManifest.settingsPages ?? plugin.settingsPages,
+    }
+    pluginRecords.push(...createPluginRecords([resolvedPlugin]))
+
     if (plugin.enabled === false) {
       continue
     }
 
     const mountedPages = resolveMountedPages(
-      mountPluginPages(plugin.manifest) as MountedPluginPage[],
-      (plugin.manifest.pages ?? []) as ReadonlyArray<{
+      mountPluginPages(resolvedManifest) as MountedPluginPage[],
+      (resolvedManifest.pages ?? []) as ReadonlyArray<{
         pageId: string
         title: string
         mount: 'workspace' | 'tools'
@@ -307,7 +358,6 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       }>,
       plugin.pluginId,
     )
-    const loaded = await loadRendererPluginModule(plugin.entryPath)
     if (!loaded.ok || !loaded.module) {
       const reason = loaded.issue?.reason ?? 'module_import_failed'
       issues.push(
@@ -327,14 +377,14 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
           render: renderPluginLoadFailurePage(page.title, reason),
         })
         if (page.mount === 'workspace') {
-          homeEntries.push(buildWorkflowHomeEntry(plugin, page))
+          homeEntries.push(buildWorkflowHomeEntry(resolvedPlugin, page))
         }
       }
       continue
     }
 
-    const context = createPluginRuntime(plugin.manifest, {
-      locale: input.locale,
+    const context = createPluginRuntime(resolvedManifest, {
+      locale: normalizePluginLocaleContext(input.locale),
       presto: input.presto,
       storage,
       logger,
@@ -363,10 +413,10 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       continue
     }
 
-    ensurePluginStyle(plugin.pluginId, plugin.manifest.styleEntry, plugin.pluginRoot)
+    ensurePluginStyle(plugin.pluginId, resolvedManifest.styleEntry, plugin.pluginRoot)
     const automationRunnerContext = createAutomationRunnerContext(context, input.runtime)
 
-    for (const automationItem of (plugin.manifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {
+    for (const automationItem of (resolvedManifest.automationItems ?? []) as PluginAutomationItemDefinition[]) {
       const runner = loaded.module[automationItem.runnerExport]
       if (typeof runner !== 'function') {
         issues.push(
@@ -406,7 +456,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
               input.runtime,
               createToolRunHost({
                 page,
-                plugin,
+                plugin: resolvedPlugin,
                 moduleNamespace: loaded.module as Record<string, unknown>,
                 context,
                 presto: input.presto,
@@ -424,7 +474,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       })
       pages.push(renderedPage.entry)
       if (page.mount === 'workspace') {
-        homeEntries.push(buildWorkflowHomeEntry(plugin, page))
+        homeEntries.push(buildWorkflowHomeEntry(resolvedPlugin, page))
       }
       if (renderedPage.issueReason) {
         issues.push(
@@ -438,10 +488,10 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
       }
     }
 
-    for (const settingsPage of plugin.settingsPages ?? plugin.manifest.settingsPages ?? []) {
+    for (const settingsPage of resolvedPlugin.settingsPages ?? []) {
       const settingsResult = createSettingsEntry({
         pluginId: plugin.pluginId,
-        extensionType: plugin.manifest.extensionType,
+        extensionType: resolvedManifest.extensionType,
         settingsPage,
         moduleNamespace: loaded.module,
         storage: context.storage,

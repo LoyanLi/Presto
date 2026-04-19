@@ -261,6 +261,20 @@ test('plugin module exports workflow manifest and page export', async () => {
   assert.equal(typeof pluginModule.saveImportWorkflowSettings, 'function')
 })
 
+test('plugin module resolves manifest strings from plugin-local zh-CN messages', async () => {
+  const pluginModule = await loadPluginModule()
+  const localizedManifest = pluginModule.resolveManifest({
+    requested: 'zh-CN',
+    resolved: 'zh-CN',
+  })
+
+  assert.equal(localizedManifest.displayName, '导入流程')
+  assert.equal(localizedManifest.pages[0]?.title, '导入流程')
+  assert.equal(localizedManifest.settingsPages[0]?.sections[1]?.title, '运行默认值')
+  assert.equal(localizedManifest.settingsPages[0]?.sections[1]?.fields[0]?.label, '音频导入方式')
+  assert.equal(localizedManifest.settingsPages[0]?.sections[1]?.fields[0]?.options[0]?.label, '复制到 Audio Files 文件夹')
+})
+
 test('manifest.json stays aligned with module manifest essentials', async () => {
   const pluginModule = await loadPluginModule()
   const raw = await readFile(new URL('../manifest.json', import.meta.url), 'utf8')

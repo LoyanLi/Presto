@@ -1,4 +1,5 @@
 import React from './react-shared.mjs'
+import { tAtmos, translateAtmosPreviewIssue } from './i18n.mjs'
 import {
   buildAtmosMuxRunPreview,
   buildAtmosMuxToolRunRequest,
@@ -15,14 +16,18 @@ import {
 
 const h = React.createElement
 
-const WORKFLOW_STEPS = [
-  { id: 'sources', label: 'Sources' },
-  { id: 'output-review-run', label: 'Output / Review / Run' },
-]
+function createWorkflowSteps(context) {
+  return [
+    { id: 'sources', label: tAtmos(context, 'step.sources') },
+    { id: 'output-review-run', label: tAtmos(context, 'step.outputReviewRun') },
+  ]
+}
 
-const MP4_FILE_PICKER_OPTIONS = Object.freeze({
-  filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-})
+function createMp4FilePickerOptions(context) {
+  return {
+    filters: [{ name: tAtmos(context, 'picker.filterName'), extensions: ['mp4'] }],
+  }
+}
 
 function selectFirstPath(openFn, options) {
   return Promise.resolve(openFn(options)).then((result) => {
@@ -34,7 +39,7 @@ function selectFirstPath(openFn, options) {
 }
 
 function clampStep(step) {
-  return Math.min(Math.max(1, Number(step) || 1), WORKFLOW_STEPS.length)
+  return Math.min(Math.max(1, Number(step) || 1), 2)
 }
 
 function toErrorMessage(error, fallbackMessage) {
@@ -89,7 +94,7 @@ function createEmptyLastRun() {
   }
 }
 
-export function AtmosVideoMuxToolPage({ host }) {
+export function AtmosVideoMuxToolPage({ host, context }) {
   const [step, setStep] = React.useState(1)
   const [videoPath, setVideoPath] = React.useState('')
   const [atmosPath, setAtmosPath] = React.useState('')
@@ -110,8 +115,10 @@ export function AtmosVideoMuxToolPage({ host }) {
     [videoPath, atmosPath, outputDir, allowFpsConversion],
   )
 
-  const reviewTone = runPreview.canRun ? 'success' : 'warning'
+  const workflowSteps = createWorkflowSteps(context)
   const sourceReadyCount = [videoPath, atmosPath].filter(Boolean).length
+  const previewIssues = runPreview.issues.map((issue) => translateAtmosPreviewIssue(context, issue))
+  const reviewTone = runPreview.canRun ? 'success' : 'warning'
   const resultTone =
     lastRun.state === 'succeeded'
       ? 'success'
@@ -122,25 +129,25 @@ export function AtmosVideoMuxToolPage({ host }) {
           : reviewTone
   const resultLabel =
     lastRun.state === 'succeeded'
-      ? 'Completed'
+      ? tAtmos(context, 'status.completed')
       : lastRun.state === 'failed'
-        ? 'Failed'
+        ? tAtmos(context, 'status.failed')
         : isRunning
-          ? 'Running'
+          ? tAtmos(context, 'status.running')
           : runPreview.canRun
-            ? 'Ready to run'
-            : 'Missing required input'
+            ? tAtmos(context, 'status.readyToRun')
+            : tAtmos(context, 'status.missingRequiredInput')
   const resultMessage =
     typeof statusMessage === 'string' && statusMessage.trim()
       ? statusMessage.trim()
       : lastRun.outputPath
-        ? `Output file: ${getPathName(lastRun.outputPath)}`
+        ? tAtmos(context, 'status.outputFile', { fileName: getPathName(lastRun.outputPath) })
         : lastRun.summary
 
   const pickVideo = React.useCallback(async () => {
-    const selectedPath = await selectFirstPath(host.dialog.openFile, MP4_FILE_PICKER_OPTIONS)
+    const selectedPath = await selectFirstPath(host.dialog.openFile, createMp4FilePickerOptions(context))
     if (!selectedPath) {
-      setStatusMessage('Video selection canceled.')
+      setStatusMessage(tAtmos(context, 'status.videoSelectionCanceled'))
       return
     }
 
@@ -148,30 +155,30 @@ export function AtmosVideoMuxToolPage({ host }) {
     if (!outputDir) {
       setOutputDir(inferParentDirectory(selectedPath))
     }
-    setStatusMessage('Video source staged.')
-  }, [host.dialog, outputDir])
+    setStatusMessage(tAtmos(context, 'status.videoStaged'))
+  }, [context, host.dialog, outputDir])
 
   const pickAtmos = React.useCallback(async () => {
-    const selectedPath = await selectFirstPath(host.dialog.openFile, MP4_FILE_PICKER_OPTIONS)
+    const selectedPath = await selectFirstPath(host.dialog.openFile, createMp4FilePickerOptions(context))
     if (!selectedPath) {
-      setStatusMessage('Atmos selection canceled.')
+      setStatusMessage(tAtmos(context, 'status.atmosSelectionCanceled'))
       return
     }
 
     setAtmosPath(selectedPath)
-    setStatusMessage('Atmos source staged.')
-  }, [host.dialog])
+    setStatusMessage(tAtmos(context, 'status.atmosStaged'))
+  }, [context, host.dialog])
 
   const pickOutputDir = React.useCallback(async () => {
     const selectedPath = await selectFirstPath(host.dialog.openDirectory)
     if (!selectedPath) {
-      setStatusMessage('Output directory selection canceled.')
+      setStatusMessage(tAtmos(context, 'status.outputSelectionCanceled'))
       return
     }
 
     setOutputDir(selectedPath)
-    setStatusMessage('Output directory staged.')
-  }, [host.dialog])
+    setStatusMessage(tAtmos(context, 'status.outputStaged'))
+  }, [context, host.dialog])
 
   const goPrevious = React.useCallback(() => {
     setStep((currentStep) => clampStep(currentStep - 1))
@@ -187,7 +194,7 @@ export function AtmosVideoMuxToolPage({ host }) {
     }
 
     setIsRunning(true)
-    setStatusMessage('Running Atmos video mux...')
+    setStatusMessage(tAtmos(context, 'status.runningTool'))
 
     try {
       const response = await host.runTool(
@@ -208,15 +215,15 @@ export function AtmosVideoMuxToolPage({ host }) {
       setLastRun(nextRun)
       setStatusMessage(
         nextRun.outputPath
-          ? `Output file: ${getPathName(nextRun.outputPath)}`
-          : nextRun.summary || 'Atmos video mux finished.',
+          ? tAtmos(context, 'status.outputFile', { fileName: getPathName(nextRun.outputPath) })
+          : nextRun.summary || tAtmos(context, 'status.finished'),
       )
     } catch (error) {
-      setStatusMessage(toErrorMessage(error, 'Atmos video mux failed.'))
+      setStatusMessage(toErrorMessage(error, tAtmos(context, 'status.failedTool')))
     } finally {
       setIsRunning(false)
     }
-  }, [allowFpsConversion, atmosPath, host, isRunning, outputDir, runPreview.canRun, videoPath])
+  }, [allowFpsConversion, atmosPath, context, host, isRunning, outputDir, runPreview.canRun, videoPath])
 
   function renderSourcesStep() {
     return h(
@@ -225,8 +232,8 @@ export function AtmosVideoMuxToolPage({ host }) {
       h(
         WorkflowCard,
         {
-          title: 'Source files',
-          subtitle: 'Stage the mastered picture MP4 and the Dolby Atmos MP4 input.',
+          title: tAtmos(context, 'page.sources.title'),
+          subtitle: tAtmos(context, 'page.sources.subtitle'),
           className: 'tm-panel tm-panel--scroll',
         },
         h(
@@ -235,14 +242,14 @@ export function AtmosVideoMuxToolPage({ host }) {
           h(
             'div',
             { className: 'tm-field' },
-            h('p', { className: 'tm-field-label' }, 'Video MP4'),
+            h('p', { className: 'tm-field-label' }, tAtmos(context, 'field.video')),
             h(
               'div',
               { className: 'tm-field-row tm-field-row--picker' },
               h(WorkflowInput, {
                 readOnly: true,
                 value: videoPath,
-                placeholder: 'Select the mastered video MP4',
+                placeholder: tAtmos(context, 'placeholder.video'),
                 className: 'tm-field-control',
               }),
               h(
@@ -254,24 +261,24 @@ export function AtmosVideoMuxToolPage({ host }) {
                     variant: 'secondary',
                     onClick: pickVideo,
                   },
-                  'Pick video MP4',
+                  tAtmos(context, 'button.pickVideo'),
                 ),
               ),
             ),
-            h('p', { className: 'tm-field-copy' }, 'Pick the mastered picture file that will anchor the mux job.'),
-            videoPath ? null : h('p', { className: 'tm-status-note' }, 'Video source not selected yet.'),
+            h('p', { className: 'tm-field-copy' }, tAtmos(context, 'copy.video')),
+            videoPath ? null : h('p', { className: 'tm-status-note' }, tAtmos(context, 'note.videoMissing')),
           ),
           h(
             'div',
             { className: 'tm-field' },
-            h('p', { className: 'tm-field-label' }, 'Atmos MP4'),
+            h('p', { className: 'tm-field-label' }, tAtmos(context, 'field.atmos')),
             h(
               'div',
               { className: 'tm-field-row tm-field-row--picker' },
               h(WorkflowInput, {
                 readOnly: true,
                 value: atmosPath,
-                placeholder: 'Select the Atmos MP4 source',
+                placeholder: tAtmos(context, 'placeholder.atmos'),
                 className: 'tm-field-control',
               }),
               h(
@@ -283,12 +290,12 @@ export function AtmosVideoMuxToolPage({ host }) {
                     variant: 'secondary',
                     onClick: pickAtmos,
                   },
-                  'Pick Atmos MP4',
+                  tAtmos(context, 'button.pickAtmos'),
                 ),
               ),
             ),
-            h('p', { className: 'tm-field-copy' }, 'Use the official dual-MP4 Atmos input file.'),
-            atmosPath ? null : h('p', { className: 'tm-status-note' }, 'Atmos source not selected yet.'),
+            h('p', { className: 'tm-field-copy' }, tAtmos(context, 'copy.atmos')),
+            atmosPath ? null : h('p', { className: 'tm-status-note' }, tAtmos(context, 'note.atmosMissing')),
           ),
           h(
             'label',
@@ -301,11 +308,11 @@ export function AtmosVideoMuxToolPage({ host }) {
             h(
               'span',
               null,
-              h('span', { className: 'tm-toggle__title' }, 'Allow FPS conversion'),
+              h('span', { className: 'tm-toggle__title' }, tAtmos(context, 'toggle.allowFpsConversion.title')),
               h(
                 'span',
                 { className: 'tm-toggle__hint' },
-                'Convert the video FPS when the source mismatch exceeds 0.01 before muxing.',
+                tAtmos(context, 'toggle.allowFpsConversion.hint'),
               ),
             ),
           ),
@@ -321,21 +328,21 @@ export function AtmosVideoMuxToolPage({ host }) {
       h(
         WorkflowCard,
         {
-          title: 'Output / Review / Run',
-          subtitle: 'Set the output folder, review the staged inputs, and run the mux job.',
+          title: tAtmos(context, 'page.output.title'),
+          subtitle: tAtmos(context, 'page.output.subtitle'),
           className: 'tm-panel tm-panel--scroll',
         },
         h(
           'div',
           { className: 'tm-field' },
-          h('p', { className: 'tm-field-label' }, 'Output directory'),
+          h('p', { className: 'tm-field-label' }, tAtmos(context, 'field.outputDir')),
           h(
             'div',
             { className: 'tm-field-row tm-field-row--picker' },
             h(WorkflowInput, {
               readOnly: true,
               value: outputDir,
-              placeholder: 'Select an output directory',
+              placeholder: tAtmos(context, 'placeholder.outputDir'),
               className: 'tm-field-control',
             }),
             h(
@@ -347,22 +354,22 @@ export function AtmosVideoMuxToolPage({ host }) {
                   variant: 'secondary',
                   onClick: pickOutputDir,
                 },
-                'Pick output directory',
+                tAtmos(context, 'button.pickOutputDir'),
               ),
             ),
           ),
-          h('p', { className: 'tm-field-copy' }, 'Defaults to the video file parent folder until you override it here.'),
+          h('p', { className: 'tm-field-copy' }, tAtmos(context, 'copy.outputDir')),
         ),
-        outputDir ? null : h('p', { className: 'tm-status-note' }, 'Output directory not selected yet.'),
+        outputDir ? null : h('p', { className: 'tm-status-note' }, tAtmos(context, 'note.outputDirMissing')),
         h(
           'div',
           { className: 'tm-summary tm-summary--section' },
           h('div', { className: 'tm-summary__row' }, h(StatusBadge, { tone: resultTone }, resultLabel)),
-          runPreview.issues.length > 0
+          previewIssues.length > 0
             ? h(
                 'ul',
                 { className: 'tm-algorithm' },
-                runPreview.issues.map((issue) => h('li', { key: issue }, issue)),
+                previewIssues.map((issue) => h('li', { key: issue }, issue)),
               )
             : null,
           resultMessage ? h('p', { className: 'tm-status-note' }, resultMessage) : null,
@@ -379,7 +386,7 @@ export function AtmosVideoMuxToolPage({ host }) {
       sticky: false,
     },
     step === 1
-      ? h('span', { className: 'tm-status-note' }, 'Select both source files to continue.')
+      ? h('span', { className: 'tm-status-note' }, tAtmos(context, 'note.selectSources'))
       : h(
           WorkflowButton,
           {
@@ -387,9 +394,9 @@ export function AtmosVideoMuxToolPage({ host }) {
             onClick: goPrevious,
             disabled: isRunning,
           },
-          'Previous',
+          tAtmos(context, 'button.previous'),
         ),
-    step < WORKFLOW_STEPS.length
+    step < workflowSteps.length
       ? h(
           WorkflowButton,
           {
@@ -397,7 +404,7 @@ export function AtmosVideoMuxToolPage({ host }) {
             onClick: goNext,
             disabled: isRunning || sourceReadyCount < 2,
           },
-          'Next: Output / Review / Run',
+          tAtmos(context, 'button.next'),
         )
       : h(
           WorkflowButton,
@@ -406,7 +413,7 @@ export function AtmosVideoMuxToolPage({ host }) {
             onClick: runTool,
             disabled: isRunning || !runPreview.canRun,
           },
-          isRunning ? 'Running...' : 'Run Atmos Mux',
+          isRunning ? tAtmos(context, 'button.running') : tAtmos(context, 'button.run'),
         ),
   )
 
@@ -414,7 +421,7 @@ export function AtmosVideoMuxToolPage({ host }) {
     'section',
     { className: 'tm-shell' },
     h(WorkflowStepper, {
-      steps: WORKFLOW_STEPS,
+      steps: workflowSteps,
       currentStep: step,
       className: 'tm-stepper',
     }),

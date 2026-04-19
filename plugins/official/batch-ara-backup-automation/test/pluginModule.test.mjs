@@ -103,6 +103,34 @@ test('batch ara backup automation requires track hidden and inactive core capabi
   ])
 })
 
+test('batch ara backup automation resolves zh-CN manifest and runner messages inside the plugin', async () => {
+  const pluginModule = await loadPluginModule()
+  const localizedManifest = pluginModule.resolveManifest({
+    requested: 'zh-CN',
+    resolved: 'zh-CN',
+  })
+
+  assert.equal(localizedManifest.displayName, '批量备份重命名')
+  assert.equal(localizedManifest.automationItems[0]?.title, '批量备份重命名')
+  assert.equal(localizedManifest.automationItems[0]?.optionsSchema[0]?.label, '隐藏备份轨道')
+  assert.equal(localizedManifest.automationItems[0]?.optionsSchema[1]?.label, '将备份轨道设为非激活')
+
+  const { context } = createRunnerContext({
+    locale: {
+      requested: 'zh-CN',
+      resolved: 'zh-CN',
+    },
+  })
+  const result = await pluginModule.runBatchAraBackupAutomation(context, {
+    hideBackupTracks: true,
+    makeBackupTracksInactive: true,
+  })
+
+  assert.equal(result.steps[0]?.message, '已读取 2 条源轨道。')
+  assert.equal(result.steps[1]?.message, '已复制当前轨道选择。')
+  assert.equal(result.summary, '已备份 2 条所选轨道，将复制出来的备份轨道重命名为 .bak，并执行隐藏和非激活。')
+})
+
 test('batch ara backup automation runner renames duplicated tracks to .bak before hiding and inactivating them', async () => {
   const pluginModule = await loadPluginModule()
   const { context, calls } = createRunnerContext()

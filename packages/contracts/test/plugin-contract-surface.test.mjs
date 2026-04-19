@@ -57,6 +57,7 @@ test('plugin contracts expose tool plugin page and runner surfaces', async () =>
   assert.match(moduleSource, /execBundled\(/)
   assert.match(moduleSource, /export interface PluginToolRunnerContext extends PluginContext/)
   assert.match(moduleSource, /export type PluginToolRunner =/)
+  assert.match(moduleSource, /resolveManifest\?\(locale:\s*PluginLocaleContext\):\s*PluginManifest/)
 
   assert.match(pluginIndexSource, /PluginExtensionType/)
   assert.match(pluginIndexSource, /PluginToolDefinition/)
