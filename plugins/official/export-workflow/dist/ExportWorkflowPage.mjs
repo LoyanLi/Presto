@@ -20,8 +20,11 @@ import {
   loadExportWorkflowSettings,
   loadSnapshotsFromStorage,
   normalizeSnapshot,
+  renderExportFileNameTemplate,
   saveSnapshotsToStorage,
+  sanitizeExportFileNameComponent,
   summarizeSnapshot,
+  validateExportFileNameTemplate,
   validateSnapshotName,
 } from './workflowCore.mjs'
 
@@ -34,6 +37,26 @@ const FILE_FORMAT_OPTIONS = [
   { value: 'aiff', label: 'AIFF' },
   { value: 'mp3', label: 'MP3' },
 ]
+const EXPORT_FILE_NAME_TEMPLATE_TOKENS = Object.freeze([
+  { token: 'session', labelKey: 'page.token.session', groupKey: 'page.tokenGroup.session' },
+  { token: 'sample_rate', labelKey: 'page.token.sampleRate', groupKey: 'page.tokenGroup.session' },
+  { token: 'bit_depth', labelKey: 'page.token.bitDepth', groupKey: 'page.tokenGroup.session' },
+  { token: 'date', labelKey: 'page.token.date', groupKey: 'page.tokenGroup.date' },
+  { token: 'time', labelKey: 'page.token.time', groupKey: 'page.tokenGroup.date' },
+  { token: 'datetime', labelKey: 'page.token.dateTime', groupKey: 'page.tokenGroup.date' },
+  { token: 'year', labelKey: 'page.token.year', groupKey: 'page.tokenGroup.date' },
+  { token: 'month', labelKey: 'page.token.month', groupKey: 'page.tokenGroup.date' },
+  { token: 'day', labelKey: 'page.token.day', groupKey: 'page.tokenGroup.date' },
+  { token: 'snapshot', labelKey: 'page.token.snapshot', groupKey: 'page.tokenGroup.snapshot' },
+  { token: 'snapshot_index', labelKey: 'page.token.snapshotIndex', groupKey: 'page.tokenGroup.snapshot' },
+  { token: 'snapshot_count', labelKey: 'page.token.snapshotCount', groupKey: 'page.tokenGroup.snapshot' },
+  { token: 'source', labelKey: 'page.token.source', groupKey: 'page.tokenGroup.source' },
+  { token: 'source_index', labelKey: 'page.token.sourceIndex', groupKey: 'page.tokenGroup.source' },
+  { token: 'source_count', labelKey: 'page.token.sourceCount', groupKey: 'page.tokenGroup.source' },
+  { token: 'source_type', labelKey: 'page.token.sourceType', groupKey: 'page.tokenGroup.source' },
+  { token: 'source_suffix', labelKey: 'page.token.sourceSuffix', groupKey: 'page.tokenGroup.source' },
+  { token: 'file_format', labelKey: 'page.token.fileFormat', groupKey: 'page.tokenGroup.export' },
+])
 const MIX_SOURCE_GROUP_ORDER = ['physicalOut', 'bus', 'output', 'renderer']
 const TRACK_LIST_SYNC_MS = 1000
 function buildSnapshotManageColumns(t) {
@@ -63,6 +86,54 @@ function formatMessage(template, values = {}) {
     return ''
   }
   return template.replace(/\{([^}]+)\}/g, (_, key) => String(values[key] ?? ''))
+}
+
+function buildFileNameTemplateTokenOptions(t) {
+  return EXPORT_FILE_NAME_TEMPLATE_TOKENS.map((entry) => ({
+    value: `{${entry.token}}`,
+    label: `${t(entry.labelKey)} · {${entry.token}}`,
+    group: t(entry.groupKey),
+  }))
+}
+
+function parseFileNameTemplateSegments(template) {
+  const normalizedTemplate = String(template ?? '')
+  const segments = []
+  let cursor = 0
+
+  normalizedTemplate.replace(/\{([a-z_]+)\}/g, (match, _token, offset) => {
+    if (offset > cursor) {
+      segments.push({ type: 'text', value: normalizedTemplate.slice(cursor, offset) })
+    }
+    segments.push({ type: 'token', value: match })
+    cursor = offset + match.length
+    return match
+  })
+
+  if (cursor < normalizedTemplate.length) {
+    segments.push({ type: 'text', value: normalizedTemplate.slice(cursor) })
+  }
+
+  return segments.filter((segment) => segment.value !== '')
+}
+
+function readTemplateInputSelection(input) {
+  if (!input || typeof input.selectionStart !== 'number') {
+    return null
+  }
+  const start = Math.max(0, Number(input.selectionStart ?? 0))
+  const end = Math.max(start, Number(input.selectionEnd ?? start))
+  return { start, end }
+}
+
+function restoreTemplateInputSelection(input, selectionRange) {
+  if (!input || !selectionRange || typeof input.setSelectionRange !== 'function') {
+    return
+  }
+  const valueLength = String(input.value ?? '').length
+  const start = Math.max(0, Math.min(Number(selectionRange.start ?? 0), valueLength))
+  const end = Math.max(start, Math.min(Number(selectionRange.end ?? start), valueLength))
+  input.setSelectionRange(start, end)
 }
 
 function getErrorMessage(error, fallbackMessage) {
@@ -1019,6 +1090,9 @@ export function ExportWorkflowPage({ context, host }) {
   const pollTimeoutRef = useRef(null)
   const liveTrackSyncTimeoutRef = useRef(null)
   const initializedSettingsRef = useRef(false)
+  const templateInputRef = useRef(null)
+  const templateSelectionRef = useRef(null)
+  const pendingTemplateSelectionRef = useRef(null)
 
   const browseForOutputPath = useCallback(async () => {
     if (!host || typeof host.pickFolder !== 'function') {
@@ -1060,6 +1134,72 @@ export function ExportWorkflowPage({ context, host }) {
     stopLiveTrackSync()
   }, [stopPolling, stopLiveTrackSync])
 
+  const fileNameTemplateTokenOptions = useMemo(
+    () => [{ value: '', label: t('page.placeholder.selectWildcard') }, ...buildFileNameTemplateTokenOptions(t)],
+    [t],
+  )
+  const fileNameTemplateSegments = useMemo(
+    () => parseFileNameTemplateSegments(settings.file_name_template),
+    [settings.file_name_template],
+  )
+
+  const updateFileNameTemplate = useCallback(
+    (nextTemplate, nextSelection = null) => {
+      const normalizedTemplate = String(nextTemplate ?? '')
+      pendingTemplateSelectionRef.current = nextSelection
+      templateSelectionRef.current = nextSelection
+      setSettings((current) =>
+        String(current.file_name_template ?? '') === normalizedTemplate
+          ? current
+          : {
+              ...current,
+              file_name_template: normalizedTemplate,
+            },
+      )
+    },
+    [],
+  )
+
+  const syncTemplateSelection = useCallback((event) => {
+    const input = event?.currentTarget ?? templateInputRef.current
+    templateSelectionRef.current = readTemplateInputSelection(input)
+  }, [])
+
+  const insertFileNameTemplateToken = useCallback(
+    (tokenValue) => {
+      const value = String(tokenValue ?? '')
+      if (!value) {
+        return
+      }
+      const template = String(settings.file_name_template ?? '')
+      const currentSelection = templateSelectionRef.current
+      const start = Math.max(0, Math.min(Number(currentSelection?.start ?? template.length), template.length))
+      const end = Math.max(start, Math.min(Number(currentSelection?.end ?? start), template.length))
+      const nextTemplate = `${template.slice(0, start)}${value}${template.slice(end)}`
+      const nextOffset = start + value.length
+      updateFileNameTemplate(nextTemplate, { start: nextOffset, end: nextOffset })
+      templateInputRef.current?.focus?.()
+    },
+    [settings.file_name_template, updateFileNameTemplate],
+  )
+
+  const handleFileNameTemplateChange = useCallback(
+    (event) => {
+      const nextTemplate = String(event.target?.value ?? '')
+      const nextSelection = readTemplateInputSelection(event.target)
+      updateFileNameTemplate(nextTemplate, nextSelection)
+    },
+    [updateFileNameTemplate],
+  )
+
+  useEffect(() => {
+    if (!pendingTemplateSelectionRef.current || !templateInputRef.current) {
+      return
+    }
+    restoreTemplateInputSelection(templateInputRef.current, pendingTemplateSelectionRef.current)
+    pendingTemplateSelectionRef.current = null
+  }, [settings.file_name_template])
+
   const selectedSnapshots = useMemo(() => {
     const selected = new Set(selectedSnapshotIds)
     return snapshots.filter((snapshot) => selected.has(snapshot.id))
@@ -1071,6 +1211,36 @@ export function ExportWorkflowPage({ context, host }) {
         .filter((mixSource) => mixSource.name),
     [settings.mix_sources],
   )
+  const fileNamePreviewItem = useMemo(() => {
+    const previewSnapshots = selectedSnapshots.length > 0 ? selectedSnapshots : snapshots
+    const previewMixSources = selectedMixSources
+    const template = String(settings.file_name_template ?? '').trim()
+    const fileFormat = String(settings.file_format ?? 'wav').trim().toLowerCase() || 'wav'
+
+    if (!template || previewSnapshots.length === 0 || previewMixSources.length === 0) {
+      return ''
+    }
+
+    const snapshot = previewSnapshots[0]
+    const mixSource = previewMixSources[0]
+    const renderedName = sanitizeExportFileNameComponent(
+      renderExportFileNameTemplate({
+        template,
+        sessionInfo: sessionModel.session,
+        snapshotName: snapshot?.name,
+        mixSourceName: mixSource?.name,
+        mixSourceType: mixSource?.type,
+        snapshotIndex: 1,
+        snapshotCount: previewSnapshots.length,
+        sourceIndex: 1,
+        sourceCount: previewMixSources.length,
+        totalMixSources: previewMixSources.length,
+        fileFormat,
+      }),
+    )
+
+    return renderedName ? `${renderedName}.${fileFormat}` : ''
+  }, [selectedSnapshots, selectedMixSources, settings.file_format, settings.file_name_template, sessionModel.session, snapshots])
 
   const activeDetailSnapshot = useMemo(
     () => snapshots.find((snapshot) => snapshot.id === detailSnapshotId) || null,
@@ -1198,6 +1368,7 @@ export function ExportWorkflowPage({ context, host }) {
             mix_sources: Array.isArray(current.mix_sources) ? current.mix_sources : [],
             online_export: current.online_export,
             file_format: current.file_format || 'wav',
+            file_name_template: String(current.file_name_template ?? '').trim() || createDefaultExportSettings(sessionInfo).file_name_template,
           }))
           initializedSettingsRef.current = true
         }
@@ -1480,11 +1651,13 @@ export function ExportWorkflowPage({ context, host }) {
   }, [])
 
   const handleStartExport = useCallback(async () => {
+    const resolvedSettings = settings
+
     if (selectedSnapshots.length === 0) {
       setErrorMessage('Select at least one snapshot before starting export.')
       return
     }
-    if (!settings.output_path.trim()) {
+    if (!resolvedSettings.output_path.trim()) {
       setErrorMessage('Choose an output folder before starting export.')
       return
     }
@@ -1492,8 +1665,19 @@ export function ExportWorkflowPage({ context, host }) {
       setErrorMessage('Select at least one mix source before starting export.')
       return
     }
-    if (settings.file_format === 'mp3' && selectedMixSources.length > 1) {
+    if (resolvedSettings.file_format === 'mp3' && selectedMixSources.length > 1) {
       setErrorMessage('MP3 export supports only one mix source.')
+      return
+    }
+    const fileNameTemplateError = validateExportFileNameTemplate({
+      template: resolvedSettings.file_name_template,
+      sessionInfo: sessionModel.session,
+      snapshots: selectedSnapshots,
+      mixSources: selectedMixSources,
+      fileFormat: resolvedSettings.file_format,
+    })
+    if (fileNameTemplateError) {
+      setErrorMessage(fileNameTemplateError)
       return
     }
 
@@ -1506,7 +1690,7 @@ export function ExportWorkflowPage({ context, host }) {
         workflowId: EXPORT_WORKFLOW_ID,
         input: buildExportRunPayload({
           snapshots: selectedSnapshots,
-          settings,
+          settings: resolvedSettings,
         }),
       })
       setCurrentStep(3)
@@ -2088,15 +2272,92 @@ export function ExportWorkflowPage({ context, host }) {
                                           }),
                                       }),
                                       h(
-                                        'label',
+                                        'div',
                                         { className: 'ew-field ew-field-span-2 ew-source-prefix-field' },
-                                        h('span', null, t('page.label.filePrefix')),
-                                        h('input', {
-                                          className: 'ew-input',
-                                          value: settings.file_prefix,
-                                          placeholder: t('page.placeholder.filePrefix'),
-                                          onChange: (event) => setSettings((current) => ({ ...current, file_prefix: event.target.value })),
-                                        }),
+                                        h('span', null, t('page.label.fileNameTemplate')),
+                                        h(
+                                          'div',
+                                          { className: 'ew-template-builder' },
+                                          h(
+                                            WorkflowSelect,
+                                            {
+                                              className: 'ew-template-token-select',
+                                              label: t('page.label.insertWildcard'),
+                                              options: fileNameTemplateTokenOptions,
+                                              defaultValue: '',
+                                              onChange: (event) => {
+                                                const tokenValue = String(event.target.value ?? '')
+                                                if (!tokenValue) {
+                                                  return
+                                                }
+                                                insertFileNameTemplateToken(tokenValue)
+                                                event.target.value = ''
+                                              },
+                                            },
+                                          ),
+                                          h(
+                                            'div',
+                                            { className: 'ew-template-input-shell' },
+                                            h(
+                                              'div',
+                                              { className: 'ew-template-preview', 'aria-hidden': 'true' },
+                                              fileNameTemplateSegments.length > 0
+                                                ? fileNameTemplateSegments.map((segment, index) =>
+                                                    segment.type === 'token'
+                                                      ? h(
+                                                          'span',
+                                                          {
+                                                            key: `${segment.type}-${index}-${segment.value}`,
+                                                            className: 'ew-template-pill ew-template-pill--token',
+                                                            'data-template-value': segment.value,
+                                                          },
+                                                          segment.value,
+                                                        )
+                                                      : h(
+                                                          'span',
+                                                          {
+                                                            key: `${segment.type}-${index}-${segment.value}`,
+                                                            className: 'ew-template-preview__text',
+                                                          },
+                                                          segment.value,
+                                                        ),
+                                                  )
+                                                : h(
+                                                    'span',
+                                                    { className: 'ew-template-preview__placeholder' },
+                                                    t('page.placeholder.fileNameTemplate'),
+                                                  ),
+                                            ),
+                                            h('input', {
+                                              ref: templateInputRef,
+                                              className: 'ew-input ew-template-input',
+                                              type: 'text',
+                                              value: settings.file_name_template,
+                                              placeholder: t('page.placeholder.fileNameTemplate'),
+                                              spellCheck: false,
+                                              onChange: handleFileNameTemplateChange,
+                                              onClick: syncTemplateSelection,
+                                              onFocus: syncTemplateSelection,
+                                              onKeyUp: syncTemplateSelection,
+                                              onSelect: syncTemplateSelection,
+                                            }),
+                                          ),
+                                          h(
+                                            'div',
+                                            { className: 'ew-template-runtime-preview' },
+                                            h('div', { className: 'ew-template-runtime-preview__label' }, t('page.label.fileNamePreview')),
+                                            fileNamePreviewItem
+                                              ? h(
+                                                  'div',
+                                                  {
+                                                    className: 'ew-template-runtime-preview__item',
+                                                    title: fileNamePreviewItem,
+                                                  },
+                                                  h('span', { className: 'ew-template-runtime-preview__value' }, fileNamePreviewItem),
+                                                )
+                                              : h('div', { className: 'ew-template-runtime-preview__empty' }, t('page.value.fileNamePreviewEmpty')),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),

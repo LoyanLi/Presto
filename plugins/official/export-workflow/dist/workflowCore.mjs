@@ -1,4 +1,25 @@
 const EXPORT_WORKFLOW_SETTINGS_KEY = 'settings.v1'
+const DEFAULT_EXPORT_FILE_NAME_TEMPLATE = '{session}_{snapshot}{source_suffix}'
+const SUPPORTED_EXPORT_FILE_NAME_TOKENS = new Set([
+  'session',
+  'sample_rate',
+  'bit_depth',
+  'date',
+  'time',
+  'datetime',
+  'year',
+  'month',
+  'day',
+  'snapshot',
+  'source',
+  'snapshot_index',
+  'snapshot_count',
+  'source_index',
+  'source_count',
+  'source_type',
+  'source_suffix',
+  'file_format',
+])
 
 function normalizePath(value) {
   return String(value ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
@@ -32,8 +53,63 @@ function bareSessionName(sessionInfo) {
   return raw || 'Project'
 }
 
+function normalizeFileNameSourceType(value) {
+  const normalized = String(value ?? 'physicalOut').trim()
+  const compact = normalized.replace(/[-_\s]+/g, '').toLowerCase()
+  if (compact === 'bus') {
+    return 'bus'
+  }
+  if (compact === 'output') {
+    return 'output'
+  }
+  if (compact === 'renderer') {
+    return 'renderer'
+  }
+  return 'physical_out'
+}
+
+function resolveTemplateTimestamp(renderedAt) {
+  if (renderedAt instanceof Date && !Number.isNaN(renderedAt.valueOf())) {
+    return renderedAt
+  }
+  if (typeof renderedAt === 'string' || typeof renderedAt === 'number') {
+    const parsed = new Date(renderedAt)
+    if (!Number.isNaN(parsed.valueOf())) {
+      return parsed
+    }
+  }
+  return new Date()
+}
+
+function padTemplateNumber(value) {
+  return String(value).padStart(2, '0')
+}
+
+function buildTemplateDateParts(renderedAt) {
+  const timestamp = resolveTemplateTimestamp(renderedAt)
+  const year = String(timestamp.getUTCFullYear())
+  const month = padTemplateNumber(timestamp.getUTCMonth() + 1)
+  const day = padTemplateNumber(timestamp.getUTCDate())
+  const hour = padTemplateNumber(timestamp.getUTCHours())
+  const minute = padTemplateNumber(timestamp.getUTCMinutes())
+  const second = padTemplateNumber(timestamp.getUTCSeconds())
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hour}-${minute}-${second}`,
+    datetime: `${year}-${month}-${day}_${hour}-${minute}-${second}`,
+    year,
+    month,
+    day,
+  }
+}
+
 function randomFragment() {
   return Math.random().toString(36).slice(2, 11)
+}
+
+export function sanitizeExportFileNameComponent(value) {
+  return [...String(value ?? '').trim()].filter((char) => /[A-Za-z0-9 _-]/.test(char)).join('').trimEnd()
 }
 
 export function createDefaultExportSettings(sessionInfo) {
@@ -41,7 +117,7 @@ export function createDefaultExportSettings(sessionInfo) {
     file_format: 'wav',
     mix_sources: [],
     online_export: false,
-    file_prefix: `${bareSessionName(sessionInfo)}_`,
+    file_name_template: DEFAULT_EXPORT_FILE_NAME_TEMPLATE,
     output_path: '',
   }
 }
@@ -225,7 +301,7 @@ export function buildExportRunPayload({ snapshots, settings }) {
     mix_source_name: normalizedMixSources[0]?.name ?? String(settings?.mix_source_name ?? '').trim(),
     mix_source_type: normalizedMixSources[0]?.type ?? (String(settings?.mix_source_type ?? 'PhysicalOut').trim() || 'PhysicalOut'),
     online_export: Boolean(settings?.online_export),
-    file_prefix: String(settings?.file_prefix ?? ''),
+    file_name_template: String(settings?.file_name_template ?? '').trim(),
     output_path: String(settings?.output_path ?? '').trim(),
   }
 
@@ -251,6 +327,125 @@ export function buildExportRunPayload({ snapshots, settings }) {
     startTime: null,
     endTime: null,
   }
+}
+
+function collectExportFileNameTokens(template) {
+  const matches = String(template ?? '').matchAll(/\{([a-z_]+)\}/g)
+  return [...matches].map((match) => match[1])
+}
+
+function buildExportFileNameTemplateValues({
+  sessionInfo,
+  snapshotName,
+  mixSourceName,
+  mixSourceType,
+  snapshotIndex,
+  snapshotCount,
+  sourceIndex,
+  sourceCount,
+  totalMixSources,
+  fileFormat,
+  renderedAt,
+}) {
+  const source = String(mixSourceName ?? '').trim()
+  const dateParts = buildTemplateDateParts(renderedAt)
+  return {
+    session: bareSessionName(sessionInfo),
+    sample_rate: String(sessionInfo?.sampleRate ?? sessionInfo?.sample_rate ?? '').trim(),
+    bit_depth: String(sessionInfo?.bitDepth ?? sessionInfo?.bit_depth ?? '').trim(),
+    date: dateParts.date,
+    time: dateParts.time,
+    datetime: dateParts.datetime,
+    year: dateParts.year,
+    month: dateParts.month,
+    day: dateParts.day,
+    snapshot: String(snapshotName ?? '').trim(),
+    source,
+    snapshot_index: String(snapshotIndex),
+    snapshot_count: String(snapshotCount),
+    source_index: String(sourceIndex),
+    source_count: String(sourceCount),
+    source_type: normalizeFileNameSourceType(mixSourceType),
+    source_suffix: totalMixSources > 1 && source ? `_${source}` : '',
+    file_format: String(fileFormat ?? '').trim().toLowerCase(),
+  }
+}
+
+export function renderExportFileNameTemplate({
+  template,
+  sessionInfo,
+  snapshotName,
+  mixSourceName,
+  mixSourceType,
+  snapshotIndex,
+  snapshotCount,
+  sourceIndex,
+  sourceCount,
+  totalMixSources,
+  fileFormat,
+  renderedAt,
+}) {
+  const values = buildExportFileNameTemplateValues({
+    sessionInfo,
+    snapshotName,
+    mixSourceName,
+    mixSourceType,
+    snapshotIndex,
+    snapshotCount,
+    sourceIndex,
+    sourceCount,
+    totalMixSources,
+    fileFormat,
+    renderedAt,
+  })
+  return String(template ?? '').replace(/\{([a-z_]+)\}/g, (_, token) => String(values[token] ?? ''))
+}
+
+export function validateExportFileNameTemplate({ template, sessionInfo, snapshots, mixSources, fileFormat, renderedAt }) {
+  const normalizedTemplate = String(template ?? '').trim()
+  if (!normalizedTemplate) {
+    return 'File name template is required.'
+  }
+
+  const unsupportedToken = collectExportFileNameTokens(normalizedTemplate).find((token) => !SUPPORTED_EXPORT_FILE_NAME_TOKENS.has(token))
+  if (unsupportedToken) {
+    return `Unsupported file name token: {${unsupportedToken}}.`
+  }
+
+  const normalizedSnapshots = Array.isArray(snapshots) ? snapshots : []
+  const normalizedMixSources = Array.isArray(mixSources) && mixSources.length > 0 ? mixSources : [{ name: '', type: 'physicalOut' }]
+  const renderedNames = new Set()
+
+  for (const [snapshotOffset, snapshot] of normalizedSnapshots.entries()) {
+    const snapshotName = String(snapshot?.name ?? '').trim()
+    for (const [sourceOffset, mixSource] of normalizedMixSources.entries()) {
+      const rendered = renderExportFileNameTemplate({
+        template: normalizedTemplate,
+        sessionInfo,
+        snapshotName,
+        mixSourceName: mixSource?.name,
+        mixSourceType: mixSource?.type,
+        snapshotIndex: snapshotOffset + 1,
+        snapshotCount: normalizedSnapshots.length,
+        sourceIndex: sourceOffset + 1,
+        sourceCount: normalizedMixSources.length,
+        totalMixSources: normalizedMixSources.length,
+        fileFormat,
+        renderedAt,
+      })
+      const safeName = sanitizeExportFileNameComponent(rendered)
+      if (!safeName) {
+        return 'File name template must render at least one character.'
+      }
+      const dedupeKey = safeName.toLowerCase()
+      if (renderedNames.has(dedupeKey)) {
+        return 'File name template produces duplicate names. Add {snapshot}, {source}, or an index token.'
+      }
+      renderedNames.add(dedupeKey)
+    }
+  }
+
+  return ''
 }
 
 export function deriveExportJobView(job) {

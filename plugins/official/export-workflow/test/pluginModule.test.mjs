@@ -10,6 +10,23 @@ let pluginModulePromise = null
 function createSharedUiMock() {
   return {
     Select({ label, options = [], className, children, selectProps: _selectProps, startAdornment: _startAdornment, endAdornment: _endAdornment, ...props }) {
+      let previousGroup = ''
+      const optionNodes =
+        children ??
+        options.flatMap((option) => {
+          const nodes = []
+          if (option.group && option.group !== previousGroup) {
+            previousGroup = option.group
+            nodes.push(
+              React.createElement('optgroup', {
+                key: `group:${option.group}`,
+                label: option.group,
+              }),
+            )
+          }
+          nodes.push(React.createElement('option', { key: option.value, value: option.value }, option.label))
+          return nodes
+        })
       return React.createElement(
         'label',
         { className: ['ui-select', className].filter(Boolean).join(' ') },
@@ -17,10 +34,7 @@ function createSharedUiMock() {
         React.createElement(
           'select',
           props,
-          children ??
-            options.map((option) =>
-              React.createElement('option', { key: option.value, value: option.value }, option.label),
-            ),
+          optionNodes,
         ),
       )
     },
@@ -424,6 +438,55 @@ test('main page can render Simplified Chinese through plugin-local locale messag
   assert.match(markup, /轨道列表/)
 })
 
+test('step 3 preview label uses Chinese for generic zh locale variants', async () => {
+  const idleModule = await loadPageModuleWithStateOverrides({
+    1: 3,
+    2: {
+      loading: false,
+      connected: true,
+      session: {
+        sessionName: 'Demo Session',
+        sessionPath: '/Sessions/Demo Session.ptx',
+        sampleRate: 48000,
+        bitDepth: 24,
+      },
+      tracks: [],
+      error: '',
+    },
+    4: [createSampleSnapshot()],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{session}_{snapshot}{source_suffix}',
+      output_path: '/Exports',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+  const markup = renderToStaticMarkup(
+    React.createElement(idleModule.ExportWorkflowPage, {
+      context: {
+        ...createPluginContext(),
+        locale: {
+          requested: 'zh',
+          resolved: 'zh',
+        },
+      },
+      params: {},
+      searchParams: new URLSearchParams(),
+    }),
+  )
+
+  assert.match(markup, /文件名预览/)
+  assert.doesNotMatch(markup, /File Name Preview/)
+})
+
 test('main page renders the formal three-step export workflow shell', async () => {
   const pluginModule = await loadPluginModule()
   const markup = renderToStaticMarkup(
@@ -560,9 +623,21 @@ test('step 2 markup keeps the legacy snapshot details action instead of inline r
   assert.match(markup, />Actions<\/th>/)
 })
 
-test('step 3 markup keeps the legacy export controls and labels', async () => {
+test('step 3 markup keeps the legacy export controls and renders a real template textbox with app-styled wildcard select', async () => {
   const idleModule = await loadPageModuleWithStateOverrides({
     1: 3,
+    2: {
+      loading: false,
+      connected: true,
+      session: {
+        sessionName: 'Demo Session',
+        sessionPath: '/Sessions/Demo Session.ptx',
+        sampleRate: 48000,
+        bitDepth: 24,
+      },
+      tracks: [],
+      error: '',
+    },
     4: [createSampleSnapshot()],
     5: ['snapshot-1'],
     10: {
@@ -572,7 +647,7 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
         { name: 'LV SC (Mono)', type: 'physicalOut' },
       ],
       online_export: false,
-      file_prefix: 'Demo Session_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '/Exports',
     },
     11: [
@@ -618,7 +693,60 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
   assert.match(idleMarkup, /LV SC \(Mono\)/)
   assert.doesNotMatch(idleMarkup, /\\u00A0\\u00A0\\u00A0/)
   assert.doesNotMatch(idleMarkup, /Mix Source Type/)
-  assert.match(idleMarkup, /File Prefix/)
+  assert.match(idleMarkup, /File Name Template/)
+  assert.match(idleMarkup, /ew-template-builder/)
+  assert.match(idleMarkup, /ew-template-input-shell/)
+  assert.match(idleMarkup, /ew-template-preview/)
+  assert.match(idleMarkup, /class="ew-input ew-template-input"/)
+  assert.match(idleMarkup, /placeholder="\{session\}_\{snapshot\}\{source_suffix\}"/)
+  assert.match(idleMarkup, /value="\{session\}_\{snapshot\}\{source_suffix\}"/)
+  assert.match(idleMarkup, /文件名预览/)
+  assert.doesNotMatch(idleMarkup, /File Name Preview/)
+  assert.match(idleMarkup, /ew-template-runtime-preview/)
+  assert.match(idleMarkup, /ew-template-runtime-preview__item/)
+  assert.match(idleMarkup, /Demo Session_Verse Lead_Ref Print\.wav/)
+  assert.doesNotMatch(idleMarkup, /Demo Session_Verse Lead_LV SC Mono\.wav/)
+  assert.doesNotMatch(idleMarkup, /ew-template-runtime-preview__list/)
+  assert.match(idleMarkup, /ew-template-pill ew-template-pill--token/)
+  assert.match(idleMarkup, /data-template-value="\{session\}"/)
+  assert.match(idleMarkup, /data-template-value="\{snapshot\}"/)
+  assert.match(idleMarkup, /data-template-value="\{source_suffix\}"/)
+  assert.match(idleMarkup, /class="ui-select ew-field-control ew-template-token-select"/)
+  assert.match(idleMarkup, /Sample Rate/)
+  assert.match(idleMarkup, /Bit Depth/)
+  assert.match(idleMarkup, /Snapshot Count/)
+  assert.match(idleMarkup, /Source Count/)
+  assert.match(idleMarkup, /Source Type/)
+  assert.match(idleMarkup, /File Format Token/)
+  assert.match(idleMarkup, /Session Tokens/)
+  assert.match(idleMarkup, /Snapshot Tokens/)
+  assert.match(idleMarkup, /Source Tokens/)
+  assert.match(idleMarkup, /Export Tokens/)
+  assert.doesNotMatch(idleMarkup, /Add Text/)
+  assert.doesNotMatch(idleMarkup, /Type separators or custom text/)
+  assert.doesNotMatch(idleMarkup, /Add text or tokens to build the export file name\./)
+  assert.doesNotMatch(idleMarkup, /ew-template-token-bank/)
+  assert.match(idleMarkup, /Insert Wildcard/)
+  assert.match(idleMarkup, /ew-template-token-select[\s\S]*ew-template-input-shell/)
+  assert.match(idleMarkup, /Select a wildcard/)
+  assert.match(idleMarkup, /{session}/)
+  assert.match(idleMarkup, /{snapshot}/)
+  assert.match(idleMarkup, /{source}/)
+  assert.match(idleMarkup, /{sample_rate}/)
+  assert.match(idleMarkup, /{bit_depth}/)
+  assert.match(idleMarkup, /{snapshot_count}/)
+  assert.match(idleMarkup, /{source_count}/)
+  assert.match(idleMarkup, /{source_type}/)
+  assert.match(idleMarkup, /{file_format}/)
+  assert.match(idleMarkup, /{date}/)
+  assert.match(idleMarkup, /{time}/)
+  assert.match(idleMarkup, /{datetime}/)
+  assert.match(idleMarkup, /{year}/)
+  assert.match(idleMarkup, /{month}/)
+  assert.match(idleMarkup, /{day}/)
+  assert.doesNotMatch(idleMarkup, /contenteditable="true"/)
+  assert.doesNotMatch(idleMarkup, /ew-template-editor/)
+  assert.doesNotMatch(idleMarkup, /Supported tokens:/)
   assert.match(idleMarkup, /Output Path/)
   assert.match(idleMarkup, /Online Export/)
   assert.doesNotMatch(idleMarkup, /Export Presets/)
@@ -648,12 +776,218 @@ test('step 3 markup keeps the legacy export controls and labels', async () => {
   assert.doesNotMatch(idleMarkup, /<select class="ew-select"/)
 })
 
-test('export page source reuses plugin shared WorkflowSelect for source and naming controls', async () => {
+test('export page source keeps shared WorkflowSelect for source controls and wildcard insertion, and uses a real template textbox', async () => {
   const source = await readFile('plugins/official/export-workflow/dist/ExportWorkflowPage.mjs', 'utf8')
 
   assert.match(source, /WorkflowSelect/)
-  assert.doesNotMatch(source, /h\(\s*'select'/)
-  assert.match(source, /renderValue/)
+  assert.match(source, /file_name_template/)
+  assert.match(source, /renderExportFileNameTemplate/)
+  assert.match(source, /ew-template-builder/)
+  assert.match(source, /ew-template-input-shell/)
+  assert.match(source, /ew-template-preview/)
+  assert.match(source, /ew-template-runtime-preview/)
+  assert.match(source, /page\.label\.fileNamePreview/)
+  assert.match(source, /ew-template-token-select[\s\S]*ew-template-input-shell|ew-template-input-shell[\s\S]*ew-template-runtime-preview/)
+  assert.doesNotMatch(source, /ew-template-runtime-preview__list/)
+  assert.match(source, /className:\s*'ew-input ew-template-input'/)
+  assert.match(source, /className:\s*'ew-template-token-select'/)
+  assert.match(source, /h\(WorkflowSelect,\s*\{/)
+  assert.match(source, /buildFileNameTemplateTokenOptions/)
+  assert.match(source, /options:\s*fileNameTemplateTokenOptions/)
+  assert.match(source, /selectionStart/)
+  assert.match(source, /setSelectionRange/)
+  assert.match(source, /page\.tokenGroup\.date/)
+  assert.match(source, /page\.token\.dateTime/)
+  assert.doesNotMatch(source, /contentEditable:\s*true/)
+  assert.doesNotMatch(source, /file_prefix/)
+})
+
+test('step 3 wildcard dropdown inserts the selected token at the current textbox caret', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: 3,
+    4: [createSampleSnapshot()],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{session}_mix',
+      output_path: '/Exports',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+
+  try {
+    const tree = pageModule.ExportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const templateInput = findElement(
+      tree,
+      (node) => node.type === 'input' && String(node.props?.className ?? '').includes('ew-template-input'),
+    )
+    const tokenSelect = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && String(node.props?.className ?? '').includes('ew-template-token-select'),
+    )
+
+    assert.ok(templateInput, 'expected real template textbox')
+    assert.ok(tokenSelect, 'expected categorized token select')
+    templateInput.props.onSelect({
+      currentTarget: {
+        selectionStart: '{session}_'.length,
+        selectionEnd: '{session}_'.length,
+      },
+    })
+    tokenSelect.props.onChange({ target: { value: '{file_format}' } })
+
+    const settingsUpdate = stateUpdates.find((update) => update.index === 10)
+    assert.ok(settingsUpdate, 'expected token dropdown change to update export settings state')
+    assert.equal(typeof settingsUpdate.value, 'function')
+
+    const nextSettings = settingsUpdate.value({
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{session}_mix',
+      output_path: '/Exports',
+    })
+
+    assert.equal(nextSettings.file_name_template, '{session}_{file_format}mix')
+  } finally {
+    restore()
+  }
+})
+
+test('step 3 template textbox commits typed text through change events', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: 3,
+    4: [createSampleSnapshot()],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{session}',
+      output_path: '/Exports',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+
+  try {
+    const tree = pageModule.ExportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const templateInput = findElement(
+      tree,
+      (node) => node.type === 'input' && String(node.props?.className ?? '').includes('ew-template-input'),
+    )
+
+    assert.ok(templateInput, 'expected real template textbox')
+    templateInput.props.onChange({ target: { value: '{session}_v2' } })
+
+    const settingsUpdate = stateUpdates.find((update) => update.index === 10)
+    assert.ok(settingsUpdate, 'expected textbox change to update export settings state')
+    assert.equal(typeof settingsUpdate.value, 'function')
+
+    const nextSettings = settingsUpdate.value({
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: '{session}',
+      output_path: '/Exports',
+    })
+
+    assert.equal(nextSettings.file_name_template, '{session}_v2')
+  } finally {
+    restore()
+  }
+})
+
+test('step 3 template textbox tracks caret updates from click and selection events', async () => {
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: 3,
+    4: [createSampleSnapshot()],
+    5: ['snapshot-1'],
+    10: {
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: 'mix_{snapshot}',
+      output_path: '/Exports',
+    },
+    32: {
+      physicalOut: ['Ref Print'],
+      bus: [],
+      output: [],
+      renderer: [],
+    },
+  })
+
+  try {
+    const tree = pageModule.ExportWorkflowPage({
+      context: createPluginContext(),
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+
+    const templateInput = findElement(
+      tree,
+      (node) => node.type === 'input' && String(node.props?.className ?? '').includes('ew-template-input'),
+    )
+    const tokenSelect = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && String(node.props?.className ?? '').includes('ew-template-token-select'),
+    )
+
+    assert.ok(templateInput, 'expected real template textbox')
+    assert.ok(tokenSelect, 'expected wildcard select')
+
+    templateInput.props.onClick({
+      currentTarget: {
+        selectionStart: 3,
+        selectionEnd: 3,
+      },
+    })
+    templateInput.props.onSelect({
+      currentTarget: {
+        selectionStart: 3,
+        selectionEnd: 3,
+      },
+    })
+    tokenSelect.props.onChange({ target: { value: '{date}' } })
+
+    const settingsUpdate = stateUpdates.find((update) => update.index === 10)
+    assert.ok(settingsUpdate, 'expected caret-based insert to update export settings state')
+    assert.equal(typeof settingsUpdate.value, 'function')
+
+    const nextSettings = settingsUpdate.value({
+      file_format: 'wav',
+      mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
+      online_export: false,
+      file_name_template: 'mix_{snapshot}',
+      output_path: '/Exports',
+    })
+
+    assert.equal(nextSettings.file_name_template, 'mix{date}_{snapshot}')
+  } finally {
+    restore()
+  }
 })
 
 test('step 3 browse action uses host folder picking to update the output path', async () => {
@@ -665,7 +999,7 @@ test('step 3 browse action uses host folder picking to update the output path', 
       file_format: 'wav',
       mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
       online_export: false,
-      file_prefix: 'Demo Session_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '',
     },
     32: {
@@ -710,7 +1044,7 @@ test('step 3 browse action uses host folder picking to update the output path', 
       file_format: 'wav',
       mix_sources: [{ name: 'Ref Print', type: 'physicalOut' }],
       online_export: false,
-      file_prefix: 'Demo Session_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '',
     })
 
@@ -732,7 +1066,7 @@ test('step 3 progress panel stays backend-driven and omits mobile-progress runti
       file_format: 'wav',
       mix_sources: [{ name: 'Ref Print (Stereo)', type: 'physicalOut' }],
       online_export: false,
-      file_prefix: 'Demo Session_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '/Exports',
     },
     14: createRunningJobView(),
@@ -772,7 +1106,7 @@ test('step 3 keeps export result visible after completion instead of jumping bac
       file_format: 'wav',
       mix_sources: [{ name: 'Ref Print (Stereo)', type: 'physicalOut' }],
       online_export: false,
-      file_prefix: 'Demo Session_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '/Exports',
     },
     14: createRunningJobView({
@@ -887,7 +1221,7 @@ test('export page source preserves current export workflow labels and modal surf
   assert.match(source, /group:\s*groupLabel/)
   assert.doesNotMatch(source, /\\u00A0\\u00A0\\u00A0/)
   assert.doesNotMatch(source, /page\.label\.mixSourceGroup/)
-  assert.match(source, /page\.label\.filePrefix/)
+  assert.match(source, /page\.label\.fileNameTemplate/)
   assert.match(source, /page\.label\.outputPath/)
   assert.match(source, /host\.pickFolder\(\)/)
   assert.match(source, /page\.button\.browse/)
@@ -991,6 +1325,24 @@ test('export css keeps import-style shell classes for cards, sections, and modal
   assert.doesNotMatch(cssSource, /\.ew-overlay-panel/)
   assert.doesNotMatch(cssSource, /\.ew-storage-callout/)
   assert.doesNotMatch(cssSource, /\.ew-preset-launch-row/)
+})
+
+test('export css keeps the filename template control styled as a real textbox', async () => {
+  const cssSource = await readFile(new URL('../dist/export-workflow.css', import.meta.url), 'utf8')
+
+  assert.match(cssSource, /\.ew-template-builder\s*\{/)
+  assert.match(cssSource, /\.ew-template-input-shell\s*\{/)
+  assert.match(cssSource, /\.ew-template-preview\s*\{/)
+  assert.match(cssSource, /\.ew-template-runtime-preview\s*\{/)
+  assert.match(cssSource, /\.ew-template-runtime-preview__item\s*\{/)
+  assert.match(cssSource, /\.ew-template-input-shell:focus-within\s+\.ew-template-input::selection\s*\{/)
+  assert.match(cssSource, /background:\s*color-mix\(in srgb,\s*var\(--ew-color-primary\)/)
+  assert.doesNotMatch(cssSource, /text-transform:\s*uppercase;/)
+  assert.doesNotMatch(cssSource, /\.ew-template-runtime-preview__list\s*\{/)
+  assert.match(cssSource, /\.ew-template-input\s*\{/)
+  assert.match(cssSource, /\.ew-template-token-select\s+\.ew-select,/)
+  assert.match(cssSource, /\.ew-template-pill\s*\{/)
+  assert.doesNotMatch(cssSource, /\.ew-template-editor\s*\{/)
 })
 
 test('export css keeps the plugin stepper horizontal on narrow widths and truncates tables instead of enabling horizontal scroll', async () => {

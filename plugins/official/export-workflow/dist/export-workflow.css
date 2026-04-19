@@ -395,6 +395,114 @@
   align-content: start;
 }
 
+.ew-template-builder {
+  display: grid;
+  gap: 10px;
+}
+
+.ew-template-runtime-preview {
+  display: grid;
+  gap: 6px;
+}
+
+.ew-template-runtime-preview__label {
+  color: var(--ew-color-on-surface-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.ew-template-runtime-preview__item {
+  min-width: 0;
+}
+
+.ew-template-runtime-preview__value,
+.ew-template-runtime-preview__empty {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ew-template-runtime-preview__value {
+  color: var(--ew-color-on-surface);
+}
+
+.ew-template-runtime-preview__empty {
+  color: var(--ew-color-on-surface-muted);
+}
+
+.ew-template-input-shell {
+  position: relative;
+}
+
+.ew-template-preview {
+  position: absolute;
+  inset: 1px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ew-template-preview__text {
+  color: var(--ew-color-on-surface);
+  white-space: pre;
+}
+
+.ew-template-preview__placeholder {
+  color: var(--ew-color-on-surface-muted);
+}
+
+.ew-template-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ew-color-primary) 10%, var(--ew-color-surface) 90%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ew-color-outline) 22%, transparent);
+  color: var(--ew-color-on-surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ew-template-input {
+  font-variant-ligatures: none;
+}
+
+.ew-template-input-shell .ew-template-input {
+  position: relative;
+  z-index: 2;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+}
+
+.ew-template-input-shell .ew-template-input::selection {
+  color: transparent;
+}
+
+.ew-template-input-shell:focus-within .ew-template-preview {
+  opacity: 0;
+}
+
+.ew-template-input-shell:focus-within .ew-template-input {
+  color: var(--ew-color-on-surface);
+  caret-color: var(--ew-color-on-surface);
+}
+
+.ew-template-input-shell:focus-within .ew-template-input::selection {
+  color: var(--ew-color-on-surface);
+  background: color-mix(in srgb, var(--ew-color-primary) 24%, transparent);
+}
+
 .ew-form-grid--single {
   grid-template-columns: 1fr;
 }
@@ -463,7 +571,12 @@
   font: inherit;
 }
 
-.ew-source-prefix-field .ew-input,
+.ew-source-format-field .ew-select,
+.ew-template-token-select .ew-select,
+.ew-mix-source-row .ew-select {
+  min-height: 46px;
+}
+
 .ew-source-format-field .ew-select,
 .ew-mix-source-row .ew-select {
   min-height: 46px;

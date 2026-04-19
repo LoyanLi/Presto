@@ -13,17 +13,19 @@ import {
   saveExportWorkflowSettings,
   mergeExportWorkflowSettings,
   normalizePreset,
+  renderExportFileNameTemplate,
   summarizeSnapshot,
+  validateExportFileNameTemplate,
   validatePresetName,
   validateSnapshotName,
 } from '../dist/workflowCore.mjs'
 
-test('createDefaultExportSettings uses the current session name as the prefix seed', () => {
+test('createDefaultExportSettings uses a tokenized filename template seed', () => {
   const settings = createDefaultExportSettings({
     sessionName: 'Album Mix.ptx',
   })
 
-  assert.equal(settings.file_prefix, 'Album Mix_')
+  assert.equal(settings.file_name_template, '{session}_{snapshot}{source_suffix}')
   assert.equal(settings.file_format, 'wav')
   assert.deepEqual(settings.mix_sources, [])
 })
@@ -68,18 +70,62 @@ test('buildExportRunPayload emits exportSettings with snake_case track flags pre
       mix_source_name: 'Out 1-2',
       mix_source_type: 'PhysicalOut',
       online_export: false,
-      file_prefix: 'Mix_',
+      file_name_template: '{session}_{snapshot}{source_suffix}',
       output_path: '/Users/test/Exports',
     },
   })
 
   assert.equal(payload.exportSettings.file_format, 'wav')
   assert.equal(payload.exportSettings.mix_source_type, 'PhysicalOut')
+  assert.equal(payload.exportSettings.file_name_template, '{session}_{snapshot}{source_suffix}')
   assert.equal(payload.startTime, null)
   assert.equal(payload.endTime, null)
   assert.equal(payload.snapshots[0]?.trackStates[0]?.is_muted, true)
   assert.equal(payload.snapshots[0]?.trackStates[0]?.is_soloed, false)
   assert.equal('export_settings' in payload, false)
+})
+
+test('extended export filename wildcards render stable session, snapshot, source, and export metadata', () => {
+  const rendered = renderExportFileNameTemplate({
+    template: '{session}_{sample_rate}_{bit_depth}_{snapshot_index}_{snapshot_count}_{source_index}_{source_count}_{source_type}_{file_format}_{date}_{time}_{datetime}_{year}_{month}_{day}',
+    sessionInfo: {
+      sessionName: 'Album Mix.ptx',
+      sampleRate: 96000,
+      bitDepth: 32,
+    },
+    snapshotName: 'Verse',
+    mixSourceName: 'Ref Print',
+    mixSourceType: 'physicalOut',
+    snapshotIndex: 2,
+    snapshotCount: 5,
+    sourceIndex: 3,
+    sourceCount: 4,
+    totalMixSources: 4,
+    fileFormat: 'wav',
+    renderedAt: '2026-04-18T13:14:15Z',
+  })
+
+  assert.equal(rendered, 'Album Mix_96000_32_2_5_3_4_physical_out_wav_2026-04-18_13-14-15_2026-04-18_13-14-15_2026_04_18')
+})
+
+test('extended export filename wildcards validate without collisions', () => {
+  const validationMessage = validateExportFileNameTemplate({
+    template: '{session}_{snapshot_count}_{source_count}_{source_type}_{file_format}_{date}_{snapshot_index}_{source_index}',
+    sessionInfo: {
+      sessionName: 'Album Mix.ptx',
+      sampleRate: 48000,
+      bitDepth: 24,
+    },
+    snapshots: [{ name: 'Verse' }, { name: 'Bridge' }],
+    mixSources: [
+      { name: 'Ref Print', type: 'physicalOut' },
+      { name: 'Printmaster', type: 'bus' },
+    ],
+    fileFormat: 'wav',
+    renderedAt: '2026-04-18T13:14:15Z',
+  })
+
+  assert.equal(validationMessage, '')
 })
 
 test('deriveExportJobView maps backend job metadata and completed_with_errors result', () => {
