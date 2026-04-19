@@ -124,28 +124,109 @@ test('runs surface renders translated command labels and ranked usage sections',
   )
 
   assert.match(markup, />Runs</)
+  assert.match(markup, /Workflow runs/)
+  assert.match(markup, /Automation runs/)
+  assert.match(markup, /Tool runs/)
+  assert.match(markup, /Command runs/)
+  assert.match(markup, /Import Workflow/)
   assert.match(markup, /Run Workflow/)
-  assert.match(markup, /Analyze Import Source/)
-  assert.match(markup, /Workflow ranking/)
-  assert.match(markup, /Automation ranking/)
-  assert.match(markup, /Tool ranking/)
-  assert.match(markup, /Command ranking/)
-  assert.doesNotMatch(markup, /COUNT/)
-  assert.doesNotMatch(markup, /presto-stat-chip/)
-  assert.doesNotMatch(markup, /presto-page-header/)
-  assert.doesNotMatch(markup, /Run metrics/)
-  assert.doesNotMatch(markup, /Most-used workflow/)
-  assert.doesNotMatch(markup, /Most-used automation/)
-  assert.doesNotMatch(markup, /Most-used command/)
-  assert.doesNotMatch(markup, /Successful usage totals/)
-  assert.doesNotMatch(markup, /max-width:1120px/)
+  assert.match(markup, /Choose a category to inspect the ranking details/)
+  assert.doesNotMatch(markup, /Workflow ranking/)
+  assert.doesNotMatch(markup, /Automation ranking/)
+  assert.doesNotMatch(markup, /Tool ranking/)
+  assert.doesNotMatch(markup, /Command ranking/)
 })
 
-test('runs surface renders translated workflow-step command labels in zh-CN', async () => {
+test('runs surface renders a single detail ranking with tab switching instead of four parallel lists', async () => {
+  const { HostRunsSurfaceView } = await loadRunsSurface()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostRunsSurfaceView, {
+      locale: 'en',
+      initialView: 'command',
+      summary: {
+        totals: { workflowRuns: 3, automationRuns: 1, toolRuns: 1, commandRuns: 4 },
+        topWorkflow: {
+          key: 'official.import-workflow.run',
+          label: 'Import Workflow',
+          count: 3,
+          lastUsedAt: '2026-04-12T12:00:00.000Z',
+        },
+        topAutomation: {
+          key: 'official.batch-ara-backup:run',
+          label: 'Batch ARA Backup',
+          count: 1,
+          lastUsedAt: '2026-04-12T11:00:00.000Z',
+        },
+        topTool: {
+          key: 'installed.audio-tools:ec3-decode',
+          label: 'EC3 Decode',
+          count: 1,
+          lastUsedAt: '2026-04-12T10:30:00.000Z',
+        },
+        topCommand: {
+          key: 'workflow.run.start',
+          count: 2,
+          lastUsedAt: '2026-04-12T10:00:00.000Z',
+        },
+        workflows: [
+          {
+            key: 'official.import-workflow.run',
+            label: 'Import Workflow',
+            count: 3,
+            lastUsedAt: '2026-04-12T12:00:00.000Z',
+          },
+        ],
+        automations: [
+          {
+            key: 'official.batch-ara-backup:run',
+            label: 'Batch ARA Backup',
+            count: 1,
+            lastUsedAt: '2026-04-12T11:00:00.000Z',
+          },
+        ],
+        tools: [
+          {
+            key: 'installed.audio-tools:ec3-decode',
+            label: 'EC3 Decode',
+            count: 1,
+            lastUsedAt: '2026-04-12T10:30:00.000Z',
+          },
+        ],
+        commands: [
+          {
+            key: 'workflow.run.start',
+            count: 2,
+            lastUsedAt: '2026-04-12T10:00:00.000Z',
+          },
+          {
+            key: 'daw.import.analyze',
+            count: 2,
+            lastUsedAt: '2026-04-12T09:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  )
+
+  assert.match(markup, /Back to overview/)
+  assert.match(markup, /Workflow runs \(3\)/)
+  assert.match(markup, /Automation runs \(1\)/)
+  assert.match(markup, /Tool runs \(1\)/)
+  assert.match(markup, /Command runs \(4\)/)
+  assert.match(markup, /Command ranking/)
+  assert.match(markup, /Run Workflow/)
+  assert.match(markup, /Analyze Import Source/)
+  assert.doesNotMatch(markup, />Workflow ranking</)
+  assert.doesNotMatch(markup, />Automation ranking</)
+  assert.doesNotMatch(markup, />Tool ranking</)
+})
+
+test('runs surface renders translated workflow-step command labels in zh-CN detail mode', async () => {
   const { HostRunsSurfaceView } = await loadRunsSurface()
   const markup = renderToStaticMarkup(
     React.createElement(HostRunsSurfaceView, {
       locale: 'zh-CN',
+      initialView: 'command',
       summary: {
         totals: { workflowRuns: 1, automationRuns: 0, toolRuns: 1, commandRuns: 2 },
         topWorkflow: {
@@ -205,9 +286,9 @@ test('runs surface renders translated workflow-step command labels in zh-CN', as
   assert.doesNotMatch(markup, /selectAllOnTrack/)
 })
 
-test('runs surface keeps partially empty ranking sections within the same card language', async () => {
+test('runs surface keeps partially empty categories inside overview cards and detail lists', async () => {
   const { HostRunsSurfaceView } = await loadRunsSurface()
-  const markup = renderToStaticMarkup(
+  const overviewMarkup = renderToStaticMarkup(
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
       summary: {
@@ -234,19 +315,46 @@ test('runs surface keeps partially empty ranking sections within the same card l
     }),
   )
 
-  assert.equal((markup.match(/surface-container-low/g) || []).length, 4)
-  assert.match(markup, /Workflow ranking/)
-  assert.match(markup, /Automation ranking/)
-  assert.match(markup, /Tool ranking/)
-  assert.match(markup, /Command ranking/)
-  assert.match(markup, /No data yet/)
+  const detailMarkup = renderToStaticMarkup(
+    React.createElement(HostRunsSurfaceView, {
+      locale: 'en',
+      initialView: 'workflow',
+      summary: {
+        totals: { workflowRuns: 0, automationRuns: 0, toolRuns: 0, commandRuns: 2 },
+        topWorkflow: null,
+        topAutomation: null,
+        topTool: null,
+        topCommand: {
+          key: 'workflow.run.start',
+          count: 2,
+          lastUsedAt: '2026-04-12T10:00:00.000Z',
+        },
+        workflows: [],
+        automations: [],
+        tools: [],
+        commands: [
+          {
+            key: 'workflow.run.start',
+            count: 2,
+            lastUsedAt: '2026-04-12T10:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  )
+
+  assert.match(overviewMarkup, /No successful runs yet/)
+  assert.match(overviewMarkup, /Command runs/)
+  assert.match(detailMarkup, /Workflow ranking/)
+  assert.match(detailMarkup, /No data yet/)
 })
 
-test('runs surface keeps a strict three-column-or-one-column grid and confines scrolling to card bodies', async () => {
+test('runs surface keeps overview and detail scrolling inside the content region', async () => {
   const { HostRunsSurfaceView } = await loadRunsSurface()
   const markup = renderToStaticMarkup(
     React.createElement(HostRunsSurfaceView, {
       locale: 'en',
+      initialView: 'workflow',
       summary: {
         totals: { workflowRuns: 6, automationRuns: 4, toolRuns: 2, commandRuns: 8 },
         topWorkflow: {
@@ -325,12 +433,11 @@ test('runs surface keeps a strict three-column-or-one-column grid and confines s
   )
 
   assert.match(markup, /grid-template-rows:auto minmax\(0, 1fr\)/)
-  assert.match(markup, /grid-auto-rows:minmax\(0, 1fr\)/)
-  assert.match(markup, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/)
   assert.match(markup, /container-type:inline-size/)
-  assert.match(markup, /@container \(max-width: 759px\)/)
-  assert.match(markup, /grid-template-columns:\s*minmax\(0, 1fr\)/)
-  assert.doesNotMatch(markup, /auto-fit/)
   assert.match(markup, /overflow:hidden/)
-  assert.equal((markup.match(/overflow-y:auto/g) || []).length, 4)
+  assert.match(markup, /overflow-y:auto/)
+  assert.match(markup, /Workflow ranking/)
+  assert.doesNotMatch(markup, /Automation ranking/)
+  assert.doesNotMatch(markup, /Tool ranking/)
+  assert.doesNotMatch(markup, /Command ranking/)
 })

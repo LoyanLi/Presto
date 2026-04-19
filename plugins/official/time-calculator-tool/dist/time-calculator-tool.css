@@ -1,0 +1,114 @@
+.tc-shell {
+  min-height: 0;
+  height: 100%;
+  display: block;
+}
+
+.tc-grid {
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+}
+
+.tc-panel .ui-panel__body {
+  display: grid;
+  gap: 16px;
+}
+
+.tc-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tc-stat-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tc-stat-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.tc-stat-grid--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tc-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--presto-color-outline, rgba(188, 195, 208, 0.9)) 82%, transparent);
+  background: color-mix(in srgb, var(--presto-color-surface, rgba(255, 255, 255, 0.94)) 96%, transparent);
+}
+
+.tc-stat__label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--presto-color-text-muted, rgba(80, 88, 102, 0.95));
+}
+
+.tc-stat__value {
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.tc-section-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--presto-color-text-muted, rgba(80, 88, 102, 0.95));
+}
+
+.tc-duration-list {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.tc-duration-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--presto-color-outline, rgba(188, 195, 208, 0.9)) 60%, transparent);
+}
+
+.tc-duration-row:last-child {
+  border-bottom: 0;
+}
+
+.tc-duration-row__label {
+  font-weight: 600;
+}
+
+.tc-duration-row__value {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1080px) {
+  .tc-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .tc-form-grid,
+  .tc-stat-grid,
+  .tc-stat-grid--triple {
+    grid-template-columns: 1fr;
+  }
+}

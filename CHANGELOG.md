@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.9
+
+- `Runs` 页面交互改为“默认总览 -> 单类详情”：默认先显示 `workflow`、`automation`、`tool`、`command` 四类总览卡片，进入详情后只保留单一榜单，并通过顶部 tabs 在各类别之间切换。
+- `Runs` 页面总览卡片现在直接显示每类累计次数、当前最高频项和最近使用时间，避免四份榜单同时展开造成信息层级膨胀。
+- 新增官方 `official.time-calculator-tool`，作为纯前端 `tool` 插件参考实现：不依赖 runner、不声明 capability，直接在 `Tools` 页提供 `BPM -> Time`、`Time -> BPM` 与 `Reverb / Pre-delay` 计算。
+- `official.time-calculator-tool` 使用插件内部本地化和独立样式，并把常用时值列表限制为卡片内滚动区域，避免工具页继续拉长。
+
 ## 0.3.8
 
 - 正式引入 `tool` 插件类型：contracts、host runtime、Tauri runtime 和插件装配链现在都把 `Tools` 作为一等表面，支持 `tool.run`、受限 `dialog/fs/shell` 页面 host 和 `process.execBundled` runner 闭环。

@@ -2,8 +2,8 @@
 
 Presto 是一个面向 DAW 工作流的 macOS 桌面应用。它把插件页面、workflow 入口和自动化执行收进同一个桌面工作区，让高频工程操作可以用更稳定、更清晰的方式重复执行；当前正式支持落地的 DAW 是 `Pro Tools`。
 
-当前正式版本：`0.3.8`
-发布说明：[docs/releases/v0.3.8-release.md](docs/releases/v0.3.8-release.md)
+当前正式版本：`0.3.9`
+发布说明：[docs/releases/v0.3.9-release.md](docs/releases/v0.3.9-release.md)
 
 ## 界面预览
 

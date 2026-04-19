@@ -10,6 +10,7 @@
 | `official.export-workflow` | `workflow` | 有 | 有 | 有 | 轻量 workflow、快照管理、导出 job 流程 |
 | `official.split-stereo-to-mono-automation` | `automation` | 无 | 无 | 无 | 最小 automation、单 capability 自动化入口 |
 | `official.atmos-video-mux-tool` | `tool` | 有（`Tools`） | 扩展管理独立于 workflow | 无 | 独立工具页、bundled process、本地工具链编排 |
+| `official.time-calculator-tool` | `tool` | 有（`Tools`） | 扩展管理独立于 workflow | 无 | 纯前端工具页、本地化、轻量计算逻辑 |
 
 ## 2. `official.import-workflow`
 
@@ -135,8 +136,35 @@
 先看：
 
 1. `official.atmos-video-mux-tool`
+2. `official.time-calculator-tool`
 
-## 7. 不应该参考什么
+## 7. `official.time-calculator-tool`
+
+路径：
+
+- `plugins/official/time-calculator-tool/manifest.json`
+- `plugins/official/time-calculator-tool/dist/entry.mjs`
+- `plugins/official/time-calculator-tool/dist/TimeCalculatorToolPage.mjs`
+- `plugins/official/time-calculator-tool/dist/toolCore.mjs`
+
+这个插件展示了另一类 tool 标准：不需要 runner 的纯前端工具页。
+
+它当前覆盖这些事实：
+
+- `extensionType: "tool"` 且 `supportedDaws: []`
+- 页面 `mount: "tools"`，只在 `Tools` 区域出现
+- 没有 `tools[] runner`、没有 `requiredCapabilities`，页面逻辑完全在浏览器侧完成
+- 插件内部自带本地化，不把文案写回宿主壳层
+- 把计算逻辑放进独立 `toolCore.mjs`，页面只负责状态和展示
+- 工具页采用紧凑卡片布局，`COMMON DURATIONS` 这类长列表限制在卡片内滚动，而不是继续拉长整个页面
+
+它适合做这些场景的参考：
+
+- 纯计算或纯格式转换工具
+- 不依赖 DAW、文件系统、shell 或 bundled process 的 tool 插件
+- 需要插件自带本地化和轻量测试的独立工具页
+
+## 8. 不应该参考什么
 
 以下内容不要当成插件正式标准：
 

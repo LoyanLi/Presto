@@ -1,7 +1,7 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 
-import { EmptyState } from '../ui'
+import { Button, EmptyState, Tabs } from '../ui'
 import { hostShellColors } from './hostShellColors'
 import type { HostLocale } from './i18n'
 import { formatCapabilityLabel, translateHost } from './i18n'
@@ -13,16 +13,18 @@ import {
   type HostRunMetricsSummary,
 } from './hostRunMetrics'
 
-const runsSurfaceClassName = 'host-runs-surface'
-const runsSurfaceGridClassName = 'host-runs-surface__grid'
+type RunMetricKind = 'workflow' | 'automation' | 'tool' | 'command'
+type RunsSurfaceViewMode = 'overview' | RunMetricKind
+
+const runsSurfaceOverviewGridClassName = 'host-runs-surface__overview-grid'
 
 const runsSurfaceResponsiveStyles = `
-.${runsSurfaceGridClassName} {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.${runsSurfaceOverviewGridClassName} {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @container (max-width: 759px) {
-  .${runsSurfaceGridClassName} {
+  .${runsSurfaceOverviewGridClassName} {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -39,11 +41,9 @@ const pageStyle: CSSProperties = {
   containerType: 'inline-size',
 }
 
-const titleBarStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 16,
+const headerStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
   minWidth: 0,
 }
 
@@ -55,13 +55,119 @@ const titleStyle: CSSProperties = {
   letterSpacing: '-0.03em',
 }
 
-const gridStyle: CSSProperties = {
+const bodyStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.textMuted,
+  fontSize: 14,
+  lineHeight: 1.6,
+  maxWidth: 760,
+}
+
+const contentStyle: CSSProperties = {
+  minWidth: 0,
+  minHeight: 0,
+  height: '100%',
+  overflow: 'hidden',
+}
+
+const overviewLayoutStyle: CSSProperties = {
   display: 'grid',
-  gridAutoRows: 'minmax(0, 1fr)',
+  gridTemplateRows: 'auto auto',
+  alignContent: 'start',
   gap: 16,
   minWidth: 0,
   minHeight: 0,
   height: '100%',
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  scrollbarGutter: 'stable',
+}
+
+const overviewGridStyle: CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  alignContent: 'start',
+}
+
+const overviewCardStyle: CSSProperties = {
+  appearance: 'none',
+  display: 'grid',
+  gap: 12,
+  width: '100%',
+  padding: 22,
+  border: `1px solid ${hostShellColors.border}`,
+  borderRadius: 24,
+  background: hostShellColors.surfaceMuted,
+  color: hostShellColors.text,
+  textAlign: 'left',
+  cursor: 'pointer',
+}
+
+const overviewCardLabelStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.textMuted,
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+}
+
+const overviewCardValueStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.text,
+  fontSize: 34,
+  fontWeight: 600,
+  lineHeight: 1,
+}
+
+const overviewCardMetaStyle: CSSProperties = {
+  display: 'grid',
+  gap: 4,
+}
+
+const overviewCardTopStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.text,
+  fontSize: 16,
+  fontWeight: 600,
+  lineHeight: 1.45,
+}
+
+const overviewCardHintStyle: CSSProperties = {
+  margin: 0,
+  color: hostShellColors.textMuted,
+  fontSize: 13,
+  lineHeight: 1.5,
+}
+
+const overviewHintStyle: CSSProperties = {
+  padding: 20,
+  borderRadius: 24,
+  border: `1px solid ${hostShellColors.border}`,
+  background: hostShellColors.surfaceMuted,
+}
+
+const detailLayoutStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateRows: 'auto minmax(0, 1fr)',
+  gap: 16,
+  minWidth: 0,
+  minHeight: 0,
+  height: '100%',
+}
+
+const detailToolbarStyle: CSSProperties = {
+  display: 'grid',
+  gap: 12,
+  minWidth: 0,
+}
+
+const detailTabsWrapStyle: CSSProperties = {
+  minWidth: 0,
+  padding: 8,
+  borderRadius: 24,
+  border: `1px solid ${hostShellColors.border}`,
+  background: hostShellColors.surfaceMuted,
 }
 
 const sectionCardStyle: CSSProperties = {
@@ -189,6 +295,50 @@ const sectionEmptyStateBodyStyle: CSSProperties = {
   lineHeight: 1.45,
 }
 
+const runSectionDefinitions: readonly {
+  id: RunMetricKind
+  totalKey: 'workflowRuns' | 'automationRuns' | 'toolRuns' | 'commandRuns'
+  totalLabelKey: 'runs.total.workflows' | 'runs.total.automations' | 'runs.total.tools' | 'runs.total.commands'
+  listTitleKey: 'runs.list.workflows' | 'runs.list.automations' | 'runs.list.tools' | 'runs.list.commands'
+  summaryKey: 'workflows' | 'automations' | 'tools' | 'commands'
+  topKey: 'topWorkflow' | 'topAutomation' | 'topTool' | 'topCommand'
+  descriptionKey?: 'runs.totals.body'
+}[] = [
+  {
+    id: 'workflow',
+    totalKey: 'workflowRuns',
+    totalLabelKey: 'runs.total.workflows',
+    listTitleKey: 'runs.list.workflows',
+    summaryKey: 'workflows',
+    topKey: 'topWorkflow',
+  },
+  {
+    id: 'automation',
+    totalKey: 'automationRuns',
+    totalLabelKey: 'runs.total.automations',
+    listTitleKey: 'runs.list.automations',
+    summaryKey: 'automations',
+    topKey: 'topAutomation',
+  },
+  {
+    id: 'tool',
+    totalKey: 'toolRuns',
+    totalLabelKey: 'runs.total.tools',
+    listTitleKey: 'runs.list.tools',
+    summaryKey: 'tools',
+    topKey: 'topTool',
+  },
+  {
+    id: 'command',
+    totalKey: 'commandRuns',
+    totalLabelKey: 'runs.total.commands',
+    listTitleKey: 'runs.list.commands',
+    summaryKey: 'commands',
+    topKey: 'topCommand',
+    descriptionKey: 'runs.totals.body',
+  },
+]
+
 function formatMetricTimestamp(locale: HostLocale, value: string): string {
   if (!value) {
     return translateHost(locale, 'runs.lastUsed.never')
@@ -211,13 +361,35 @@ function formatMetricTimestamp(locale: HostLocale, value: string): string {
 function renderMetricLabel(
   locale: HostLocale,
   item: HostRunMetricListItem,
-  kind: 'workflow' | 'automation' | 'tool' | 'command',
+  kind: RunMetricKind,
 ): string {
   if (kind === 'command') {
     return formatCapabilityLabel(locale, item.key)
   }
 
   return item.label ?? item.key
+}
+
+function buildRunSections(locale: HostLocale, summary: HostRunMetricsSummary) {
+  return runSectionDefinitions.map((definition) => {
+    const topItem = summary[definition.topKey]
+
+    return {
+      id: definition.id,
+      kind: definition.id,
+      totalCount: summary.totals[definition.totalKey],
+      totalLabel: translateHost(locale, definition.totalLabelKey),
+      title: translateHost(locale, definition.listTitleKey),
+      description: definition.descriptionKey ? translateHost(locale, definition.descriptionKey) : undefined,
+      items: summary[definition.summaryKey],
+      highlightLabel: topItem ? renderMetricLabel(locale, topItem, definition.id) : translateHost(locale, 'runs.highlights.none'),
+      highlightMeta: topItem
+        ? translateHost(locale, 'runs.lastUsed', {
+            value: formatMetricTimestamp(locale, topItem.lastUsedAt),
+          })
+        : undefined,
+    }
+  })
 }
 
 function RankingSection({
@@ -230,7 +402,7 @@ function RankingSection({
   locale: HostLocale
   title: string
   items: HostRunMetricListItem[]
-  kind: 'workflow' | 'automation' | 'tool' | 'command'
+  kind: RunMetricKind
   description?: string
 }) {
   return (
@@ -271,10 +443,16 @@ function RankingSection({
 export function HostRunsSurfaceView({
   locale,
   summary,
+  initialView = 'overview',
 }: {
   locale: HostLocale
   summary: HostRunMetricsSummary
+  initialView?: RunsSurfaceViewMode
 }) {
+  const [view, setView] = useState<RunsSurfaceViewMode>(initialView)
+  const sections = useMemo(() => buildRunSections(locale, summary), [locale, summary])
+  const activeSection = view === 'overview' ? null : sections.find((section) => section.id === view) ?? sections[0]
+
   const isEmpty =
     summary.totals.workflowRuns === 0 &&
     summary.totals.automationRuns === 0 &&
@@ -282,10 +460,11 @@ export function HostRunsSurfaceView({
     summary.totals.commandRuns === 0
 
   return (
-    <div className={runsSurfaceClassName} style={pageStyle}>
+    <div className="host-runs-surface" style={pageStyle}>
       <style>{runsSurfaceResponsiveStyles}</style>
-      <div style={titleBarStyle}>
+      <div style={headerStyle}>
         <h1 style={titleStyle}>{translateHost(locale, 'home.runs.title')}</h1>
+        <p style={bodyStyle}>{translateHost(locale, 'runs.body')}</p>
       </div>
 
       {isEmpty ? (
@@ -295,17 +474,56 @@ export function HostRunsSurfaceView({
           style={emptySectionStyle}
         />
       ) : (
-        <div className={runsSurfaceGridClassName} style={gridStyle}>
-          <RankingSection locale={locale} title={translateHost(locale, 'runs.list.workflows')} items={summary.workflows} kind="workflow" />
-          <RankingSection locale={locale} title={translateHost(locale, 'runs.list.automations')} items={summary.automations} kind="automation" />
-          <RankingSection locale={locale} title={translateHost(locale, 'runs.list.tools')} items={summary.tools} kind="tool" />
-          <RankingSection
-            locale={locale}
-            title={translateHost(locale, 'runs.list.commands')}
-            description={translateHost(locale, 'runs.totals.body')}
-            items={summary.commands}
-            kind="command"
-          />
+        <div style={contentStyle}>
+          {activeSection ? (
+            <div style={detailLayoutStyle}>
+              <div style={detailToolbarStyle}>
+                <div>
+                  <Button variant="secondary" size="sm" onClick={() => setView('overview')}>
+                    {translateHost(locale, 'runs.overview.back')}
+                  </Button>
+                </div>
+                <div style={detailTabsWrapStyle}>
+                  <Tabs
+                    items={sections.map((section) => ({
+                      id: section.id,
+                      label: section.totalLabel,
+                      count: section.totalCount,
+                    }))}
+                    value={activeSection.id}
+                    onChange={(nextValue) => setView(nextValue)}
+                  />
+                </div>
+              </div>
+
+              <RankingSection
+                locale={locale}
+                title={activeSection.title}
+                description={activeSection.description}
+                items={activeSection.items}
+                kind={activeSection.kind}
+              />
+            </div>
+          ) : (
+            <div style={overviewLayoutStyle}>
+              <div className={runsSurfaceOverviewGridClassName} style={overviewGridStyle}>
+                {sections.map((section) => (
+                  <button key={section.id} type="button" style={overviewCardStyle} onClick={() => setView(section.id)}>
+                    <p style={overviewCardLabelStyle}>{section.totalLabel}</p>
+                    <p style={overviewCardValueStyle}>{section.totalCount}</p>
+                    <div style={overviewCardMetaStyle}>
+                      <p style={overviewCardTopStyle}>{section.highlightLabel}</p>
+                      {section.highlightMeta ? <p style={overviewCardHintStyle}>{section.highlightMeta}</p> : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <section style={overviewHintStyle}>
+                <p style={sectionEmptyStateTitleStyle}>{translateHost(locale, 'runs.overview.prompt')}</p>
+              </section>
+            </div>
+          )}
         </div>
       )}
     </div>

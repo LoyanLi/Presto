@@ -1,0 +1,22 @@
+{
+  "pluginId": "official.time-calculator-tool",
+  "extensionType": "tool",
+  "version": "1.0.0",
+  "hostApiVersion": "0.1.0",
+  "supportedDaws": [],
+  "uiRuntime": "react18",
+  "displayName": "Time Calculator",
+  "description": "Convert BPM, milliseconds, note values, and tempo-synced reverb timings in one tool page.",
+  "entry": "dist/entry.mjs",
+  "styleEntry": "dist/time-calculator-tool.css",
+  "pages": [
+    {
+      "pageId": "time-calculator.page.main",
+      "path": "/tools/time-calculator",
+      "title": "Time Calculator",
+      "mount": "tools",
+      "componentExport": "TimeCalculatorToolPage"
+    }
+  ],
+  "requiredCapabilities": []
+}

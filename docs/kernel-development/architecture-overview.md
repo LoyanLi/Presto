@@ -70,6 +70,11 @@ src-tauri/src/runtime.rs
 - `frontend/host/`：Host Shell、设置页、开发者界面、插件渲染协同
 - `frontend/ui/`：主题、样式令牌、基础 UI
 
+其中当前已经稳定下来的宿主表面分工包括：
+
+- `Home` / `Workflows` / `Tools` / `Automation` / `Runs` / `Settings` 六个一级表面由 `frontend/host/HostHomeSurface.tsx` 和相关 surface 组件统一编排
+- `Runs` 页面不再把四类排行长期并列展开；当前结构是“总览卡片 -> 单类详情榜单”，用更少的同时可见列表换清晰的信息层级
+
 ### 3.3 后端能力层
 
 - `backend/presto/application/`：service container、DAW runtime resolver、handlers、job manager、error normalizer
@@ -105,6 +110,7 @@ src-tauri/src/runtime.rs
 - 插件 manifest 的关键约束现在在 Rust runtime 安装/发现入口统一校验，包括保留 DAW target、重复字段、页面/自动化/设置页结构，以及 workflow definition 引用闭包。
 - `backend.daw-target.set` 现在由 Rust runtime 独占持久化和重启链路；Renderer 只更新本地宿主状态，不再通过 generic preferences config 路径双写 `hostPreferences.dawTarget`。
 - React Host 当前已经没有额外历史 runtime 层；宿主状态主要拆分在 `frontend/host/` 和 `frontend/desktop/` 的专用 hook 与装配入口里。
+- `frontend/host/HostRunsSurface.tsx` 当前承担两层交互：默认总览显示 `workflow` / `automation` / `tool` / `command` 的聚合卡片；进入详情后只渲染单一榜单，并通过 tabs 切换分类，而不是一次并列四份滚动列表。
 - capability 是跨宿主、后端、插件的正式业务协议中心。
 - 插件不是宿主内任意脚本执行环境，而是 manifest 驱动的受限扩展模型。
 - 当前真实支持的 DAW 只有 `pro_tools`。
