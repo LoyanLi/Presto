@@ -10,6 +10,7 @@ import pytest
 
 from presto.application.capabilities.registry import build_default_capability_registry
 from presto.application.errors.normalizer import ErrorNormalizer
+from presto.application.handlers.context import build_execution_context
 from presto.application.handlers.import_workflow import (
     ImportAnalysisCache,
     _render_export_file_name_template,
@@ -19,6 +20,7 @@ from presto.application.handlers.import_workflow import (
     finalize_import,
     persist_import_analysis_cache,
     start_export_run,
+    start_export_run_payload,
     start_import_run,
 )
 from presto.application.jobs.manager import InMemoryJobManager
@@ -32,6 +34,23 @@ from presto.transport.http.schemas.capabilities import CapabilityInvokeRequestSc
 
 class DummyRequest(SimpleNamespace):
     app: object
+
+
+class RecordingLogger:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def debug(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("debug", message, meta))
+
+    def info(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("info", message, meta))
+
+    def warn(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("warn", message, meta))
+
+    def error(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("error", message, meta))
 
 
 class FakeDawAdapter:
@@ -830,6 +849,84 @@ def test_export_run_start_uses_file_level_progress_for_running_job_state(tmp_pat
     app.state.services.daw.export_progress_release_event.set()
     job = _wait_for_job_state(app, response["jobId"], "succeeded")
     assert job.result["status"] == "completed"
+
+
+def test_export_run_start_logs_export_lifecycle_events(tmp_path: Path) -> None:
+    app = _app_with_fake_daw()
+    logger = RecordingLogger()
+    app.state.services.logger = logger
+    session_root = tmp_path / "session"
+    session_root.mkdir(parents=True)
+    app.state.services.daw.session_path = str(session_root / "Demo Session.ptx")
+    output_path = tmp_path / "exports"
+    payload = {
+        "snapshots": [
+            {
+                "name": "Verse A",
+                "trackStates": [
+                    {"trackName": "Kick", "isMuted": True, "isSoloed": False},
+                ],
+            }
+        ],
+        "exportSettings": {
+            "outputPath": str(output_path),
+            "fileNameTemplate": "{session}_{snapshot}{source_suffix}",
+            "fileFormat": "wav",
+            "mixSources": [
+                _build_mix_source("Out 1-2"),
+            ],
+            "onlineExport": False,
+        },
+    }
+
+    accepted = start_export_run_payload(
+        build_execution_context(app.state.services, request_id="req-export-log-1"),
+        payload,
+        capability_id="daw.export.run.start",
+    )
+    _wait_for_job_state(app, accepted["jobId"], "succeeded")
+
+    info_records = [record for record in logger.records if record[0] == "info"]
+    assert any(
+        message == "export.run.accepted"
+        and meta == {
+            "capability": "daw.export.run.start",
+            "jobId": accepted["jobId"],
+            "requestId": "req-export-log-1",
+            "snapshotCount": 1,
+        }
+        for _, message, meta in info_records
+    )
+    assert any(
+        message == "export.run.started"
+        and meta == {
+            "capability": "daw.export.run.start",
+            "jobId": accepted["jobId"],
+            "requestId": "req-export-log-1",
+        }
+        for _, message, meta in info_records
+    )
+    assert any(
+        message == "export.file.succeeded"
+        and meta == {
+            "capability": "daw.export.run.start",
+            "jobId": accepted["jobId"],
+            "mixSourceName": "Out 1-2",
+            "requestId": "req-export-log-1",
+            "snapshotName": "Verse A",
+        }
+        for _, message, meta in info_records
+    )
+    assert any(
+        message == "export.run.succeeded"
+        and meta == {
+            "capability": "daw.export.run.start",
+            "exportedCount": 1,
+            "jobId": accepted["jobId"],
+            "requestId": "req-export-log-1",
+        }
+        for _, message, meta in info_records
+    )
 
 
 def test_export_run_start_records_mix_source_progress_metadata_on_success(tmp_path: Path) -> None:

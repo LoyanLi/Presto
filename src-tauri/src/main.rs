@@ -27,7 +27,7 @@ pub(crate) fn resolve_runtime_resources_dir(app: &AppHandle) -> Result<PathBuf, 
 }
 
 #[tauri::command]
-fn runtime_invoke(
+async fn runtime_invoke(
     app: AppHandle,
     state: State<'_, Arc<runtime::RuntimeState>>,
     operation: String,
@@ -35,7 +35,18 @@ fn runtime_invoke(
 ) -> Result<Value, String> {
     match operation.as_str() {
         "app.version.get" => Ok(Value::String(app.package_info().version.to_string())),
-        "backend.capability.invoke" => runtime::invoke(state.inner(), &operation, args),
+        "backend.status.get"
+        | "backend.capabilities.list"
+        | "backend.lifecycle.restart"
+        | "backend.daw-adapter.snapshot.get"
+        | "backend.daw-target.set"
+        | "backend.developer-mode.set"
+        | "backend.capability.invoke" => {
+            let runtime_state = state.inner().clone();
+            tauri::async_runtime::spawn_blocking(move || runtime::invoke(&runtime_state, &operation, args))
+                .await
+                .map_err(|error| error.to_string())?
+        }
         _ => runtime::invoke(state.inner(), &operation, args),
     }
 }

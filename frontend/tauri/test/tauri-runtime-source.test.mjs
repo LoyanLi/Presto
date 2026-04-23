@@ -44,6 +44,8 @@ test('tauri host uses invoke bridge without a packaged stdio sidecar RPC layer',
   assert.doesNotMatch(rustSource, /app:get-version|plugins:list|backend:invoke-capability/)
   assert.match(rustSource, /app\.version\.get/)
   assert.match(rustSource, /backend\.capability\.invoke/)
+  assert.match(rustSource, /#\[tauri::command\]\s*async fn runtime_invoke/)
+  assert.match(rustSource, /tauri::async_runtime::spawn_blocking/)
   assert.match(runtimeSource, /mod backend;/)
   assert.match(runtimeSource, /mod plugins;/)
   assert.match(runtimeSource, /mod mobile_progress;/)

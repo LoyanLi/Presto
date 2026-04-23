@@ -9,9 +9,35 @@ from ..service_container import ServiceContainer
 from ...domain.capabilities import DEFAULT_DAW_TARGET, CapabilityDefinition
 from ...domain.errors import PrestoValidationError
 
+LOW_SIGNAL_SUCCESS_CAPABILITIES = frozenset(
+    {
+        "daw.connection.getStatus",
+        "daw.adapter.getSnapshot",
+        "jobs.get",
+    }
+)
+
 
 def _resolve_handler(definition: CapabilityDefinition):
     return HANDLER_BINDINGS.get(definition.handler)
+
+
+def _normalize_error_payload(error: Exception) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "type": error.__class__.__name__,
+        "message": str(error),
+    }
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code.strip():
+        payload["code"] = code.strip()
+    details = getattr(error, "details", None)
+    if isinstance(details, dict) and details:
+        payload["details"] = details
+    return payload
+
+
+def _should_log_success_lifecycle(capability_id: str) -> bool:
+    return capability_id not in LOW_SIGNAL_SUCCESS_CAPABILITIES
 
 
 def _execute_handler(
@@ -26,18 +52,53 @@ def _execute_handler(
         raise NotImplementedError(f"Capability not implemented: {definition.id}")
 
     ctx = build_execution_context(services, request_id=request_id)
-    if definition.handler == "workflow.run.start":
-        return start_workflow_run_payload(
-            ctx,
-            payload,
-            invoke_capability=lambda capability_id, request_payload: _execute_atomic_capability(
-                services,
-                capability_id,
-                request_payload,
-                request_id=request_id,
-            ),
+    should_log_success_lifecycle = _should_log_success_lifecycle(definition.id)
+    if ctx.logger is not None and should_log_success_lifecycle:
+        ctx.logger.info(
+            "capability.invoke.start",
+            {
+                "capability": definition.id,
+                "requestId": ctx.request_id,
+                "payload": payload,
+            },
         )
-    return handler(ctx, payload)
+    try:
+        if definition.handler == "workflow.run.start":
+            result = start_workflow_run_payload(
+                ctx,
+                payload,
+                invoke_capability=lambda capability_id, request_payload: _execute_atomic_capability(
+                    services,
+                    capability_id,
+                    request_payload,
+                    request_id=request_id,
+                ),
+            )
+        else:
+            result = handler(ctx, payload)
+    except Exception as error:
+        if ctx.logger is not None:
+            ctx.logger.error(
+                "capability.invoke.failed",
+                {
+                    "capability": definition.id,
+                    "requestId": ctx.request_id,
+                    "payload": payload,
+                    "error": _normalize_error_payload(error),
+                },
+            )
+        raise
+
+    if ctx.logger is not None and should_log_success_lifecycle:
+        ctx.logger.info(
+            "capability.invoke.succeeded",
+            {
+                "capability": definition.id,
+                "requestId": ctx.request_id,
+                "result": result,
+            },
+        )
+    return result
 
 
 def _execute_atomic_capability(

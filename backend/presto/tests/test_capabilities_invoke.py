@@ -23,6 +23,23 @@ class DummyRequest(SimpleNamespace):
     app: object
 
 
+class RecordingLogger:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def debug(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("debug", message, meta))
+
+    def info(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("info", message, meta))
+
+    def warn(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("warn", message, meta))
+
+    def error(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("error", message, meta))
+
+
 class FakeDawAdapter:
     def __init__(self) -> None:
         self.connected = False
@@ -470,6 +487,52 @@ def _app_with_fake_daw() -> object:
     app = create_app()
     app.state.services = build_service_container(daw=FakeDawAdapter())
     return app
+
+
+def test_execute_capability_suppresses_polling_success_logs_for_daw_status_probes() -> None:
+    services = build_service_container(daw=FakeDawAdapter())
+    services.daw.connected = True
+    logger = RecordingLogger()
+    services.logger = logger
+
+    result = execute_capability(
+        services,
+        "daw.connection.getStatus",
+        {},
+        request_id="req-status-poll-1",
+    )
+
+    assert result["connected"] is True
+    assert logger.records == []
+
+
+def test_execute_capability_suppresses_polling_success_logs_for_jobs_get() -> None:
+    services = build_service_container(daw=FakeDawAdapter())
+    logger = RecordingLogger()
+    services.logger = logger
+    created = execute_capability(
+        services,
+        "jobs.create",
+        {
+            "capability": "jobs.create",
+            "targetDaw": "pro_tools",
+            "state": "running",
+        },
+        request_id="req-jobs-create-log-1",
+    )
+    logger.records.clear()
+
+    result = execute_capability(
+        services,
+        "jobs.get",
+        {
+            "jobId": created["job"]["jobId"],
+        },
+        request_id="req-jobs-get-log-1",
+    )
+
+    assert result["job"]["jobId"] == created["job"]["jobId"]
+    assert logger.records == []
 
 
 def _create_audio_source_folder(tmp_path: Path, *, file_names: list[str]) -> Path:

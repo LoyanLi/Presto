@@ -14,6 +14,7 @@ from ...domain.ports import (
     ImportAnalysisStorePort,
     JobHandleRegistryPort,
     KeychainStorePort,
+    LoggerPort,
     MacAutomationPort,
 )
 
@@ -30,6 +31,7 @@ class HandlerRuntime:
     daw_ui_profile: DawUiProfilePort | None
     config_store: ConfigStorePort | None
     keychain_store: KeychainStorePort | None
+    logger: LoggerPort | None
 
 
 def runtime_from_context(ctx: CapabilityExecutionContext) -> HandlerRuntime:
@@ -44,6 +46,7 @@ def runtime_from_context(ctx: CapabilityExecutionContext) -> HandlerRuntime:
         daw_ui_profile=ctx.daw_ui_profile,
         config_store=ctx.config_store,
         keychain_store=ctx.keychain_store,
+        logger=ctx.logger,
     )
 
 

@@ -12,10 +12,12 @@ from ..domain.ports import (
     ImportAnalysisStorePort,
     JobHandleRegistryPort,
     KeychainStorePort,
+    LoggerPort,
     MacAutomationPort,
 )
 from ..domain.jobs import JobManagerProtocol
 from ..integrations.config_store import create_default_config_store
+from ..integrations.execution_logger import create_default_execution_logger
 from ..integrations.keychain_store import create_default_keychain_store
 from .capabilities.registry import InMemoryCapabilityRegistry, build_default_capability_registry
 from .daw_runtime import resolve_daw_runtime
@@ -36,6 +38,7 @@ class ServiceContainer:
     job_handle_registry: JobHandleRegistryPort = field(default_factory=InMemoryJobHandleRegistry)
     mac_automation: MacAutomationPort | None = None
     daw_ui_profile: DawUiProfilePort | None = None
+    logger: LoggerPort | None = None
     target_daw: DawTarget = DEFAULT_DAW_TARGET
     backend_ready: bool = True
 
@@ -52,6 +55,7 @@ def build_service_container(
     job_handle_registry: JobHandleRegistryPort | None = None,
     mac_automation: MacAutomationPort | None = None,
     daw_ui_profile: DawUiProfilePort | None = None,
+    logger: LoggerPort | None = None,
 ) -> ServiceContainer:
     env_target_daw = os.environ.get("PRESTO_TARGET_DAW", DEFAULT_DAW_TARGET)
     resolved_target_daw = env_target_daw if env_target_daw in SUPPORTED_DAW_TARGETS else DEFAULT_DAW_TARGET
@@ -75,5 +79,6 @@ def build_service_container(
         job_handle_registry=job_handle_registry or InMemoryJobHandleRegistry(),
         mac_automation=resolved_daw_runtime.mac_automation,
         daw_ui_profile=resolved_daw_runtime.daw_ui_profile,
+        logger=logger or create_default_execution_logger(),
         target_daw=resolved_target_daw,
     )

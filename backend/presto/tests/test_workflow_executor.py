@@ -64,6 +64,23 @@ class WorkflowExecutorFakeDaw:
         }
 
 
+class RecordingLogger:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str, dict[str, object] | None]] = []
+
+    def debug(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("debug", message, meta))
+
+    def info(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("info", message, meta))
+
+    def warn(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("warn", message, meta))
+
+    def error(self, message: str, meta: dict[str, object] | None = None) -> None:
+        self.records.append(("error", message, meta))
+
+
 def _services() -> ServiceContainer:
     return ServiceContainer(
         capability_registry=build_default_capability_registry(),
@@ -518,3 +535,111 @@ def test_workflow_run_start_propagates_request_id_to_nested_capability(monkeypat
     assert seen_request_ids == ["req-workflow-parent"]
     assert hasattr(services, "workflow_run_handles") is False
     assert hasattr(services, "workflow_run_handles_lock") is False
+
+
+def test_execute_capability_logs_atomic_capability_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
+    services = _services()
+    logger = RecordingLogger()
+    services.logger = logger
+
+    def _record_handler(ctx, payload):
+        return {"requestId": ctx.request_id, "payload": payload}
+
+    monkeypatch.setitem(invoker_module.HANDLER_BINDINGS, "system.health", _record_handler)
+
+    result = execute_capability(
+        services,
+        "system.health",
+        {"probe": True},
+        request_id="req-exec-log-1",
+    )
+
+    assert result == {"requestId": "req-exec-log-1", "payload": {"probe": True}}
+    assert logger.records == [
+        (
+            "info",
+            "capability.invoke.start",
+            {
+                "capability": "system.health",
+                "requestId": "req-exec-log-1",
+                "payload": {"probe": True},
+            },
+        ),
+        (
+            "info",
+            "capability.invoke.succeeded",
+            {
+                "capability": "system.health",
+                "requestId": "req-exec-log-1",
+                "result": {"requestId": "req-exec-log-1", "payload": {"probe": True}},
+            },
+        ),
+    ]
+
+
+def test_workflow_run_start_logs_workflow_lifecycle_and_steps() -> None:
+    services = _services()
+    logger = RecordingLogger()
+    services.logger = logger
+    payload = {
+        "pluginId": "official.import-workflow",
+        "workflowId": "test.workflow.log",
+        "definition": {
+            "workflowId": "test.workflow.log",
+            "version": "1.0.0",
+            "inputSchemaId": "test.workflow.input.v1",
+            "steps": [
+                {
+                    "stepId": "rename_track",
+                    "usesCapability": "daw.track.rename",
+                    "input": {
+                        "currentName": "Lead Vox RAW",
+                        "newName": "Lead Vox",
+                    },
+                }
+            ],
+        },
+        "allowedCapabilities": ["daw.track.rename"],
+        "input": {},
+    }
+
+    accepted = execute_capability(services, "workflow.run.start", payload, request_id="req-workflow-log-1")
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        if services.job_manager.get(accepted["jobId"]).state in {"succeeded", "failed", "cancelled"}:
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow job did not finish in time")
+
+    info_records = [record for record in logger.records if record[0] == "info"]
+    assert any(
+        message == "workflow.run.accepted"
+        and meta == {
+            "jobId": accepted["jobId"],
+            "pluginId": "official.import-workflow",
+            "requestId": "req-workflow-log-1",
+            "workflowId": "test.workflow.log",
+        }
+        for _, message, meta in info_records
+    )
+    assert any(
+        message == "workflow.step.started"
+        and meta == {
+            "capability": "daw.track.rename",
+            "jobId": accepted["jobId"],
+            "requestId": "req-workflow-log-1",
+            "stepId": "rename_track",
+            "workflowId": "test.workflow.log",
+        }
+        for _, message, meta in info_records
+    )
+    assert any(
+        message == "workflow.run.succeeded"
+        and meta == {
+            "jobId": accepted["jobId"],
+            "requestId": "req-workflow-log-1",
+            "workflowId": "test.workflow.log",
+        }
+        for _, message, meta in info_records
+    )

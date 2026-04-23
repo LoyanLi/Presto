@@ -37,6 +37,18 @@ def _analysis_cache(services: "ServiceContainer") -> ImportAnalysisCache:
     return cache
 
 
+def _log_info(services: "ServiceContainer", event: str, meta: dict[str, Any]) -> None:
+    logger = getattr(services, "logger", None)
+    if logger is not None:
+        logger.info(event, meta)
+
+
+def _log_error(services: "ServiceContainer", event: str, meta: dict[str, Any]) -> None:
+    logger = getattr(services, "logger", None)
+    if logger is not None:
+        logger.error(event, meta)
+
+
 def _run_handles_get(services: "ServiceContainer", job_id: str) -> ThreadedJobHandle | None:
     registry = services.job_handle_registry
     if registry is None:
@@ -1376,6 +1388,7 @@ def _run_export_workflow_job(
     job_id: str,
     request: dict[str, Any],
     cancel_event: threading.Event,
+    request_id: str | None = None,
 ) -> None:
     started_at = time.time()
     exported_files: list[str] = []
@@ -1473,6 +1486,15 @@ def _run_export_workflow_job(
                 eta_seconds=None,
                 exported_count=0,
             ),
+        )
+        _log_info(
+            services,
+            "export.run.started",
+            {
+                "capability": "daw.export.run.start",
+                "jobId": job_id,
+                "requestId": request_id,
+            },
         )
 
         settings = request["settings"]
@@ -1798,6 +1820,17 @@ def _run_export_workflow_job(
                 exported_files.append(str(final_output_path))
                 processed_file_count += 1
                 last_exported_file = str(final_output_path)
+                _log_info(
+                    services,
+                    "export.file.succeeded",
+                    {
+                        "capability": "daw.export.run.start",
+                        "jobId": job_id,
+                        "mixSourceName": mix_source["name"],
+                        "requestId": request_id,
+                        "snapshotName": snapshot_name,
+                    },
+                )
                 job = _clone_job(services.job_manager.get(job_id))
                 _update_export_run_progress(
                     services,
@@ -1854,6 +1887,16 @@ def _run_export_workflow_job(
                 ),
             ),
         )
+        _log_info(
+            services,
+            "export.run.succeeded",
+            {
+                "capability": "daw.export.run.start",
+                "exportedCount": len(exported_files),
+                "jobId": job_id,
+                "requestId": request_id,
+            },
+        )
     except Exception as exc:
         job = _clone_job(services.job_manager.get(job_id))
         error = _normalize_run_error(services, exc, capability_id="daw.export.run.start")
@@ -1884,6 +1927,20 @@ def _run_export_workflow_job(
                 error_message=error.message,
             ),
         )
+        _log_error(
+            services,
+            "export.run.failed",
+            {
+                "capability": "daw.export.run.start",
+                "jobId": job_id,
+                "requestId": request_id,
+                "error": {
+                    "code": error.code,
+                    "message": error.message,
+                    "details": error.details,
+                },
+            },
+        )
     finally:
         _run_handles_pop(services, job_id)
 
@@ -1893,6 +1950,7 @@ def _run_export_job(
     job_id: str,
     request: dict[str, Any],
     cancel_event: threading.Event,
+    request_id: str | None = None,
 ) -> None:
     try:
         daw = getattr(services, "daw", None)
@@ -1931,6 +1989,15 @@ def _run_export_job(
             return
 
         _set_job_running(services, job, total=1, message="Export is running.")
+        _log_info(
+            services,
+            "export.run.started",
+            {
+                "capability": request["capability_id"],
+                "jobId": job_id,
+                "requestId": request_id,
+            },
+        )
 
         export_request = dict(request)
         export_request.pop("capability_id", None)
@@ -1958,15 +2025,45 @@ def _run_export_job(
                 },
             },
         )
+        _log_info(
+            services,
+            "export.run.succeeded",
+            {
+                "capability": request["capability_id"],
+                "exportedCount": 1,
+                "jobId": job_id,
+                "requestId": request_id,
+            },
+        )
     except Exception as exc:
         job = _clone_job(services.job_manager.get(job_id))
         error = _normalize_run_error(services, exc, capability_id=request["capability_id"])
         _set_job_failed(services, job, error=error)
+        _log_error(
+            services,
+            "export.run.failed",
+            {
+                "capability": request["capability_id"],
+                "jobId": job_id,
+                "requestId": request_id,
+                "error": {
+                    "code": error.code,
+                    "message": error.message,
+                    "details": error.details,
+                },
+            },
+        )
     finally:
         _run_handles_pop(services, job_id)
 
 
-def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, capability_id: str) -> dict[str, Any]:
+def start_export_run(
+    services: "ServiceContainer",
+    payload: dict[str, Any],
+    *,
+    capability_id: str,
+    request_id: str | None = None,
+) -> dict[str, Any]:
     _ensure_run_daw_connected(services, payload, capability_id=capability_id)
     if capability_id == "daw.export.run.start":
         request = _normalize_export_run_request(payload)
@@ -1998,11 +2095,22 @@ def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, c
             created_at=_utc_now(),
         )
         _upsert_job(services, job)
+        _log_info(
+            services,
+            "export.run.accepted",
+            {
+                "capability": capability_id,
+                "jobId": job.job_id,
+                "requestId": request_id,
+                "snapshotCount": len(request["snapshots"]),
+            },
+        )
 
         cancel_event = threading.Event()
         worker = threading.Thread(
             target=_run_export_workflow_job,
             args=(services, job.job_id, request, cancel_event),
+            kwargs={"request_id": request_id},
             name=f"presto-export-workflow-{job.job_id}",
             daemon=True,
         )
@@ -2030,11 +2138,22 @@ def start_export_run(services: "ServiceContainer", payload: dict[str, Any], *, c
         created_at=_utc_now(),
     )
     _upsert_job(services, job)
+    _log_info(
+        services,
+        "export.run.accepted",
+        {
+            "capability": capability_id,
+            "jobId": job.job_id,
+            "requestId": request_id,
+            "snapshotCount": 1,
+        },
+    )
 
     cancel_event = threading.Event()
     worker = threading.Thread(
         target=_run_export_job,
         args=(services, job.job_id, request, cancel_event),
+        kwargs={"request_id": request_id},
         name=f"presto-export-run-{job.job_id}",
         daemon=True,
     )
@@ -2054,7 +2173,12 @@ def start_export_run_payload(
     *,
     capability_id: str,
 ) -> dict[str, Any]:
-    return start_export_run(runtime_from_context(ctx), payload, capability_id=capability_id)
+    return start_export_run(
+        runtime_from_context(ctx),
+        payload,
+        capability_id=capability_id,
+        request_id=ctx.request_id,
+    )
 
 
 def start_import_run(services: "ServiceContainer", payload: dict[str, Any]) -> dict[str, Any]:

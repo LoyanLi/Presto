@@ -15,6 +15,7 @@ const tauriRuntimeOperations = {
     getVersion: 'app.version.get',
     checkForUpdates: 'app.release.check',
     viewLog: 'app.log.view',
+    writeExecutionLog: 'app.log.execution.write',
   },
   backend: {
     getStatus: 'backend.status.get',

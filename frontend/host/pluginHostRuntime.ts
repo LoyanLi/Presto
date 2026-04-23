@@ -361,7 +361,7 @@ export async function loadHostPlugins(input: LoadHostPluginsInput): Promise<Load
   const issues: HostPluginIssue[] = input.catalog.issues.map(formatPluginIssue)
   const pluginRecords: HostPluginManagerModel['plugins'] = []
   const storage = createHostPluginStorage()
-  const logger = createHostPluginLogger()
+  const logger = createHostPluginLogger(input.runtime, { source: 'plugin.host' })
   const workflowHost = createPluginWorkflowPageHost(input.runtime)
   const fallbackToolHost = createPluginToolPageHost(input.runtime, 'unknown-plugin', new Set())
 

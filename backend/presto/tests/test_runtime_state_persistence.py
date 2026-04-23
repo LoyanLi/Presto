@@ -73,6 +73,15 @@ def test_default_runtime_config_creates_backing_file_on_first_load(tmp_path: Pat
     assert config["hostPreferences"]["includePrereleaseUpdates"] is False
 
 
+def test_build_execution_context_exposes_default_execution_logger(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("PRESTO_APP_DATA_DIR", str(tmp_path))
+
+    services = build_service_container()
+    context = build_execution_context(services, request_id="req-runtime-logger")
+
+    assert context.logger is not None
+
+
 def test_macos_keychain_store_uses_security_cli_contract() -> None:
     runner = FakeSecurityRunner()
     store = MacOsKeychainStore(run_security=runner)

@@ -1,4 +1,5 @@
 import type {
+  AppWriteExecutionLogRequest,
   PluginAutomationRunnerContext,
   PluginLogger,
   PluginToolPageHost,
@@ -33,7 +34,7 @@ export interface PluginHostProcessRuntime {
 }
 
 export type PluginHostRuntime = Pick<PrestoRuntime, 'dialog'> &
-  Partial<Pick<PrestoRuntime, 'macAccessibility' | 'fs' | 'shell'>> & {
+  Partial<Pick<PrestoRuntime, 'app' | 'macAccessibility' | 'fs' | 'shell'>> & {
     process?: PluginHostProcessRuntime
   }
 
@@ -99,6 +100,8 @@ const unavailableMacAccessibility: MacAccessibilityClient = {
 }
 
 const inMemoryStorage = new Map<string, string>()
+const recentPluginLogEntries = new Map<string, number>()
+const DUPLICATE_PLUGIN_LOG_WINDOW_MS = 1_500
 
 const unavailableToolRunHost: PluginToolRunHost = async ({ toolId }) => {
   throw new Error(`tool.run is unavailable in this host shell: ${toolId}`)
@@ -173,18 +176,83 @@ export function createHostPluginStorage(): PluginStorage {
   }
 }
 
-export function createHostPluginLogger(): PluginLogger {
+interface HostPluginLoggerDefaults {
+  source?: string
+  pluginId?: string
+  requestId?: string
+  jobId?: string
+  workflowId?: string
+  capability?: string
+  stepId?: string
+}
+
+function logToRuntimeApp(
+  runtime: PluginHostRuntime | undefined,
+  entry: AppWriteExecutionLogRequest,
+): void {
+  void runtime?.app?.writeExecutionLog?.(entry).catch(() => {})
+}
+
+function shouldSuppressDuplicatePluginLog(
+  level: AppWriteExecutionLogRequest['level'],
+  message: string,
+  pluginId: string | undefined,
+): boolean {
+  const normalizedPluginId = pluginId?.trim() ?? ''
+  if (!normalizedPluginId) {
+    return false
+  }
+  const signature = `${level}:${normalizedPluginId}:${message.trim()}`
+  const now = Date.now()
+  const previous = recentPluginLogEntries.get(signature)
+  recentPluginLogEntries.set(signature, now)
+  return typeof previous === 'number' && now - previous < DUPLICATE_PLUGIN_LOG_WINDOW_MS
+}
+
+export function createHostPluginLogger(
+  runtime?: PluginHostRuntime,
+  defaults: HostPluginLoggerDefaults = {},
+): PluginLogger {
+  const source = defaults.source?.trim() || 'plugin.host'
+
+  const writeExecutionLog = (
+    level: AppWriteExecutionLogRequest['level'],
+    message: string,
+    meta?: Record<string, unknown>,
+  ): void => {
+    if (shouldSuppressDuplicatePluginLog(level, message, defaults.pluginId ?? (meta?.pluginId as string | undefined))) {
+      return
+    }
+    logToRuntimeApp(runtime, {
+      level,
+      source,
+      event: 'plugin.log',
+      message,
+      ...(typeof defaults.pluginId === 'string' && defaults.pluginId ? { pluginId: defaults.pluginId } : {}),
+      ...(typeof defaults.requestId === 'string' && defaults.requestId ? { requestId: defaults.requestId } : {}),
+      ...(typeof defaults.jobId === 'string' && defaults.jobId ? { jobId: defaults.jobId } : {}),
+      ...(typeof defaults.workflowId === 'string' && defaults.workflowId ? { workflowId: defaults.workflowId } : {}),
+      ...(typeof defaults.capability === 'string' && defaults.capability ? { capability: defaults.capability } : {}),
+      ...(typeof defaults.stepId === 'string' && defaults.stepId ? { stepId: defaults.stepId } : {}),
+      ...(meta && Object.keys(meta).length > 0 ? { data: meta } : {}),
+    })
+  }
+
   return {
     debug(message, meta) {
+      writeExecutionLog('debug', message, meta)
       console.debug(message, meta)
     },
     info(message, meta) {
+      writeExecutionLog('info', message, meta)
       console.info(message, meta)
     },
     warn(message, meta) {
+      writeExecutionLog('warn', message, meta)
       console.warn(message, meta)
     },
     error(message, meta) {
+      writeExecutionLog('error', message, meta)
       console.error(message, meta)
     },
   }

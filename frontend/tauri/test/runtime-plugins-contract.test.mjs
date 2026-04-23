@@ -34,6 +34,7 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
         getVersion: 'app.version.get',
         checkForUpdates: 'app.release.check',
         viewLog: 'app.log.view',
+        writeExecutionLog: 'app.log.execution.write',
       },
       backend: {
         getStatus: 'backend.status.get',
@@ -109,6 +110,13 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
   await runtime.plugins.installFromZip(false)
   await runtime.plugins.setEnabled('official.export-workflow', false)
   await runtime.plugins.uninstall('official.export-workflow')
+  await runtime.app.writeExecutionLog({
+    level: 'info',
+    source: 'plugin.host',
+    event: 'plugin.log',
+    message: 'tool started',
+    data: { pluginId: 'official.export-workflow' },
+  })
   await runtime.dialog.openFolder()
   await runtime.dialog.openFile({
     filters: [
@@ -132,6 +140,16 @@ test('shared desktop runtime bridge exposes plugin management inside PrestoRunti
     ['plugins.install.zip', false],
     ['plugins.set-enabled', 'official.export-workflow', false],
     ['plugins.uninstall', 'official.export-workflow'],
+    [
+      'app.log.execution.write',
+      {
+        level: 'info',
+        source: 'plugin.host',
+        event: 'plugin.log',
+        message: 'tool started',
+        data: { pluginId: 'official.export-workflow' },
+      },
+    ],
     ['dialog.open', { properties: ['openDirectory'] }],
     ['dialog.open', { properties: ['openFile'], filters: [{ name: 'MP4 Video', extensions: ['mp4'] }] }],
     ['dialog.open', { properties: ['openDirectory'] }],

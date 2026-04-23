@@ -6,7 +6,7 @@ import time
 from typing import Any, Callable
 from uuid import uuid4
 
-from ...domain.ports import CapabilityExecutionContext
+from ...domain.ports import CapabilityExecutionContext, LoggerPort
 from ..service_container import ServiceContainer
 from ..runtime_state import ThreadedJobHandle
 from ...domain.capabilities import DEFAULT_DAW_TARGET
@@ -115,6 +115,16 @@ def _record_successful_command(command_counts: dict[str, int], capability_id: st
     command_counts[capability_id] = command_counts.get(capability_id, 0) + 1
 
 
+def _log_info(logger: LoggerPort | None, event: str, meta: dict[str, Any]) -> None:
+    if logger is not None:
+        logger.info(event, meta)
+
+
+def _log_error(logger: LoggerPort | None, event: str, meta: dict[str, Any]) -> None:
+    if logger is not None:
+        logger.error(event, meta)
+
+
 def _normalize_error(services: ServiceContainer, error: Exception, *, capability_id: str) -> PrestoErrorPayload:
     payload = services.error_normalizer.normalize(
         error,
@@ -215,6 +225,9 @@ def _execute_steps(
     command_counts: dict[str, int],
     invoke_capability: Callable[[str, dict[str, Any]], Any],
     cancel_event: threading.Event,
+    logger: LoggerPort | None,
+    request_id: str | None,
+    workflow_id: str,
     progress_phase: str | None = None,
     report_step_progress: bool = True,
 ) -> dict[str, Any]:
@@ -264,6 +277,9 @@ def _execute_steps(
                     command_counts=command_counts,
                     invoke_capability=invoke_capability,
                     cancel_event=cancel_event,
+                    logger=logger,
+                    request_id=request_id,
+                    workflow_id=workflow_id,
                     progress_phase=effective_phase,
                     report_step_progress=False,
                 )
@@ -307,6 +323,17 @@ def _execute_steps(
                     message=f"Workflow step {effective_phase} is running.",
                 ),
             )
+        _log_info(
+            logger,
+            "workflow.step.started",
+            {
+                "capability": capability_id,
+                "jobId": parent_job_id,
+                "requestId": request_id,
+                "stepId": step_id,
+                "workflowId": workflow_id,
+            },
+        )
         result = invoke_capability(capability_id, payload)
 
         if step.get("awaitJob") is True:
@@ -314,6 +341,17 @@ def _execute_steps(
                 raise _validation_error("awaitJob steps must return a jobId.", field="definition")
             result = _await_child_job(services, parent_job_id, result["jobId"], phase=effective_phase, cancel_event=cancel_event)
         _record_successful_command(command_counts, capability_id)
+        _log_info(
+            logger,
+            "workflow.step.succeeded",
+            {
+                "capability": capability_id,
+                "jobId": parent_job_id,
+                "requestId": request_id,
+                "stepId": step_id,
+                "workflowId": workflow_id,
+            },
+        )
 
         if report_step_progress:
             parent_job = services.job_manager.get(parent_job_id)
@@ -359,8 +397,12 @@ def _run_workflow_job(
     *,
     invoke_capability: Callable[[str, dict[str, Any]], Any],
     cancel_event: threading.Event,
+    logger: LoggerPort | None,
+    plugin_id: str,
+    request_id: str | None,
 ) -> None:
     job = services.job_manager.get(job_id)
+    workflow_id = str(definition["workflowId"])
     try:
         _update_job(
             services,
@@ -375,6 +417,16 @@ def _run_workflow_job(
                 message="Workflow is running.",
             ),
         )
+        _log_info(
+            logger,
+            "workflow.run.started",
+            {
+                "jobId": job_id,
+                "pluginId": plugin_id,
+                "requestId": request_id,
+                "workflowId": workflow_id,
+            },
+        )
 
         context: dict[str, Any] = {
             "input": workflow_input,
@@ -388,6 +440,9 @@ def _run_workflow_job(
             command_counts=command_counts,
             invoke_capability=invoke_capability,
             cancel_event=cancel_event,
+            logger=logger,
+            request_id=request_id,
+            workflow_id=workflow_id,
         )
 
         _update_job(
@@ -412,6 +467,15 @@ def _run_workflow_job(
             },
             finished_at=_utc_now(),
         )
+        _log_info(
+            logger,
+            "workflow.run.succeeded",
+            {
+                "jobId": job_id,
+                "requestId": request_id,
+                "workflowId": workflow_id,
+            },
+        )
     except Exception as error:
         normalized_error = _normalize_error(services, error, capability_id="workflow.run.start")
         job = services.job_manager.get(job_id)
@@ -430,6 +494,21 @@ def _run_workflow_job(
             error=normalized_error,
             finished_at=_utc_now(),
         )
+        _log_error(
+            logger,
+            "workflow.run.failed",
+            {
+                "jobId": job_id,
+                "pluginId": plugin_id,
+                "requestId": request_id,
+                "workflowId": workflow_id,
+                "error": {
+                    "code": normalized_error.code,
+                    "message": normalized_error.message,
+                    "details": normalized_error.details,
+                },
+            },
+        )
     finally:
         _run_handles_pop(services, job_id)
 
@@ -439,6 +518,8 @@ def start_workflow_run(
     payload: dict[str, Any],
     *,
     invoke_capability: Callable[[str, dict[str, Any]], Any],
+    logger: LoggerPort | None = None,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     plugin_id = str(payload.get("pluginId", "")).strip()
     if not plugin_id:
@@ -493,12 +574,28 @@ def start_workflow_run(
         created_at=_utc_now(),
     )
     services.job_manager.upsert(job)
+    _log_info(
+        logger,
+        "workflow.run.accepted",
+        {
+            "jobId": job.job_id,
+            "pluginId": plugin_id,
+            "requestId": request_id,
+            "workflowId": workflow_id,
+        },
+    )
 
     cancel_event = threading.Event()
     worker = threading.Thread(
         target=_run_workflow_job,
         args=(services, job.job_id, definition, workflow_input),
-        kwargs={"invoke_capability": invoke_capability, "cancel_event": cancel_event},
+        kwargs={
+            "invoke_capability": invoke_capability,
+            "cancel_event": cancel_event,
+            "logger": logger,
+            "plugin_id": plugin_id,
+            "request_id": request_id,
+        },
         name=f"presto-workflow-run-{job.job_id}",
         daemon=True,
     )
@@ -521,4 +618,6 @@ def start_workflow_run_payload(
         runtime_from_context(ctx),
         payload,
         invoke_capability=invoke_capability,
+        logger=ctx.logger,
+        request_id=ctx.request_id,
     )

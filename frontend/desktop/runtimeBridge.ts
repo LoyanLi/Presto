@@ -4,6 +4,8 @@ import type {
   AppReleaseCheckResult,
   AppRuntimeClient,
   AppViewLogResult,
+  AppWriteExecutionLogRequest,
+  AppWriteExecutionLogResult,
 } from '@presto/sdk-runtime/clients/app'
 import type {
   BackendCapabilityDefinition,
@@ -50,6 +52,7 @@ export interface DesktopRuntimeOperationMap {
     getVersion: string
     checkForUpdates: string
     viewLog: string
+    writeExecutionLog: string
   }
   backend: {
     getStatus: string
@@ -125,6 +128,8 @@ export function createDesktopRuntimeBridge(
     checkForUpdates: (request: AppReleaseCheckRequest) =>
       invokeTyped<AppReleaseCheckResult>(invoke, operations.app.checkForUpdates, request),
     viewLog: () => invokeTyped<AppViewLogResult>(invoke, operations.app.viewLog),
+    writeExecutionLog: (request: AppWriteExecutionLogRequest) =>
+      invokeTyped<AppWriteExecutionLogResult>(invoke, operations.app.writeExecutionLog, request),
   }
 
   const backend = {

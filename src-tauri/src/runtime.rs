@@ -19,6 +19,11 @@ use tauri::{AppHandle, Manager};
 const DEFAULT_PORT: u16 = 18_500;
 const PYTHON_VERSION: &str = "3.13";
 const ACCESSIBILITY_PERMISSION_REQUIRED: &str = "MAC_ACCESSIBILITY_PERMISSION_REQUIRED";
+const EXECUTION_LOG_PREFIX: &str = "PRESTO_EXEC_LOG ";
+const LOG_RETENTION_SESSIONS: usize = 10;
+const MAX_LOG_DEPTH: usize = 4;
+const MAX_LOG_STRING_LENGTH: usize = 4 * 1024;
+const MAX_LOG_DATA_LENGTH: usize = 16 * 1024;
 
 pub struct RuntimeState {
     app: AppHandle,
@@ -29,6 +34,7 @@ pub struct RuntimeState {
 
 struct LogState {
     current_log_path: PathBuf,
+    session_id: String,
     next_id: u64,
 }
 
@@ -104,6 +110,7 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
     let session_stamp = timestamp_for_file_name();
     let current_log_path = log_dir.join(format!("presto-{session_stamp}.log"));
     ensure_file(&current_log_path)?;
+    prune_log_files(&log_dir, LOG_RETENTION_SESSIONS)?;
 
     let initial_backend_target_daw = load_initial_backend_target_daw(&app)?;
 
@@ -111,6 +118,7 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
         app,
         log_state: Mutex::new(LogState {
             current_log_path,
+            session_id: session_stamp,
             next_id: 1,
         }),
         backend_state: Mutex::new(BackendSupervisorState {
@@ -151,6 +159,7 @@ pub fn invoke(
                 "filePath": file_path,
             }))
         }
+        "app.log.execution.write" => write_execution_log(state, args.first()),
         "app.release.check" => check_for_updates(state, args.first()),
         "dialog.open" => open_dialog(args.first()),
         "process.bundled.exec" => execute_bundled_process(state, args.first()),
@@ -404,6 +413,27 @@ fn ensure_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn prune_log_files(log_dir: &Path, keep: usize) -> Result<(), String> {
+    let mut entries = fs::read_dir(log_dir)
+        .map_err(|error| error.to_string())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .map(|name| name.starts_with("presto-") && name.ends_with(".log"))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    entries.sort_by_key(|entry| entry.file_name());
+    let remove_count = entries.len().saturating_sub(keep);
+    for entry in entries.into_iter().take(remove_count) {
+        fs::remove_file(entry.path()).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn timestamp_now() -> String {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -440,6 +470,151 @@ fn append_log(
         .and_then(|mut file| file.write_all(content.as_bytes()))
         .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+fn write_execution_log(state: &Arc<RuntimeState>, entry: Option<&Value>) -> Result<Value, String> {
+    append_execution_log(state, entry.ok_or_else(|| "missing_execution_log_entry".to_string())?)?;
+    Ok(json!({ "ok": true }))
+}
+
+pub(super) fn append_execution_log(state: &Arc<RuntimeState>, entry: &Value) -> Result<(), String> {
+    let mut log_state = state
+        .log_state
+        .lock()
+        .map_err(|_| "log_lock_failed".to_string())?;
+    log_state.next_id += 1;
+    ensure_file(&log_state.current_log_path)?;
+    let line = serialize_execution_log_entry(entry, &log_state.session_id)?;
+    append_line_to_path(&log_state.current_log_path, &line)
+}
+
+pub(super) fn append_execution_log_from_raw_line(
+    state: &Arc<RuntimeState>,
+    raw_line: &str,
+) -> Result<(), String> {
+    let trimmed = raw_line.trim();
+    let payload = trimmed
+        .strip_prefix(EXECUTION_LOG_PREFIX)
+        .unwrap_or(trimmed);
+    let parsed = serde_json::from_str::<Value>(payload).map_err(|error| error.to_string())?;
+    append_execution_log(state, &parsed)
+}
+
+fn append_line_to_path(path: &Path, line: &str) -> Result<(), String> {
+    let mut content = String::from(line);
+    content.push('\n');
+    fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .and_then(|mut file| file.write_all(content.as_bytes()))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn serialize_execution_log_entry(entry: &Value, default_session_id: &str) -> Result<String, String> {
+    let object = entry
+        .as_object()
+        .ok_or_else(|| "invalid_execution_log_entry".to_string())?;
+    let level = required_log_field(object, "level")?;
+    let source = required_log_field(object, "source")?;
+    let event = required_log_field(object, "event")?;
+    let message = required_log_field(object, "message")?;
+    let mut normalized = Map::new();
+    normalized.insert("ts".to_string(), Value::String(timestamp_now()));
+    normalized.insert(
+        "sessionId".to_string(),
+        Value::String(optional_log_field(object, "sessionId").unwrap_or_else(|| default_session_id.to_string())),
+    );
+    normalized.insert("level".to_string(), Value::String(level));
+    normalized.insert("source".to_string(), Value::String(source));
+    normalized.insert("event".to_string(), Value::String(event));
+    normalized.insert("message".to_string(), Value::String(message));
+    for field in [
+        "jobId",
+        "requestId",
+        "pluginId",
+        "workflowId",
+        "capability",
+        "stepId",
+    ] {
+        if let Some(value) = optional_log_field(object, field) {
+            normalized.insert(field.to_string(), Value::String(value));
+        }
+    }
+    if let Some(data) = object.get("data") {
+        if !data.is_null() {
+            normalized.insert("data".to_string(), normalize_log_data(data));
+        }
+    }
+    serde_json::to_string(&Value::Object(normalized)).map_err(|error| error.to_string())
+}
+
+fn required_log_field(object: &Map<String, Value>, field: &str) -> Result<String, String> {
+    optional_log_field(object, field).ok_or_else(|| format!("invalid_execution_log_{field}"))
+}
+
+fn optional_log_field(object: &Map<String, Value>, field: &str) -> Option<String> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn normalize_log_data(value: &Value) -> Value {
+    let sanitized = sanitize_log_value(value, 0);
+    let serialized = serde_json::to_string(&sanitized).unwrap_or_else(|_| "null".to_string());
+    if serialized.len() <= MAX_LOG_DATA_LENGTH {
+        return sanitized;
+    }
+    json!({
+        "truncated": true,
+        "preview": truncate_log_string(&serialized, MAX_LOG_DATA_LENGTH),
+    })
+}
+
+fn sanitize_log_value(value: &Value, depth: usize) -> Value {
+    if depth >= MAX_LOG_DEPTH {
+        return Value::String("[max-depth]".to_string());
+    }
+    match value {
+        Value::Null | Value::Bool(_) | Value::Number(_) => value.clone(),
+        Value::String(text) => Value::String(truncate_log_string(text, MAX_LOG_STRING_LENGTH)),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| sanitize_log_value(item, depth + 1))
+                .collect(),
+        ),
+        Value::Object(object) => {
+            let mut sanitized = Map::new();
+            for (key, nested) in object {
+                if is_redacted_log_key(key) {
+                    sanitized.insert(key.clone(), Value::String("***REDACTED***".to_string()));
+                } else {
+                    sanitized.insert(key.clone(), sanitize_log_value(nested, depth + 1));
+                }
+            }
+            Value::Object(sanitized)
+        }
+    }
+}
+
+fn truncate_log_string(value: &str, limit: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= limit {
+        return value.to_string();
+    }
+    let preview = value.chars().take(limit).collect::<String>();
+    format!("{preview}...[truncated:{}]", char_count - limit)
+}
+
+fn is_redacted_log_key(key: &str) -> bool {
+    let lowered = key.to_ascii_lowercase();
+    ["token", "secret", "password", "authorization", "apikey", "api_key"]
+        .iter()
+        .any(|fragment| lowered.contains(fragment))
 }
 
 fn increment_backend_log_count(state: &Arc<RuntimeState>) -> Result<(), String> {
@@ -1148,7 +1323,13 @@ fn check_for_updates(_state: &Arc<RuntimeState>, request: Option<&Value>) -> Res
 
 #[cfg(test)]
 mod tests {
-    use super::{load_initial_backend_target_daw_from_contents, DEFAULT_DAW_TARGET};
+    use super::{
+        load_initial_backend_target_daw_from_contents, normalize_log_data, prune_log_files,
+        serialize_execution_log_entry, DEFAULT_DAW_TARGET,
+    };
+    use serde_json::{json, Map, Value};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn persisted_host_preferences_seed_initial_backend_target_daw() {
@@ -1176,6 +1357,83 @@ mod tests {
 
         assert_eq!(invalid_target, DEFAULT_DAW_TARGET);
         assert_eq!(invalid_json, DEFAULT_DAW_TARGET);
+    }
+
+    #[test]
+    fn execution_log_entries_are_normalized_and_redacted() {
+        let serialized = serialize_execution_log_entry(
+            &json!({
+                "level": "info",
+                "source": "plugin.host",
+                "event": "plugin.log",
+                "message": "export started",
+                "requestId": "req-1",
+                "data": {
+                    "password": "super-secret",
+                    "nested": {
+                        "token": "abc",
+                    },
+                },
+            }),
+            "session-1",
+        )
+        .expect("serialize execution log");
+
+        let parsed = serde_json::from_str::<serde_json::Value>(&serialized).expect("parse serialized execution log");
+        assert_eq!(parsed.get("sessionId").and_then(serde_json::Value::as_str), Some("session-1"));
+        assert_eq!(
+            parsed
+                .get("data")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|data| data.get("password"))
+                .and_then(serde_json::Value::as_str),
+            Some("***REDACTED***")
+        );
+    }
+
+    #[test]
+    fn normalize_log_data_truncates_large_payloads() {
+        let mut oversized = Map::new();
+        for index in 0..10 {
+            oversized.insert(format!("blob{index}"), Value::String("x".repeat(3_000)));
+        }
+        let normalized = normalize_log_data(&Value::Object(oversized));
+
+        assert_eq!(
+            normalized
+                .get("truncated")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn prune_log_files_keeps_latest_sessions() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("presto-runtime-log-test-{unique}"));
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+
+        for index in 0..12 {
+            let path = temp_dir.join(format!("presto-2026-04-23T00-00-{index:02}.log"));
+            fs::write(path, b"log").expect("write log");
+        }
+
+        prune_log_files(&temp_dir, 10).expect("prune logs");
+        let mut entries = fs::read_dir(&temp_dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        entries.sort();
+
+        assert_eq!(entries.len(), 10);
+        assert_eq!(entries.first().map(String::as_str), Some("presto-2026-04-23T00-00-02.log"));
+        assert_eq!(entries.last().map(String::as_str), Some("presto-2026-04-23T00-00-11.log"));
+
+        fs::remove_dir_all(&temp_dir).expect("cleanup temp dir");
     }
 }
 

@@ -10,15 +10,47 @@ use std::{
 };
 
 use super::{
-    app_data_dir, append_log, backend_root, log_backend_message, resolve_backend_python_bin,
-    resolve_bundled_python_home, unique_suffix, BackendSupervisorState, RuntimeState, DEFAULT_PORT,
-    SUPPORTED_DAW_TARGETS,
+    app_data_dir, append_execution_log_from_raw_line, append_log, backend_root, log_backend_message,
+    resolve_backend_python_bin, resolve_bundled_python_home, BackendSupervisorState, RuntimeState,
+    DEFAULT_PORT, EXECUTION_LOG_PREFIX, SUPPORTED_DAW_TARGETS, unique_suffix,
 };
 
 struct HttpJsonResponse {
     status_code: u16,
     status_line: String,
     body: Value,
+}
+
+fn strip_ansi_escape_sequences(input: &str) -> String {
+    let mut normalized = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if matches!(chars.peek(), Some('[')) {
+                chars.next();
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        normalized.push(ch);
+    }
+    normalized
+}
+
+fn classify_backend_stderr_line(line: &str) -> (&'static str, String) {
+    let normalized = strip_ansi_escape_sequences(line).trim().to_string();
+    let level = if normalized.starts_with("INFO:") {
+        "info"
+    } else if normalized.starts_with("WARNING:") || normalized.starts_with("WARN:") {
+        "warn"
+    } else {
+        "error"
+    };
+    (level, format!("backend.stderr {normalized}"))
 }
 
 pub(super) fn backend_status(state: &Arc<RuntimeState>) -> Result<Value, String> {
@@ -406,15 +438,22 @@ fn start_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
                 if trimmed.is_empty() {
                     continue;
                 }
+                if trimmed.starts_with(EXECUTION_LOG_PREFIX) {
+                    let _ = append_execution_log_from_raw_line(&state_clone, trimmed);
+                    continue;
+                }
+                let (level, message) = classify_backend_stderr_line(trimmed);
                 if let Ok(mut backend) = state_clone.backend_state.lock() {
                     backend.logs_count += 1;
-                    backend.last_error = Some(trimmed.to_string());
+                    if level == "error" {
+                        backend.last_error = Some(strip_ansi_escape_sequences(trimmed).trim().to_string());
+                    }
                 }
                 let _ = append_log(
                     &state_clone,
-                    "error",
+                    level,
                     "backend.supervisor",
-                    &format!("backend.stderr {trimmed}"),
+                    &message,
                     Some(json!({ "port": pid })),
                 );
             }
@@ -792,7 +831,8 @@ fn state_version() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        backend_env_vars, backend_error_response_to_capability_response, HttpJsonResponse,
+        backend_env_vars, backend_error_response_to_capability_response, classify_backend_stderr_line,
+        HttpJsonResponse,
     };
     use serde_json::{json, Value};
     use std::path::Path;
@@ -865,6 +905,19 @@ mod tests {
                 .and_then(|details| details.get("statusCode"))
                 .and_then(Value::as_u64),
             Some(404)
+        );
+    }
+
+    #[test]
+    fn classify_backend_stderr_line_maps_uvicorn_info_to_info_level() {
+        let (level, message) = classify_backend_stderr_line(
+            "\u{1b}[32mINFO\u{1b}[0m:     Uvicorn running on \u{1b}[1mhttp://127.0.0.1:18500\u{1b}[0m",
+        );
+
+        assert_eq!(level, "info");
+        assert_eq!(
+            message,
+            "backend.stderr INFO:     Uvicorn running on http://127.0.0.1:18500"
         );
     }
 }
