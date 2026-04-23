@@ -681,6 +681,31 @@ test('general and workflow settings reuse the shared ui Select used by automatio
   assert.match(dawSource, /SUPPORTED_DAW_TARGETS/)
 })
 
+test('daw settings page renders the explicit unavailable status instead of disconnected when the DAW state is unknown', async () => {
+  const { DawSettingsPage } = await loadHostModule()
+
+  const markup = renderToStaticMarkup(
+    React.createElement(DawSettingsPage, {
+      locale: 'en',
+      dawTarget: 'pro_tools',
+      dawStatus: {
+        status: 'unknown',
+        targetLabel: 'Pro Tools',
+        sessionName: '',
+        statusLabel: 'Unavailable',
+        lastError: 'Probe failed.',
+      },
+      checkingConnection: false,
+      onDawTargetChange() {},
+      onCheckConnection() {},
+    }),
+  )
+
+  assert.match(markup, /Unavailable/)
+  assert.match(markup, /Probe failed\./)
+  assert.doesNotMatch(markup, />Disconnected</)
+})
+
 test('general settings markup keeps shared select styling for appearance controls after the split', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   globalThis.localStorage = {

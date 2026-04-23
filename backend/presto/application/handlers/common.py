@@ -106,16 +106,38 @@ def ensure_daw_connected(
     return daw
 
 
-def safe_connection_status(ctx: CapabilityExecutionContext) -> Any | None:
-    daw = ctx.daw
-    if daw is None:
-        return None
-
+def read_connection_status(ctx: CapabilityExecutionContext, capability_id: str) -> Any:
+    daw = get_daw(ctx, capability_id)
     get_connection_status = getattr(daw, "get_connection_status", None)
     if not callable(get_connection_status):
-        return None
+        raise PrestoError(
+            "DAW_STATUS_UNAVAILABLE",
+            "DAW connection status is unavailable.",
+            source="capability",
+            retryable=False,
+            capability=capability_id,
+            adapter=str(ctx.target_daw),
+            details={
+                "rawCode": "DAW_STATUS_UNAVAILABLE",
+                "rawMessage": "DAW connection status is unavailable.",
+            },
+        )
 
     try:
         return get_connection_status()
-    except Exception:
-        return None
+    except PrestoError:
+        raise
+    except Exception as exc:
+        message = str(exc).strip() or "Failed to read DAW connection status."
+        raise PrestoError(
+            "DAW_STATUS_UNAVAILABLE",
+            "Failed to read DAW connection status.",
+            source="capability",
+            retryable=False,
+            capability=capability_id,
+            adapter=str(ctx.target_daw),
+            details={
+                "rawCode": "DAW_STATUS_UNAVAILABLE",
+                "rawMessage": message,
+            },
+        ) from exc

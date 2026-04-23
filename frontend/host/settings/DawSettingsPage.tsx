@@ -4,6 +4,7 @@ import { SUPPORTED_DAW_TARGETS, type DawTarget } from '@presto/contracts'
 import { Select } from '../../ui'
 import { hostShellColors } from '../hostShellColors'
 import { dawLabel } from '../hostShellHelpers'
+import type { HostDawConnectionState } from '../hooks/useDawStatusPolling'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
 import { actionButtonStyle, sectionDescriptionStyle, sectionStyle, sectionTitleStyle, stackStyle } from './pageStyles'
@@ -12,7 +13,7 @@ export interface DawSettingsPageProps {
   locale: HostLocale
   dawTarget: DawTarget
   dawStatus: {
-    connected: boolean
+    status: HostDawConnectionState
     targetLabel: string
     sessionName: string
     statusLabel: string
@@ -31,6 +32,12 @@ export function DawSettingsPage({
   onDawTargetChange,
   onCheckConnection,
 }: DawSettingsPageProps) {
+  const statusColor = dawStatus.status === 'connected'
+    ? hostShellColors.successText
+    : dawStatus.status === 'disconnected'
+      ? hostShellColors.errorText
+      : hostShellColors.textMuted
+
   return (
     <div style={stackStyle}>
       <section style={sectionStyle}>
@@ -51,7 +58,7 @@ export function DawSettingsPage({
               <p
                 style={{
                   margin: 0,
-                  color: dawStatus.connected ? hostShellColors.successText : hostShellColors.errorText,
+                  color: statusColor,
                   fontSize: 16,
                   fontWeight: 600,
                 }}

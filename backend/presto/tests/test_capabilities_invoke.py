@@ -524,7 +524,6 @@ def test_invoke_system_health_returns_backend_status() -> None:
     assert response.capability == "system.health"
     assert response.data == {
         "backendReady": True,
-        "dawConnected": False,
         "activeDaw": "pro_tools",
     }
     assert app.state.services.daw.connect_calls == 0
@@ -537,8 +536,50 @@ def test_health_route_returns_live_backend_status() -> None:
     response = health(request)
 
     assert response.backend_ready is True
-    assert response.daw_connected is False
     assert response.active_daw == "pro_tools"
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_health_route_does_not_depend_on_daw_connection_status_probe() -> None:
+    app = _app_with_fake_daw()
+    app.state.services.daw.connected = True
+    request = DummyRequest(app=app)
+
+    def _raise_connection_probe_failure():
+        raise RuntimeError("health route must not call get_connection_status")
+
+    app.state.services.daw.get_connection_status = _raise_connection_probe_failure
+
+    response = health(request)
+
+    assert response.backend_ready is True
+    assert response.active_daw == "pro_tools"
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_invoke_system_health_does_not_depend_on_daw_connection_status_probe() -> None:
+    app = _app_with_fake_daw()
+    request = DummyRequest(app=app)
+
+    def _raise_connection_probe_failure():
+        raise RuntimeError("system.health must not call get_connection_status")
+
+    app.state.services.daw.get_connection_status = _raise_connection_probe_failure
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-1-no-probe",
+            capability="system.health",
+            payload={},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data == {
+        "backendReady": True,
+        "activeDaw": "pro_tools",
+    }
     assert app.state.services.daw.connect_calls == 0
 
 
@@ -654,6 +695,55 @@ def test_invoke_daw_connection_get_status_returns_live_shape() -> None:
     assert response.data == {
         "connected": False,
         "targetDaw": "pro_tools",
+        "sessionName": "",
+    }
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_invoke_daw_connection_get_status_returns_session_name_when_connected() -> None:
+    app = _app_with_fake_daw()
+    app.state.services.daw.connected = True
+    request = DummyRequest(app=app)
+
+    response = invoke_capability(
+        request,
+        CapabilityInvokeRequestSchema(
+            requestId="req-3-session",
+            capability="daw.connection.getStatus",
+            payload={},
+        ),
+    )
+
+    assert response.success is True
+    assert response.data == {
+        "connected": True,
+        "targetDaw": "pro_tools",
+        "sessionName": "Presto",
+    }
+    assert app.state.services.daw.connect_calls == 0
+
+
+def test_execute_daw_connection_get_status_raises_when_status_probe_fails() -> None:
+    app = _app_with_fake_daw()
+
+    def _raise_connection_probe_failure():
+        raise RuntimeError("probe failed")
+
+    app.state.services.daw.get_connection_status = _raise_connection_probe_failure
+
+    with pytest.raises(PrestoError) as exc_info:
+        execute_capability(
+            app.state.services,
+            "daw.connection.getStatus",
+            {},
+            request_id="req-probe-failed",
+        )
+
+    assert exc_info.value.code == "DAW_STATUS_UNAVAILABLE"
+    assert exc_info.value.capability == "daw.connection.getStatus"
+    assert exc_info.value.details == {
+        "rawCode": "DAW_STATUS_UNAVAILABLE",
+        "rawMessage": "probe failed",
     }
     assert app.state.services.daw.connect_calls == 0
 
@@ -2141,7 +2231,6 @@ def test_health_route_unchanged() -> None:
 
     assert response.model_dump() == {
         "backend_ready": True,
-        "daw_connected": False,
         "active_daw": "pro_tools",
     }
     assert app.state.services.daw.connect_calls == 0

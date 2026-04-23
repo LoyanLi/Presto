@@ -10,7 +10,6 @@ from .errors import ErrorResponseSchema
 
 class HealthResponseSchema(BaseModel):
     backend_ready: bool
-    daw_connected: bool
     active_daw: str
 
 

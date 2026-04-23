@@ -7,20 +7,32 @@ import { formatHostErrorMessage } from '../errorDisplay'
 import { translateHost } from '../i18n'
 import { dawLabel } from '../hostShellHelpers'
 
+export type HostDawConnectionState = 'connected' | 'disconnected' | 'unknown'
+
 type HostDawStatusState = {
-  connected: boolean
+  status: HostDawConnectionState
   targetLabel: string
   sessionName: string
   statusLabel: string
   lastError: string
 }
 
-const DISCONNECTED_DAW_STATUS: HostDawStatusState = {
-  connected: false,
+const UNKNOWN_DAW_STATUS: HostDawStatusState = {
+  status: 'unknown',
   targetLabel: 'Pro Tools',
   sessionName: '',
   statusLabel: '',
   lastError: '',
+}
+
+function statusLabelFor(resolvedLocale: string, status: HostDawConnectionState): string {
+  if (status === 'connected') {
+    return translateHost(resolvedLocale, 'general.connected')
+  }
+  if (status === 'disconnected') {
+    return translateHost(resolvedLocale, 'general.disconnected')
+  }
+  return translateHost(resolvedLocale, 'general.unavailable')
 }
 
 type UseDawStatusPollingInput = {
@@ -41,9 +53,9 @@ export function useDawStatusPolling({
   const [checkingDawConnection, setCheckingDawConnection] = useState(false)
   const [dawRefreshKey, setDawRefreshKey] = useState(0)
   const [dawStatus, setDawStatus] = useState<HostDawStatusState>(() => ({
-    ...DISCONNECTED_DAW_STATUS,
+    ...UNKNOWN_DAW_STATUS,
     targetLabel: dawLabel(preferences.dawTarget),
-    statusLabel: translateHost(resolvedLocale, 'general.disconnected'),
+    statusLabel: statusLabelFor(resolvedLocale, 'unknown'),
   }))
   const [liveDawAdapterSnapshot, setLiveDawAdapterSnapshot] = useState<DawAdapterSnapshot | null>(initialSnapshot)
 
@@ -69,7 +81,7 @@ export function useDawStatusPolling({
           setDawStatus((current) => ({
             ...current,
             targetLabel: dawLabel(preferences.dawTarget),
-            statusLabel: translateHost(resolvedLocale, 'general.disconnected'),
+            statusLabel: statusLabelFor(resolvedLocale, current.status),
           }))
         }
         return
@@ -77,23 +89,15 @@ export function useDawStatusPolling({
 
       try {
         const status = await developerPresto.daw.connection.getStatus()
-        let sessionName = ''
-        if (status.connected && developerPresto?.session && typeof developerPresto.session.getInfo === 'function') {
-          try {
-            sessionName = (await developerPresto.session.getInfo()).session?.sessionName ?? ''
-          } catch {
-            sessionName = ''
-          }
-        }
+        const sessionName = status.sessionName ?? ''
 
         if (!cancelled) {
+          const nextStatus: HostDawConnectionState = status.connected ? 'connected' : 'disconnected'
           setDawStatus({
-            connected: Boolean(status.connected),
+            status: nextStatus,
             targetLabel: dawLabel((status.targetDaw ?? preferences.dawTarget) as DawTarget),
             sessionName,
-            statusLabel: status.connected
-              ? translateHost(resolvedLocale, 'general.connected')
-              : translateHost(resolvedLocale, 'general.disconnected'),
+            statusLabel: statusLabelFor(resolvedLocale, nextStatus),
             lastError: '',
           })
         }
@@ -111,8 +115,8 @@ export function useDawStatusPolling({
         if (!cancelled) {
           setDawStatus((current) => ({
             ...current,
-            connected: false,
-            statusLabel: translateHost(resolvedLocale, 'general.disconnected'),
+            status: current.status,
+            statusLabel: statusLabelFor(resolvedLocale, current.status),
             lastError: formatHostErrorMessage(error, 'Failed to read DAW connection status.'),
           }))
         }

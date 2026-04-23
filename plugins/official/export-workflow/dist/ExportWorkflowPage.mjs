@@ -151,6 +151,29 @@ const EMPTY_PROGRESS_PANEL_STATE = Object.freeze({
   detail: '',
 })
 
+export function shouldLoadMixSourceOptions({ currentStep, jobView }) {
+  if (currentStep !== 3) {
+    return false
+  }
+  return !jobView || jobView.isTerminal === true
+}
+
+export function shouldLoadWorkflowState({ jobView }) {
+  return !jobView || jobView.isTerminal === true
+}
+
+function resolveWorkflowConnectionState(connected) {
+  return connected ? 'connected' : 'disconnected'
+}
+
+const INITIAL_SESSION_MODEL = Object.freeze({
+  loading: true,
+  connectionState: 'unknown',
+  session: null,
+  tracks: [],
+  error: '',
+})
+
 function normalizeMixSourceType(value) {
   const normalized = String(value ?? '')
     .trim()
@@ -1044,13 +1067,7 @@ export function ExportWorkflowPage({ context, host }) {
   const snapshotManageColumns = useMemo(() => buildSnapshotManageColumns(t), [t])
   const snapshotSelectionColumns = useMemo(() => buildSnapshotSelectionColumns(t), [t])
   const [currentStep, setCurrentStep] = useState(1)
-  const [sessionModel, setSessionModel] = useState({
-    loading: true,
-    connected: false,
-    session: null,
-    tracks: [],
-    error: '',
-  })
+  const [sessionModel, setSessionModel] = useState(() => ({ ...INITIAL_SESSION_MODEL }))
   const [storageInfo, setStorageInfo] = useState({
     snapshots: { snapshotPath: '', storageDir: '', sessionPath: '', projectPath: '' },
     presets: { presetPath: '', storageDir: '' },
@@ -1326,40 +1343,83 @@ export function ExportWorkflowPage({ context, host }) {
 
   const loadWorkflowState = useCallback(
     async ({ refreshOnly = false, tracksOnly = false } = {}) => {
+      if (!shouldLoadWorkflowState({ jobView })) {
+        return
+      }
       if (!tracksOnly) {
         setSessionModel((current) => ({ ...current, loading: true, error: '' }))
         setErrorMessage('')
       }
-      try {
-        const connection = await context.presto.daw.connection.getStatus()
-        let sessionInfo = null
-        let tracks = []
-        if (connection.connected) {
-          sessionInfo = (await context.presto.session.getInfo()).session
-          tracks = (await context.presto.track.list()).tracks || []
-        }
 
+      let connection
+      try {
+        connection = await context.presto.daw.connection.getStatus()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load export workflow state.'
+        setSessionModel((current) => ({
+          ...current,
+          loading: false,
+          connectionState: current.connectionState,
+          error: message,
+        }))
+        return
+      }
+
+      const connectionState = resolveWorkflowConnectionState(Boolean(connection.connected))
+      if (!connection.connected) {
+        const disconnectedState = {
+          loading: false,
+          connectionState,
+          session: null,
+          tracks: [],
+          error: '',
+        }
         if (tracksOnly) {
           setSessionModel((current) => ({
             ...current,
-            loading: false,
-            connected: Boolean(connection.connected),
-            session: sessionInfo,
-            tracks,
-            error: '',
+            ...disconnectedState,
           }))
           return
         }
+        setSessionModel(disconnectedState)
+        return
+      }
 
-        const loadedSnapshots = await loadSnapshotsFromStorage(context.storage, sessionInfo)
-
-        setSessionModel({
+      let sessionInfo = null
+      let tracks = []
+      try {
+        sessionInfo = (await context.presto.session.getInfo()).session
+        tracks = (await context.presto.track.list()).tracks || []
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load export workflow state.'
+        setSessionModel((current) => ({
+          ...current,
           loading: false,
-          connected: Boolean(connection.connected),
-          session: sessionInfo,
-          tracks,
-          error: '',
-        })
+          connectionState,
+          error: message,
+        }))
+        return
+      }
+
+      const connectedState = {
+        loading: false,
+        connectionState,
+        session: sessionInfo,
+        tracks,
+        error: '',
+      }
+      if (tracksOnly) {
+        setSessionModel((current) => ({
+          ...current,
+          ...connectedState,
+        }))
+        return
+      }
+
+      setSessionModel(connectedState)
+
+      try {
+        const loadedSnapshots = await loadSnapshotsFromStorage(context.storage, sessionInfo)
         setSnapshots(loadedSnapshots.map(normalizeSnapshot))
         if (!initializedSettingsRef.current || refreshOnly) {
           setSettings((current) => ({
@@ -1374,27 +1434,14 @@ export function ExportWorkflowPage({ context, host }) {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load export workflow state.'
-        if (tracksOnly) {
-          setSessionModel((current) => ({
-            ...current,
-            loading: false,
-            connected: false,
-            session: null,
-            tracks: [],
-            error: message,
-          }))
-          return
-        }
-        setSessionModel({
-          loading: false,
-          connected: false,
-          session: null,
-          tracks: [],
+        setSessionModel((current) => ({
+          ...current,
+          ...connectedState,
           error: message,
-        })
+        }))
       }
     },
-    [context.presto.daw.connection, context.presto.session, context.presto.track, context.storage],
+    [context.presto.daw.connection, context.presto.session, context.presto.track, context.storage, jobView],
   )
 
   useEffect(() => {
@@ -1403,17 +1450,17 @@ export function ExportWorkflowPage({ context, host }) {
 
   useEffect(() => {
     stopLiveTrackSync()
-    if (currentStep !== 1) {
+    if (currentStep !== 1 || !shouldLoadWorkflowState({ jobView })) {
       return undefined
     }
     liveTrackSyncTimeoutRef.current = setTimeout(() => {
       void loadWorkflowState({ tracksOnly: true })
     }, TRACK_LIST_SYNC_MS)
     return () => stopLiveTrackSync()
-  }, [currentStep, loadWorkflowState, sessionModel.tracks, stopLiveTrackSync])
+  }, [currentStep, jobView, loadWorkflowState, sessionModel.tracks, stopLiveTrackSync])
 
   useEffect(() => {
-    if (currentStep !== 3) {
+    if (!shouldLoadMixSourceOptions({ currentStep, jobView })) {
       return undefined
     }
 
@@ -1490,7 +1537,7 @@ export function ExportWorkflowPage({ context, host }) {
     return () => {
       cancelled = true
     }
-  }, [context.presto?.export?.mixSource, currentStep])
+  }, [context.presto?.export?.mixSource, currentStep, jobView])
 
   const pollJob = useCallback(
     async (nextJobId) => {
@@ -1745,7 +1792,7 @@ export function ExportWorkflowPage({ context, host }) {
     resetActiveExportState()
   }, [resetActiveExportState])
 
-  const canAdvanceToSnapshots = sessionModel.connected
+  const canAdvanceToSnapshots = sessionModel.connectionState === 'connected' && Boolean(sessionModel.session)
   const canAdvanceToExportSettings = snapshots.length > 0
   const previousStepAction = currentStep > 1
     ? h(

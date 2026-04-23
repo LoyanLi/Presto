@@ -4,6 +4,7 @@ import BuildOutlined from '@mui/icons-material/BuildOutlined'
 import CableOutlined from '@mui/icons-material/CableOutlined'
 import ChevronLeftOutlined from '@mui/icons-material/ChevronLeftOutlined'
 import ChevronRightOutlined from '@mui/icons-material/ChevronRightOutlined'
+import HelpOutlineOutlined from '@mui/icons-material/HelpOutlineOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import HomeOutlined from '@mui/icons-material/HomeOutlined'
 import LinkOffOutlined from '@mui/icons-material/LinkOffOutlined'
@@ -12,11 +13,12 @@ import ViewSidebarOutlined from '@mui/icons-material/ViewSidebarOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
 import prestoLogoPng from '../../assets/PrestoLogoPng.png'
 import { hostShellColors } from './hostShellColors'
+import type { HostDawConnectionState } from './hooks/useDawStatusPolling'
 import type { HostLocale } from './i18n'
 import { translateHost } from './i18n'
 
 export interface HostSidebarConnectionStatus {
-  connected: boolean
+  status: HostDawConnectionState
   targetLabel: string
   sessionName: string
   statusLabel: string
@@ -96,7 +98,7 @@ const connectionFooterStyle = (collapsed: boolean): CSSProperties => ({
   boxSizing: 'border-box',
 })
 
-const connectionChipStyle = (connected: boolean, collapsed: boolean): CSSProperties => ({
+const connectionChipStyle = (status: HostDawConnectionState, collapsed: boolean): CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: collapsed ? 'center' : 'flex-start',
@@ -105,9 +107,9 @@ const connectionChipStyle = (connected: boolean, collapsed: boolean): CSSPropert
   minWidth: 0,
   padding: collapsed ? '0' : '0 12px',
   borderRadius: 18,
-  border: `1px solid ${connected ? hostShellColors.successBorder : hostShellColors.errorBorder}`,
-  background: connected ? hostShellColors.successSurface : hostShellColors.errorSurface,
-  color: connected ? hostShellColors.successText : hostShellColors.errorText,
+  border: `1px solid ${status === 'connected' ? hostShellColors.successBorder : status === 'disconnected' ? hostShellColors.errorBorder : hostShellColors.border}`,
+  background: status === 'connected' ? hostShellColors.successSurface : status === 'disconnected' ? hostShellColors.errorSurface : hostShellColors.surfaceMuted,
+  color: status === 'connected' ? hostShellColors.successText : status === 'disconnected' ? hostShellColors.errorText : hostShellColors.textMuted,
   boxSizing: 'border-box',
 })
 
@@ -308,12 +310,16 @@ export function HostPrimarySidebar({
           </span>
         </button>
         <div
-          style={connectionChipStyle(connectionStatus.connected, collapsed)}
+          style={connectionChipStyle(connectionStatus.status, collapsed)}
           title={`${connectionStatus.targetLabel} · ${connectionStatus.statusLabel}${connectionStatus.sessionName ? ` · ${connectionStatus.sessionName}` : ''}`}
           aria-label={`DAW connection ${connectionStatus.statusLabel}`}
         >
           <span aria-hidden style={navIconStyle}>
-            {connectionStatus.connected ? <CableOutlined sx={{ fontSize: 20 }} /> : <LinkOffOutlined sx={{ fontSize: 20 }} />}
+            {connectionStatus.status === 'connected'
+              ? <CableOutlined sx={{ fontSize: 20 }} />
+              : connectionStatus.status === 'disconnected'
+                ? <LinkOffOutlined sx={{ fontSize: 20 }} />
+                : <HelpOutlineOutlined sx={{ fontSize: 20 }} />}
           </span>
           {collapsed ? null : (
             <span style={connectionMetaStyle}>

@@ -416,7 +416,7 @@ export function HostShellApp({
   )
 
   const sidebarConnectionStatus = {
-    connected: dawStatus.connected,
+    status: dawStatus.status,
     targetLabel: dawStatus.targetLabel,
     sessionName: dawStatus.sessionName,
     statusLabel: dawStatus.statusLabel,

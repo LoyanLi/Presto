@@ -354,6 +354,63 @@ test('plugin module exports manifest and page export', async () => {
   assert.equal(typeof pluginModule.saveExportWorkflowSettings, 'function')
 })
 
+test('export workflow page skips mix-source reload while export job is still running', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness()
+
+  try {
+    assert.equal(
+      pageModule.shouldLoadMixSourceOptions({
+        currentStep: 3,
+        jobView: createRunningJobView(),
+      }),
+      false,
+    )
+    assert.equal(
+      pageModule.shouldLoadMixSourceOptions({
+        currentStep: 3,
+        jobView: createRunningJobView({ isTerminal: true, state: 'succeeded', terminalStatus: 'succeeded' }),
+      }),
+      true,
+    )
+    assert.equal(
+      pageModule.shouldLoadMixSourceOptions({
+        currentStep: 2,
+        jobView: null,
+      }),
+      false,
+    )
+  } finally {
+    restore()
+  }
+})
+
+test('export workflow page freezes session refresh while export job is still running', async () => {
+  const { pageModule, restore } = await loadPageModuleWithHookHarness()
+
+  try {
+    assert.equal(
+      pageModule.shouldLoadWorkflowState({
+        jobView: createRunningJobView(),
+      }),
+      false,
+    )
+    assert.equal(
+      pageModule.shouldLoadWorkflowState({
+        jobView: createRunningJobView({ isTerminal: true, state: 'succeeded', terminalStatus: 'succeeded' }),
+      }),
+      true,
+    )
+    assert.equal(
+      pageModule.shouldLoadWorkflowState({
+        jobView: null,
+      }),
+      true,
+    )
+  } finally {
+    restore()
+  }
+})
+
 test('plugin module resolves manifest strings from plugin-local zh-CN messages', async () => {
   const pluginModule = await loadPluginModule()
   const localizedManifest = pluginModule.resolveManifest({
@@ -1330,6 +1387,16 @@ test('export page source keeps the live track list in sync while the session ste
   assert.match(source, /TRACK_LIST_SYNC_MS/)
   assert.match(source, /loadWorkflowState\(\{ tracksOnly: true \}\)/)
   assert.match(source, /currentStep !== 1/)
+  assert.match(source, /shouldLoadWorkflowState\(\{ jobView \}\)/)
+})
+
+test('export page source distinguishes unknown connection state from confirmed disconnection', async () => {
+  const source = await readFile(new URL('../dist/ExportWorkflowPage.mjs', import.meta.url), 'utf8')
+
+  assert.match(source, /connectionState:\s*'unknown'/)
+  assert.match(source, /return connected \? 'connected' : 'disconnected'/)
+  assert.match(source, /sessionModel\.connectionState === 'connected'/)
+  assert.doesNotMatch(source, /catch\s*\(error\)\s*\{[\s\S]*connected:\s*false[\s\S]*session:\s*null[\s\S]*tracks:\s*\[\]/)
 })
 
 test('export page source loads plugin-local settings and applies the default snapshot selection policy', async () => {

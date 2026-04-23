@@ -4,7 +4,6 @@ import type { JobAcceptedResponse, JobsCancelResponse, JobsCreateResponse, JobsD
 
 export interface HealthStatus {
   backendReady: boolean
-  dawConnected: boolean
   activeDaw: DawTarget
 }
 
@@ -128,6 +127,7 @@ export interface DawConnectionDisconnectResponse {
 export interface DawConnectionGetStatusResponse {
   connected: boolean
   targetDaw: DawTarget
+  sessionName: string
   host?: string
   port?: number
 }
