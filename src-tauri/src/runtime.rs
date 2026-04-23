@@ -529,7 +529,8 @@ fn serialize_execution_log_entry(entry: &Value, default_session_id: &str) -> Res
     }
     if let Some(data) = normalize_execution_log_data(object, &event) {
         if !data.is_null() {
-            content.push('\n');
+            content.push(' ');
+            content.push_str("data=");
             content.push_str(&format_execution_log_details(&data)?);
         }
     }
@@ -657,7 +658,7 @@ fn format_execution_log_context(object: &Map<String, Value>, event: &str) -> Str
 }
 
 fn format_execution_log_details(value: &Value) -> Result<String, String> {
-    serde_json::to_string_pretty(value).map_err(|error| error.to_string())
+    serde_json::to_string(value).map_err(|error| error.to_string())
 }
 
 fn normalize_execution_log_data(object: &Map<String, Value>, event: &str) -> Option<Value> {
@@ -1714,8 +1715,10 @@ mod tests {
         .expect("serialize execution log");
 
         assert!(serialized.contains("[2026-04-23T15:00:00.000Z] [info] [plugin.host] export started request=req-1"));
-        assert!(serialized.contains("\"password\": \"***REDACTED***\""));
-        assert!(serialized.contains("\"token\": \"***REDACTED***\""));
+        assert!(!serialized.contains('\n'));
+        assert!(serialized.contains("data={"));
+        assert!(serialized.contains("\"password\":\"***REDACTED***\""));
+        assert!(serialized.contains("\"token\":\"***REDACTED***\""));
     }
 
     #[test]
@@ -1748,9 +1751,11 @@ mod tests {
         .expect("serialize execution log");
 
         assert!(serialized.contains("[info] [backend.execution] Succeeded daw.track.list request=req-1"));
+        assert!(!serialized.contains('\n'));
         assert!(!serialized.contains("\"capability\": \"daw.track.list\""));
-        assert!(serialized.contains("\"count\": 6"));
-        assert!(serialized.contains("\"sample\": ["));
+        assert!(serialized.contains("data={"));
+        assert!(serialized.contains("\"count\":6"));
+        assert!(serialized.contains("\"sample\":["));
     }
 
     #[test]
@@ -1785,8 +1790,10 @@ mod tests {
                 "[error] [backend.execution] Failed daw.export.run.start: Workflow execution cancelled. request=req-2"
             )
         );
-        assert!(serialized.contains("\"code\": \"WORKFLOW_CANCELLED\""));
-        assert!(serialized.contains("\"detailKeys\": ["));
+        assert!(!serialized.contains('\n'));
+        assert!(serialized.contains("data={"));
+        assert!(serialized.contains("\"code\":\"WORKFLOW_CANCELLED\""));
+        assert!(serialized.contains("\"detailKeys\":["));
     }
 
     #[test]

@@ -46,6 +46,9 @@ Rust runtime 的职责是桌面业务宿主装配，而不是 UI 渲染。
 - 日志目录位于应用数据目录下的 `logs/`
 - 每次应用启动生成一个新的 `presto-<timestamp>.log`
 - 主日志行优先记录真实错误原因，只有额外上下文才追加紧凑 JSON
+- execution lifecycle 事件现在也直接写回同一份 runtime log，不再单独分流到另一套日志面
+- execution log 落盘格式当前统一为严格单行摘要，必要上下文以内联紧凑字段或 JSON 片段追加；默认先保证人类扫读和 grep 友好
+- `daw.connection.getStatus`、`daw.adapter.getSnapshot`、`daw.session.getInfo`、`daw.track.list`、`daw.export.mixWithSource` 与 `jobs.get` 这类低信号成功态不会持续刷屏，失败态仍然保留
 - `macAccessibility` 相关运行时失败如果命中辅助功能权限缺失，会被统一归类成 `MAC_ACCESSIBILITY_PERMISSION_REQUIRED`
 - `mac-accessibility.script.run` 与 `mac-accessibility.file.run` 都会走同一套权限引导逻辑，而不是把原始 `osascript` 权限错误直接抛回上层
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.10
+
+- 导出执行链路补齐明确生命周期事件：`export.run.accepted`、`export.run.started`、`export.file.succeeded`、`export.run.succeeded`、`export.run.failed`，原始 runtime log 终于能按真实顺序反映导出状态。
+- runtime log 继续写回同一份原始日志文件，但 execution log 现在收紧为严格单行可读摘要；必要上下文以内联紧凑字段追加，不再被多行 JSON 撕碎。
+- 低信号成功态日志被进一步收紧：`daw.connection.getStatus`、`daw.adapter.getSnapshot`、`daw.session.getInfo`、`daw.track.list`、`daw.export.mixWithSource` 和 `jobs.get` 不再持续把日志刷成轮询噪音。
+- 插件宿主会抑制紧邻的重复 activation 日志；官方插件激活不再在原始日志里成对重复出现。
+- backend supervisor 现在会正确识别 backend `stderr` 的级别，并清理 ANSI 控制字符；`Uvicorn INFO` 不再误记成 `error`。
+- Tauri `runtime_invoke` 改成异步命令，并把 `backend.*` 调用移到 `spawn_blocking`；导出期间慢 invoke 不再直接卡住宿主命令处理线程。
+- `0.3.10` 双架构安装包已重新生成并补齐校验值：`arm64` `973a57c3f21f074582e1e6f3a477e13259f57fde639ba412b541b6595ab6ccfe`，`x64` `9d5d2dfd161503432f80cd5ee8bd24cc587256b25c1413d019433ed47f416112`。
+
 ## 0.3.9
 
 - `Runs` 页面交互改为“默认总览 -> 单类详情”：默认先显示 `workflow`、`automation`、`tool`、`command` 四类总览卡片，进入详情后只保留单一榜单，并通过顶部 tabs 在各类别之间切换。

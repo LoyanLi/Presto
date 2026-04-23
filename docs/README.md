@@ -9,6 +9,8 @@
 
 - [实施计划](plans/)
 - [发布记录](releases/)
+- [当前发布说明：0.3.10](releases/v0.3.10-release.md)
+- [更新总览](../CHANGELOG.md)
 
 ## 如何选入口
 
