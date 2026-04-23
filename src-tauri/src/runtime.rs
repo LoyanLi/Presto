@@ -518,35 +518,368 @@ fn serialize_execution_log_entry(entry: &Value, default_session_id: &str) -> Res
     let level = required_log_field(object, "level")?;
     let source = required_log_field(object, "source")?;
     let event = required_log_field(object, "event")?;
-    let message = required_log_field(object, "message")?;
-    let mut normalized = Map::new();
-    normalized.insert("ts".to_string(), Value::String(timestamp_now()));
-    normalized.insert(
-        "sessionId".to_string(),
-        Value::String(optional_log_field(object, "sessionId").unwrap_or_else(|| default_session_id.to_string())),
-    );
-    normalized.insert("level".to_string(), Value::String(level));
-    normalized.insert("source".to_string(), Value::String(source));
-    normalized.insert("event".to_string(), Value::String(event));
-    normalized.insert("message".to_string(), Value::String(message));
-    for field in [
-        "jobId",
-        "requestId",
-        "pluginId",
-        "workflowId",
-        "capability",
-        "stepId",
-    ] {
-        if let Some(value) = optional_log_field(object, field) {
-            normalized.insert(field.to_string(), Value::String(value));
-        }
+    let message = humanize_execution_log_message(object, &event, &required_log_field(object, "message")?);
+    let _session_id = optional_log_field(object, "sessionId").unwrap_or_else(|| default_session_id.to_string());
+    let timestamp = optional_log_field(object, "ts").unwrap_or_else(timestamp_now);
+    let context = format_execution_log_context(object, &event);
+    let mut content = format!("[{timestamp}] [{level}] [{source}] {message}");
+    if !context.is_empty() {
+        content.push(' ');
+        content.push_str(&context);
     }
-    if let Some(data) = object.get("data") {
+    if let Some(data) = normalize_execution_log_data(object, &event) {
         if !data.is_null() {
-            normalized.insert("data".to_string(), normalize_log_data(data));
+            content.push('\n');
+            content.push_str(&format_execution_log_details(&data)?);
         }
     }
-    serde_json::to_string(&Value::Object(normalized)).map_err(|error| error.to_string())
+    Ok(content)
+}
+
+fn humanize_execution_log_message(
+    object: &Map<String, Value>,
+    event: &str,
+    fallback_message: &str,
+) -> String {
+    match event {
+        "capability.invoke.start" => format!(
+            "Invoke {}",
+            optional_log_field(object, "capability").unwrap_or_else(|| "capability".to_string())
+        ),
+        "capability.invoke.succeeded" => format!(
+            "Succeeded {}",
+            optional_log_field(object, "capability").unwrap_or_else(|| "capability".to_string())
+        ),
+        "capability.invoke.failed" => {
+            let capability = optional_log_field(object, "capability").unwrap_or_else(|| "capability".to_string());
+            let error_summary = object
+                .get("data")
+                .and_then(Value::as_object)
+                .and_then(|data| data.get("error"))
+                .and_then(Value::as_object)
+                .and_then(|error| {
+                    error
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .or_else(|| error.get("code").and_then(Value::as_str))
+                })
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned);
+            if let Some(summary) = error_summary {
+                format!("Failed {capability}: {summary}")
+            } else {
+                format!("Failed {capability}")
+            }
+        }
+        "workflow.run.accepted" => {
+            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            format!("Queued workflow {workflow}")
+        }
+        "workflow.run.started" => {
+            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            format!("Started workflow {workflow}")
+        }
+        "workflow.run.succeeded" => {
+            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            format!("Finished workflow {workflow}")
+        }
+        "workflow.run.failed" => {
+            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            format!("Failed workflow {workflow}")
+        }
+        "workflow.step.started" => format!(
+            "Started step {}",
+            optional_log_field(object, "stepId").unwrap_or_else(|| "step".to_string())
+        ),
+        "workflow.step.succeeded" => format!(
+            "Finished step {}",
+            optional_log_field(object, "stepId").unwrap_or_else(|| "step".to_string())
+        ),
+        "workflow.step.failed" => format!(
+            "Failed step {}",
+            optional_log_field(object, "stepId").unwrap_or_else(|| "step".to_string())
+        ),
+        "export.run.accepted" => "Queued export".to_string(),
+        "export.run.started" => "Started export".to_string(),
+        "export.run.succeeded" => "Finished export".to_string(),
+        "export.run.failed" => "Failed export".to_string(),
+        "export.file.succeeded" => {
+            let snapshot_name = object
+                .get("data")
+                .and_then(Value::as_object)
+                .and_then(|data| data.get("snapshotName"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let mix_source_name = object
+                .get("data")
+                .and_then(Value::as_object)
+                .and_then(|data| data.get("mixSourceName"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            match (snapshot_name, mix_source_name) {
+                (Some(snapshot), Some(source_name)) => format!("Exported {snapshot} via {source_name}"),
+                (Some(snapshot), None) => format!("Exported {snapshot}"),
+                (None, Some(source_name)) => format!("Exported file via {source_name}"),
+                (None, None) => "Exported file".to_string(),
+            }
+        }
+        _ => fallback_message.to_string(),
+    }
+}
+
+fn format_execution_log_context(object: &Map<String, Value>, event: &str) -> String {
+    let mut parts = Vec::new();
+    if let Some(request_id) = optional_log_field(object, "requestId") {
+        parts.push(format!("request={request_id}"));
+    }
+    if let Some(job_id) = optional_log_field(object, "jobId") {
+        parts.push(format!("job={job_id}"));
+    }
+    if let Some(workflow_id) = optional_log_field(object, "workflowId") {
+        parts.push(format!("workflow={workflow_id}"));
+    }
+    if let Some(step_id) = optional_log_field(object, "stepId") {
+        parts.push(format!("step={step_id}"));
+    }
+    if let Some(plugin_id) = optional_log_field(object, "pluginId") {
+        parts.push(format!("plugin={plugin_id}"));
+    }
+    if event != "capability.invoke.start" && event != "capability.invoke.succeeded" && event != "capability.invoke.failed"
+    {
+        if let Some(capability) = optional_log_field(object, "capability") {
+            parts.push(format!("capability={capability}"));
+        }
+    }
+    parts.join(" ")
+}
+
+fn format_execution_log_details(value: &Value) -> Result<String, String> {
+    serde_json::to_string_pretty(value).map_err(|error| error.to_string())
+}
+
+fn normalize_execution_log_data(object: &Map<String, Value>, event: &str) -> Option<Value> {
+    let data = object.get("data")?;
+    if data.is_null() {
+        return None;
+    }
+    let compacted = compact_execution_log_data(object, event, data);
+    if compacted.is_null() {
+        return None;
+    }
+    Some(normalize_log_data(&compacted))
+}
+
+fn compact_execution_log_data(object: &Map<String, Value>, _event: &str, data: &Value) -> Value {
+    let Some(data_object) = data.as_object() else {
+        return data.clone();
+    };
+
+    let mut compacted = Map::new();
+    for (key, value) in data_object {
+        if key == "event" || key == "message" {
+            continue;
+        }
+        if let Some(top_level) = object.get(key) {
+            if top_level == value {
+                continue;
+            }
+        }
+
+        let compacted_value = match key.as_str() {
+            "payload" => compact_log_payload(value),
+            "result" => compact_log_result(value),
+            "error" => compact_log_error(value),
+            _ => compact_log_value(value),
+        };
+        if !compacted_value.is_null() {
+            compacted.insert(key.clone(), compacted_value);
+        }
+    }
+
+    if compacted.is_empty() {
+        Value::Null
+    } else {
+        Value::Object(compacted)
+    }
+}
+
+fn compact_log_payload(value: &Value) -> Value {
+    let Some(object) = value.as_object() else {
+        return compact_log_value(value);
+    };
+    if object.is_empty() {
+        return Value::Null;
+    }
+
+    if let Some(snapshots) = object.get("snapshots").and_then(Value::as_array) {
+        let mut summary = Map::new();
+        summary.insert("snapshotCount".to_string(), json!(snapshots.len()));
+        summary.insert(
+            "snapshotSample".to_string(),
+            Value::Array(
+                snapshots
+                    .iter()
+                    .filter_map(|snapshot| snapshot.get("name").and_then(Value::as_str))
+                    .take(5)
+                    .map(|name| Value::String(name.to_string()))
+                    .collect(),
+            ),
+        );
+        if let Some(settings) = object.get("exportSettings").and_then(Value::as_object) {
+            if let Some(file_format) = settings.get("file_format").and_then(Value::as_str) {
+                summary.insert("fileFormat".to_string(), Value::String(file_format.to_string()));
+            }
+            if let Some(output_path) = settings.get("output_path").and_then(Value::as_str) {
+                summary.insert("outputPath".to_string(), Value::String(output_path.to_string()));
+            }
+            if let Some(mix_sources) = settings.get("mix_sources").and_then(Value::as_array) {
+                summary.insert("mixSourceCount".to_string(), json!(mix_sources.len()));
+            }
+        }
+        return Value::Object(summary);
+    }
+
+    compact_log_value(value)
+}
+
+fn compact_log_result(value: &Value) -> Value {
+    let Some(object) = value.as_object() else {
+        return compact_log_value(value);
+    };
+
+    if let Some(session) = object.get("session").and_then(Value::as_object) {
+        let mut summary = Map::new();
+        for key in [
+            "sessionName",
+            "sampleRate",
+            "bitDepth",
+            "isPlaying",
+            "isRecording",
+            "sessionPath",
+        ] {
+            if let Some(item) = session.get(key) {
+                summary.insert(key.to_string(), compact_log_value(item));
+            }
+        }
+        return json!({ "session": summary });
+    }
+
+    if let Some(tracks) = object.get("tracks").and_then(Value::as_array) {
+        return json!({
+            "tracks": {
+                "count": tracks.len(),
+                "sample": tracks
+                    .iter()
+                    .filter_map(|track| track.get("name").or_else(|| track.get("trackName")).and_then(Value::as_str))
+                    .take(5)
+                    .collect::<Vec<_>>(),
+            }
+        });
+    }
+
+    if let Some(source_list) = object.get("sourceList").and_then(Value::as_array) {
+        let mut summary = Map::new();
+        if let Some(source_type) = object.get("sourceType").and_then(Value::as_str) {
+            summary.insert("sourceType".to_string(), Value::String(source_type.to_string()));
+        }
+        summary.insert("sourceCount".to_string(), json!(source_list.len()));
+        summary.insert(
+            "sample".to_string(),
+            Value::Array(
+                source_list
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .take(5)
+                    .map(|item| Value::String(item.to_string()))
+                    .collect(),
+            ),
+        );
+        return Value::Object(summary);
+    }
+
+    if let Some(config) = object.get("config").and_then(Value::as_object) {
+        let mut summary = Map::new();
+        summary.insert(
+            "sections".to_string(),
+            Value::Array(config.keys().take(8).map(|key| Value::String(key.clone())).collect()),
+        );
+        if let Some(host_preferences) = config.get("hostPreferences").and_then(Value::as_object) {
+            if let Some(target) = host_preferences.get("dawTarget") {
+                summary.insert("dawTarget".to_string(), compact_log_value(target));
+            }
+            if let Some(language) = host_preferences.get("language") {
+                summary.insert("language".to_string(), compact_log_value(language));
+            }
+        }
+        if let Some(ui_preferences) = config.get("uiPreferences").and_then(Value::as_object) {
+            if let Some(enabled) = ui_preferences.get("developerModeEnabled") {
+                summary.insert("developerModeEnabled".to_string(), compact_log_value(enabled));
+            }
+        }
+        return json!({ "config": summary });
+    }
+
+    if object.get("jobId").is_some() || object.get("state").is_some() {
+        let mut summary = Map::new();
+        for key in ["jobId", "state", "capability"] {
+            if let Some(item) = object.get(key) {
+                summary.insert(key.to_string(), compact_log_value(item));
+            }
+        }
+        return Value::Object(summary);
+    }
+
+    compact_log_value(value)
+}
+
+fn compact_log_error(value: &Value) -> Value {
+    let Some(object) = value.as_object() else {
+        return compact_log_value(value);
+    };
+
+    let mut summary = Map::new();
+    for key in ["code", "message"] {
+        if let Some(item) = object.get(key) {
+            summary.insert(key.to_string(), compact_log_value(item));
+        }
+    }
+    if let Some(details) = object.get("details").and_then(Value::as_object) {
+        let detail_keys = details.keys().take(6).map(|key| Value::String(key.clone())).collect::<Vec<_>>();
+        if !detail_keys.is_empty() {
+            summary.insert("detailKeys".to_string(), Value::Array(detail_keys));
+        }
+    }
+    Value::Object(summary)
+}
+
+fn compact_log_value(value: &Value) -> Value {
+    match value {
+        Value::Array(items) => {
+            if items.len() <= 5 {
+                Value::Array(items.iter().map(compact_log_value).collect())
+            } else {
+                json!({
+                    "count": items.len(),
+                    "sample": items.iter().take(5).map(compact_log_value).collect::<Vec<_>>(),
+                })
+            }
+        }
+        Value::Object(object) => {
+            let sanitized = sanitize_log_value(value, 0);
+            let serialized = serde_json::to_string(&sanitized).unwrap_or_else(|_| "null".to_string());
+            if serialized.len() <= 512 {
+                sanitized
+            } else {
+                json!({
+                    "keys": object.keys().take(8).cloned().collect::<Vec<_>>(),
+                })
+            }
+        }
+        _ => sanitize_log_value(value, 0),
+    }
 }
 
 fn required_log_field(object: &Map<String, Value>, field: &str) -> Result<String, String> {
@@ -1365,6 +1698,7 @@ mod tests {
             &json!({
                 "level": "info",
                 "source": "plugin.host",
+                "ts": "2026-04-23T15:00:00.000Z",
                 "event": "plugin.log",
                 "message": "export started",
                 "requestId": "req-1",
@@ -1379,16 +1713,80 @@ mod tests {
         )
         .expect("serialize execution log");
 
-        let parsed = serde_json::from_str::<serde_json::Value>(&serialized).expect("parse serialized execution log");
-        assert_eq!(parsed.get("sessionId").and_then(serde_json::Value::as_str), Some("session-1"));
-        assert_eq!(
-            parsed
-                .get("data")
-                .and_then(serde_json::Value::as_object)
-                .and_then(|data| data.get("password"))
-                .and_then(serde_json::Value::as_str),
-            Some("***REDACTED***")
+        assert!(serialized.contains("[2026-04-23T15:00:00.000Z] [info] [plugin.host] export started request=req-1"));
+        assert!(serialized.contains("\"password\": \"***REDACTED***\""));
+        assert!(serialized.contains("\"token\": \"***REDACTED***\""));
+    }
+
+    #[test]
+    fn capability_success_logs_are_humanized_and_summarized_for_readability() {
+        let serialized = serialize_execution_log_entry(
+            &json!({
+                "level": "info",
+                "source": "backend.execution",
+                "event": "capability.invoke.succeeded",
+                "message": "capability.invoke.succeeded",
+                "capability": "daw.track.list",
+                "requestId": "req-1",
+                "data": {
+                    "capability": "daw.track.list",
+                    "requestId": "req-1",
+                    "result": {
+                        "tracks": [
+                            { "name": "Kick" },
+                            { "name": "Snare" },
+                            { "name": "Hat" },
+                            { "name": "Bass" },
+                            { "name": "Lead Vox" },
+                            { "name": "Print" }
+                        ]
+                    }
+                },
+            }),
+            "session-1",
+        )
+        .expect("serialize execution log");
+
+        assert!(serialized.contains("[info] [backend.execution] Succeeded daw.track.list request=req-1"));
+        assert!(!serialized.contains("\"capability\": \"daw.track.list\""));
+        assert!(serialized.contains("\"count\": 6"));
+        assert!(serialized.contains("\"sample\": ["));
+    }
+
+    #[test]
+    fn capability_failure_logs_surface_human_readable_error_messages() {
+        let serialized = serialize_execution_log_entry(
+            &json!({
+                "level": "error",
+                "source": "backend.execution",
+                "event": "capability.invoke.failed",
+                "message": "capability.invoke.failed",
+                "capability": "daw.export.run.start",
+                "requestId": "req-2",
+                "data": {
+                    "capability": "daw.export.run.start",
+                    "requestId": "req-2",
+                    "error": {
+                        "code": "WORKFLOW_CANCELLED",
+                        "message": "Workflow execution cancelled.",
+                        "details": {
+                            "rawCode": "WORKFLOW_CANCELLED",
+                            "rawMessage": "Workflow execution cancelled."
+                        }
+                    }
+                },
+            }),
+            "session-1",
+        )
+        .expect("serialize execution log");
+
+        assert!(
+            serialized.contains(
+                "[error] [backend.execution] Failed daw.export.run.start: Workflow execution cancelled. request=req-2"
+            )
         );
+        assert!(serialized.contains("\"code\": \"WORKFLOW_CANCELLED\""));
+        assert!(serialized.contains("\"detailKeys\": ["));
     }
 
     #[test]

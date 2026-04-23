@@ -13,6 +13,9 @@ LOW_SIGNAL_SUCCESS_CAPABILITIES = frozenset(
     {
         "daw.connection.getStatus",
         "daw.adapter.getSnapshot",
+        "daw.session.getInfo",
+        "daw.track.list",
+        "daw.export.mixWithSource",
         "jobs.get",
     }
 )

@@ -535,6 +535,40 @@ def test_execute_capability_suppresses_polling_success_logs_for_jobs_get() -> No
     assert logger.records == []
 
 
+def test_execute_capability_suppresses_repetitive_success_logs_for_workflow_setup_reads() -> None:
+    services = build_service_container(daw=FakeDawAdapter())
+    logger = RecordingLogger()
+    services.logger = logger
+
+    session_result = execute_capability(
+        services,
+        "daw.session.getInfo",
+        {},
+        request_id="req-session-log-1",
+    )
+    assert session_result["session"]["sessionName"] == "Presto"
+    assert logger.records == []
+
+    track_result = execute_capability(
+        services,
+        "daw.track.list",
+        {},
+        request_id="req-track-list-log-1",
+    )
+    assert len(track_result["tracks"]) == 4
+    assert logger.records == []
+
+    mix_source_result = execute_capability(
+        services,
+        "daw.export.mixWithSource",
+        {"sourceType": "bus"},
+        request_id="req-mix-source-log-1",
+    )
+    assert mix_source_result["sourceType"] == "bus"
+    assert mix_source_result["sourceList"] == ["bus-1", "bus-2"]
+    assert logger.records == []
+
+
 def _create_audio_source_folder(tmp_path: Path, *, file_names: list[str]) -> Path:
     root = tmp_path / "source"
     root.mkdir(parents=True, exist_ok=True)
