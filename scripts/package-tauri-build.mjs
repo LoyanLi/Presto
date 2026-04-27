@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -56,6 +56,10 @@ function run(command, args, options = {}) {
   })
 }
 
+function escapeAppleScriptText(value) {
+  return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+}
+
 const tauriConfig = JSON.parse(await readFile(path.join(repoRoot, 'src-tauri', 'tauri.conf.json'), 'utf8'))
 const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'))
 const productName = tauriConfig.productName
@@ -78,6 +82,11 @@ const releaseRoot = path.join(repoRoot, 'release', 'tauri', artifactArch)
 const releaseAppPath = path.join(releaseRoot, `${productName}.app`)
 const releaseDmgPath = path.join(releaseRoot, `${productName}_${version}_${artifactArch}.dmg`)
 const releaseSizeReportPath = path.join(releaseRoot, 'size-report.json')
+const quarantineBypassCommandName = '打不开时运行.command'
+const writableDmgSize = '256m'
+const dmgWindowWidth = 600
+const dmgWindowHeight = 600
+const dmgBackgroundHeight = 560
 
 async function measurePathSize(targetPath) {
   const targetStat = await stat(targetPath)
@@ -122,6 +131,100 @@ async function syncBundledResources(appBundlePath) {
   }
 }
 
+async function writeQuarantineBypassCommand(targetPath) {
+  const command = `#!/bin/bash
+set -euo pipefail
+
+APP_PATH="/Applications/Presto.app"
+
+if [ ! -d "$APP_PATH" ]; then
+  echo "Presto.app 不在 /Applications。请先把 Presto.app 拖到 Applications 后再运行本脚本。"
+  read -r -p "按回车退出..."
+  exit 1
+fi
+
+xattr -dr com.apple.quarantine "/Applications/Presto.app"
+echo "已跳过 Presto.app 的 macOS 安全性检查。"
+read -r -p "按回车退出..."
+`
+
+  await writeFile(targetPath, command, 'utf8')
+  await chmod(targetPath, 0o755)
+}
+
+async function writeDmgBackground(backgroundDir) {
+  await mkdir(backgroundDir, { recursive: true })
+
+  const backgroundSvgPath = path.join(backgroundDir, 'dmg-background.svg')
+  const generatedPngPath = path.join(backgroundDir, 'dmg-background.svg.png')
+  const backgroundPngPath = path.join(backgroundDir, 'dmg-background.png')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${dmgWindowWidth}" height="${dmgBackgroundHeight}" viewBox="0 0 ${dmgWindowWidth} ${dmgBackgroundHeight}">
+  <defs>
+    <filter id="textShadow" x="-10%" y="-40%" width="120%" height="180%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#ffffff" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="${dmgWindowWidth}" height="${dmgBackgroundHeight}" fill="#ffffff"/>
+  <text x="300" y="92" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="34" font-weight="400" fill="#1d1d1f" filter="url(#textShadow)">Hi,Presto</text>
+  <text x="300" y="134" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="19" font-weight="600" fill="#8e8e93">拖到 Applications 即可安装</text>
+  <path d="M292 246L308 270L292 294" fill="none" stroke="#707070" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="300" y="400" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" fill="#2f2f31">无法打开时，运行下方脚本</text>
+</svg>
+`
+
+  await writeFile(backgroundSvgPath, svg, 'utf8')
+  await rm(generatedPngPath, { force: true })
+  await rm(backgroundPngPath, { force: true })
+  await run('qlmanage', ['-t', '-s', String(dmgWindowWidth), '-o', backgroundDir, backgroundSvgPath])
+  await rename(generatedPngPath, backgroundPngPath)
+  await run('sips', ['--cropToHeightWidth', String(dmgBackgroundHeight), String(dmgWindowWidth), backgroundPngPath])
+  await rm(backgroundSvgPath, { force: true })
+}
+
+async function configureDmgFinderWindow(stagingDir) {
+  const appleScript = `
+tell application "Finder"
+  set dmgFolder to POSIX file "${escapeAppleScriptText(stagingDir)}" as alias
+  open dmgFolder
+  set current view of container window of dmgFolder to icon view
+  set toolbar visible of container window of dmgFolder to false
+  set statusbar visible of container window of dmgFolder to false
+  set pathbar visible of container window of dmgFolder to false
+  activate
+end tell
+tell application "System Events"
+  tell process "Finder"
+    if exists menu item "Hide Tab Bar" of menu "View" of menu bar 1 then
+      click menu item "Hide Tab Bar" of menu "View" of menu bar 1
+    end if
+  end tell
+end tell
+tell application "Finder"
+  set bounds of container window of dmgFolder to {120, 120, ${120 + dmgWindowWidth}, ${120 + dmgWindowHeight}}
+  set iconViewOptions to icon view options of container window of dmgFolder
+  set arrangement of iconViewOptions to not arranged
+  set icon size of iconViewOptions to 96
+  set background picture of iconViewOptions to file ".background:dmg-background.png" of dmgFolder
+  set position of item "${productName}.app" of dmgFolder to {160, 255}
+  set position of item "Applications" of dmgFolder to {440, 255}
+  set position of item "${quarantineBypassCommandName}" of dmgFolder to {300, 455}
+  update dmgFolder without registering applications
+  delay 1
+  close container window of dmgFolder
+end tell
+`
+
+  await run('osascript', ['-e', appleScript])
+}
+
+async function decorateDmgStagingDir(stagingDir) {
+  const backgroundDir = path.join(stagingDir, '.background')
+
+  await writeDmgBackground(backgroundDir)
+  await run('SetFile', ['-a', 'V', backgroundDir])
+  await configureDmgFinderWindow(stagingDir)
+}
+
 async function writeSizeReport(appBundlePath) {
   const resourcesRoot = path.join(appBundlePath, 'Contents', 'Resources')
   const pythonRoot = path.join(resourcesRoot, 'backend', 'python')
@@ -157,19 +260,35 @@ await run('node', ['scripts/inject-macos-app-icon.mjs', '--app', appPath])
 await run('codesign', ['--force', '--deep', '--sign', '-', appPath])
 await run('codesign', ['--verify', '--deep', '--strict', appPath])
 
-const stagingDir = await mkdtemp(path.join(os.tmpdir(), 'presto-dmg-'))
-const stagingAppPath = path.join(stagingDir, `${productName}.app`)
-const applicationsLinkPath = path.join(stagingDir, 'Applications')
-
-await cp(appPath, stagingAppPath, { recursive: true })
-await symlink('/Applications', applicationsLinkPath)
 await mkdir(dmgDir, { recursive: true })
 await rm(rawDmgPath, { force: true })
 await rm(dmgPath, { force: true })
-await run('hdiutil', ['makehybrid', '-hfs', '-hfs-volume-name', productName, '-ov', '-o', rawDmgPath, stagingDir])
+await run('hdiutil', ['create', '-size', writableDmgSize, '-fs', 'HFS+', '-volname', productName, '-type', 'UDIF', '-ov', rawDmgPath])
+
+const mountedDmgPath = await mkdtemp(path.join(os.tmpdir(), 'presto-dmg-mounted-'))
+let didMountDmg = false
+
+try {
+  await run('hdiutil', ['attach', rawDmgPath, '-mountpoint', mountedDmgPath, '-nobrowse', '-noautoopen'])
+  didMountDmg = true
+
+  const mountedAppPath = path.join(mountedDmgPath, `${productName}.app`)
+  const applicationsLinkPath = path.join(mountedDmgPath, 'Applications')
+
+  await cp(appPath, mountedAppPath, { recursive: true })
+  await symlink('/Applications', applicationsLinkPath)
+  await writeQuarantineBypassCommand(path.join(mountedDmgPath, quarantineBypassCommandName))
+  await decorateDmgStagingDir(mountedDmgPath)
+  await run('sync', [])
+} finally {
+  if (didMountDmg) {
+    await run('hdiutil', ['detach', mountedDmgPath])
+  }
+  await rm(mountedDmgPath, { recursive: true, force: true })
+}
+
 await run('hdiutil', ['convert', rawDmgPath, '-format', 'UDBZ', '-o', dmgPath])
 await rm(rawDmgPath, { force: true })
-await rm(stagingDir, { recursive: true, force: true })
 
 await mkdir(releaseRoot, { recursive: true })
 await rm(releaseAppPath, { recursive: true, force: true })

@@ -105,13 +105,54 @@ test('tauri python prep rebuilds runtime per target architecture instead of reus
   assert.match(prepareSource, /await runTargetArch\(targetArch,\s*bundledPip,\s*\['install', '--no-cache-dir', '-r', runtimeRequirementsPath\]\)/)
 })
 
-test('tauri packaging script builds DMGs without hdiutil create', async () => {
+test('tauri packaging script configures Finder on a mounted writable DMG before compression', async () => {
   const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
 
-  assert.match(packageBuildSource, /await run\('hdiutil', \['makehybrid'/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['create', '-size', writableDmgSize, '-fs', 'HFS\+', '-volname', productName, '-type', 'UDIF'/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['attach', rawDmgPath, '-mountpoint', mountedDmgPath, '-nobrowse', '-noautoopen'\]\)/)
+  assert.match(packageBuildSource, /await decorateDmgStagingDir\(mountedDmgPath\)/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['detach', mountedDmgPath\]\)/)
   assert.match(packageBuildSource, /await run\('hdiutil', \['convert', rawDmgPath, '-format', 'UDBZ', '-o', dmgPath\]\)/)
   assert.match(packageBuildSource, /size-report\.json/)
-  assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['create'/)
+  assert.doesNotMatch(packageBuildSource, /await run\('hdiutil', \['makehybrid'/)
+})
+
+test('tauri packaging script includes a one-click quarantine removal command in the DMG', async () => {
+  const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
+
+  assert.match(packageBuildSource, /const quarantineBypassCommandName = '打不开时运行\.command'/)
+  assert.match(packageBuildSource, /async function writeQuarantineBypassCommand\(targetPath\)/)
+  assert.match(packageBuildSource, /xattr -dr com\.apple\.quarantine "\/Applications\/Presto\.app"/)
+  assert.match(packageBuildSource, /chmod\(targetPath,\s*0o755\)/)
+  assert.match(packageBuildSource, /await writeQuarantineBypassCommand\(path\.join\(mountedDmgPath,\s*quarantineBypassCommandName\)\)/)
+  assert.match(packageBuildSource, /await run\('hdiutil', \['create'/)
+})
+
+test('tauri packaging script lays out a branded DMG Finder window', async () => {
+  const packageBuildSource = await readFile(path.join(repoRoot, 'scripts/package-tauri-build.mjs'), 'utf8')
+
+  assert.match(packageBuildSource, /const dmgWindowWidth = 600/)
+  assert.match(packageBuildSource, /const dmgWindowHeight = 600/)
+  assert.match(packageBuildSource, /const dmgBackgroundHeight = 560/)
+  assert.match(packageBuildSource, /async function writeDmgBackground\(backgroundDir\)/)
+  assert.match(packageBuildSource, /Hi,Presto/)
+  assert.match(packageBuildSource, /拖到 Applications 即可安装/)
+  assert.match(packageBuildSource, /x="300" y="400"[\s\S]*无法打开时，运行下方脚本/)
+  assert.match(packageBuildSource, /d="M292 246L308 270L292 294"/)
+  assert.doesNotMatch(packageBuildSource, /Drag to Applications/)
+  assert.match(packageBuildSource, /await run\('qlmanage', \['-t', '-s', String\(dmgWindowWidth\), '-o', backgroundDir, backgroundSvgPath\]\)/)
+  assert.match(packageBuildSource, /await run\('sips', \['--cropToHeightWidth', String\(dmgBackgroundHeight\), String\(dmgWindowWidth\), backgroundPngPath\]\)/)
+  assert.match(packageBuildSource, /await run\('SetFile', \['-a', 'V', backgroundDir\]\)/)
+  assert.match(packageBuildSource, /async function configureDmgFinderWindow\(stagingDir\)/)
+  assert.match(packageBuildSource, /set current view of container window of dmgFolder to icon view/)
+  assert.match(packageBuildSource, /set toolbar visible of container window of dmgFolder to false/)
+  assert.match(packageBuildSource, /set pathbar visible of container window of dmgFolder to false/)
+  assert.match(packageBuildSource, /menu item "Hide Tab Bar" of menu "View" of menu bar 1/)
+  assert.match(packageBuildSource, /set background picture of iconViewOptions to file ".background:dmg-background.png" of dmgFolder/)
+  assert.match(packageBuildSource, /set position of item "\$\{productName\}\.app" of dmgFolder to \{160, 255\}/)
+  assert.match(packageBuildSource, /set position of item "Applications" of dmgFolder to \{440, 255\}/)
+  assert.match(packageBuildSource, /set position of item "\$\{quarantineBypassCommandName\}" of dmgFolder to \{300, 455\}/)
+  assert.match(packageBuildSource, /await decorateDmgStagingDir\(mountedDmgPath\)/)
 })
 
 test('tauri packaging script syncs only configured bundle resources into the app bundle before signing', async () => {
