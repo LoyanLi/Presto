@@ -127,6 +127,32 @@ function requirementsSatisfied<T extends { minVersion: string }>(
   return true
 }
 
+function requiredCapabilityHostVersionSatisfied(
+  requiredCapabilities: readonly string[] | undefined,
+  snapshot: DawAdapterSnapshot,
+): boolean {
+  if (!requiredCapabilities || requiredCapabilities.length === 0) {
+    return true
+  }
+
+  const availableCapabilities = new Map(
+    snapshot.capabilities.map((capability) => [capability.capabilityId, capability]),
+  )
+  const hostVersion = String(snapshot.hostVersion || '').trim()
+
+  for (const capabilityId of requiredCapabilities) {
+    const minimumHostVersion = availableCapabilities.get(capabilityId)?.minimumHostVersion
+    if (!minimumHostVersion) {
+      continue
+    }
+    if (!hostVersion || compareVersions(hostVersion, minimumHostVersion) < 0) {
+      return false
+    }
+  }
+
+  return true
+}
+
 export function isPluginAvailableForSnapshot(
   plugin: HostPluginRecord,
   snapshot: DawAdapterSnapshot | null,
@@ -146,6 +172,10 @@ export function isPluginAvailableForSnapshot(
 
   if (!snapshot) {
     return true
+  }
+
+  if (!requiredCapabilityHostVersionSatisfied(plugin.requiredCapabilities, snapshot)) {
+    return false
   }
 
   const availableModules = pickHighestAvailableVersions(snapshot.modules, (module) => module.moduleId)

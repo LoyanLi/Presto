@@ -12,6 +12,9 @@ from presto.integrations.daw.ptsl_catalog import list_commands
 from presto.integrations.daw.protools_adapter import ProToolsDawAdapter, _convert_posix_directory_to_hfs
 
 
+TEST_PTSL_HOST_VERSION = "2025.10.0"
+
+
 def _adapter() -> ProToolsDawAdapter:
     return ProToolsDawAdapter(address="127.0.0.1:31416")
 
@@ -88,6 +91,59 @@ def test_coerce_session_length_seconds_handles_drop_frame_rate() -> None:
     assert round(seconds, 3) == 60.06
 
 
+def test_detect_host_version_ignores_non_pro_tools_version_attr() -> None:
+    adapter = _adapter()
+
+    class EngineWithLibraryVersion:
+        version = "123"
+        ptsl_version = "2025.10.0"
+
+    assert adapter._detect_host_version(EngineWithLibraryVersion()) == "2025.10.0"
+
+
+def test_detect_host_version_reads_ptsl_version_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = _adapter()
+
+    class FakeGetVersionOp:
+        response = None
+
+    class FakePtslOps:
+        @staticmethod
+        def CId_GetPTSLVersion() -> FakeGetVersionOp:
+            return FakeGetVersionOp()
+
+    class FakeVersionResponse:
+        version = 2025
+        version_minor = 10
+        version_revision = 2
+
+    class FakeClient:
+        def run(self, op: FakeGetVersionOp) -> None:
+            op.response = FakeVersionResponse()
+
+    class EngineWithResponseVersion:
+        client = FakeClient()
+
+        def ptsl_version(self) -> int:
+            return 2025
+
+    monkeypatch.setattr(protools_adapter_module, "ptsl_ops", FakePtslOps)
+
+    assert adapter._detect_host_version(EngineWithResponseVersion()) == "2025.10.2"
+
+
+def test_detect_host_version_accepts_ptsl_year_from_engine_method(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = _adapter()
+
+    class EngineWithYearVersion:
+        def ptsl_version(self) -> int:
+            return 2026
+
+    monkeypatch.setattr(protools_adapter_module, "ptsl_ops", None)
+
+    assert adapter._detect_host_version(EngineWithYearVersion()) == "2026.0.0"
+
+
 def test_connect_honors_timeout_seconds_when_host_ready_check_hangs(monkeypatch: pytest.MonkeyPatch) -> None:
     release_event = threading.Event()
 
@@ -115,6 +171,8 @@ def test_connect_honors_timeout_seconds_when_host_ready_check_hangs(monkeypatch:
 
 
 class FakeSelectionEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.selected_track_names: list[str] = []
         self.track_names = ["Kick", "Snare", "Bass", "Lead Vox", "Pad", "FX"]
@@ -185,6 +243,8 @@ class FakeSelectionEngine:
 
 
 class FakeImportEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
         self.import_calls: list[dict[str, object]] = []
@@ -206,6 +266,8 @@ class FakeImportEngine:
 
 
 class FakeReorderedImportEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
         self.import_calls: list[dict[str, object]] = []
@@ -229,6 +291,8 @@ class FakeReorderedImportEngine:
 
 
 class FakeTimelineEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
         self.command_calls: list[tuple[object, dict[str, object]]] = []
@@ -246,6 +310,8 @@ class FakeTimelineEngine:
 
 
 class FakeTrackSelectionStateEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
         self.client = type("Client", (), {"run_command": self._run_command})()
@@ -261,6 +327,8 @@ class FakeTrackSelectionStateEngine:
 
 
 class FakeExportEngine:
+    host_version = TEST_PTSL_HOST_VERSION
+
     def __init__(self) -> None:
         self.session_path = "/Sessions/Presto.ptx"
         self.command_calls: list[tuple[object, dict[str, object]]] = []
@@ -412,7 +480,8 @@ def test_list_ptsl_commands_exposes_full_catalog_metadata() -> None:
     assert "requestMessage" in commands[0]
     assert "responseMessage" in commands[0]
     assert "hasPyPtslOp" in commands[0]
-    assert "introducedVersion" in commands[0]
+    assert "minimumHostVersion" in commands[0]
+    assert "introducedVersion" not in commands[0]
 
 
 def test_describe_ptsl_command_returns_single_catalog_entry() -> None:
@@ -424,6 +493,7 @@ def test_describe_ptsl_command_returns_single_catalog_entry() -> None:
     assert command["commandId"] == _pt_constant("CId_GetTrackList")
     assert command["requestMessage"] == "GetTrackListRequestBody"
     assert command["responseMessage"] == "GetTrackListResponseBody"
+    assert command["minimumHostVersion"] == "2022.12.0"
 
 
 def test_execute_ptsl_command_runs_generic_cataloged_command() -> None:

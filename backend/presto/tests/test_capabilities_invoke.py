@@ -301,7 +301,7 @@ class FakeDawAdapter:
                 "responseMessage": entry.response_message,
                 "hasPyPtslOp": entry.has_py_ptsl_op,
                 "category": entry.category,
-                "introducedVersion": entry.introduced_version,
+                "minimumHostVersion": entry.minimum_host_version,
             }
             for entry in commands
         ]
@@ -315,7 +315,7 @@ class FakeDawAdapter:
             "responseMessage": entry.response_message,
             "hasPyPtslOp": entry.has_py_ptsl_op,
             "category": entry.category,
-            "introducedVersion": entry.introduced_version,
+            "minimumHostVersion": entry.minimum_host_version,
         }
 
     def execute_ptsl_command(
@@ -871,6 +871,18 @@ def test_invoke_daw_adapter_get_snapshot_returns_capability_snapshot() -> None:
     assert response.data["capabilities"][0]["capabilityId"]
     assert response.data["capabilities"][0]["moduleId"]
     assert response.data["capabilities"][0]["version"]
+    export_mix = next(
+        item for item in response.data["capabilities"] if item["capabilityId"] == "daw.export.mixWithSource"
+    )
+    assert export_mix["minimumHostVersion"] == "2025.06.0"
+    export_run = next(item for item in response.data["capabilities"] if item["capabilityId"] == "daw.export.run.start")
+    assert export_run["minimumHostVersion"] == "2022.12.0"
+    import_run = next(item for item in response.data["capabilities"] if item["capabilityId"] == "daw.import.run.start")
+    assert import_run["minimumHostVersion"] == "2022.12.0"
+    split_automation = next(
+        item for item in response.data["capabilities"] if item["capabilityId"] == "daw.automation.splitStereoToMono.execute"
+    )
+    assert split_automation["minimumHostVersion"] == "2023.09.0"
 
 
 def test_invoke_config_get_returns_config_payload() -> None:
@@ -2187,6 +2199,8 @@ def test_invoke_internal_ptsl_catalog_list_returns_command_metadata() -> None:
     assert response.success is True
     assert response.data["commands"]
     assert all(command["category"] == "transport" for command in response.data["commands"])
+    assert all("minimumHostVersion" in command for command in response.data["commands"])
+    assert all("introducedVersion" not in command for command in response.data["commands"])
 
 
 def test_invoke_internal_ptsl_command_describe_returns_single_command() -> None:
@@ -2205,6 +2219,8 @@ def test_invoke_internal_ptsl_command_describe_returns_single_command() -> None:
     assert response.success is True
     assert response.data["command"]["commandName"] == "CId_GetTrackList"
     assert response.data["command"]["responseMessage"] == "GetTrackListResponseBody"
+    assert response.data["command"]["minimumHostVersion"] == "2022.12.0"
+    assert "introducedVersion" not in response.data["command"]
 
 
 def test_invoke_internal_ptsl_command_execute_dispatches_to_adapter() -> None:

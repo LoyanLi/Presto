@@ -16,7 +16,7 @@ def _serialize_command(entry: PtslCommandCatalogEntry) -> dict[str, Any]:
         "responseMessage": entry.response_message,
         "hasPyPtslOp": entry.has_py_ptsl_op,
         "category": entry.category,
-        "introducedVersion": entry.introduced_version,
+        "minimumHostVersion": entry.minimum_host_version,
     }
 
 

@@ -105,6 +105,7 @@ export interface HostPluginRecord {
   pluginRoot?: string
   loadable?: boolean
   supportedDaws?: DawTarget[]
+  requiredCapabilities?: string[]
   adapterModuleRequirements?: PluginAdapterModuleRequirement[]
   capabilityRequirements?: PluginCapabilityRequirement[]
 }

@@ -20,7 +20,7 @@ class PtslCommandCatalogEntry:
     response_message: str | None
     has_py_ptsl_op: bool
     category: str | None
-    introduced_version: str | None
+    minimum_host_version: str
 
 
 _COMMANDS = tuple(
@@ -35,7 +35,7 @@ _COMMANDS = tuple(
         else None,
         has_py_ptsl_op=bool(entry.get("has_py_ptsl_op", False)),
         category=str(entry["category"]) if entry.get("category") else None,
-        introduced_version=str(entry["introduced_version"]) if entry.get("introduced_version") else None,
+        minimum_host_version=str(entry["minimum_host_version"]),
     )
     for entry in ptsl_catalog_generated.PTSL_COMMAND_CATALOG
 )

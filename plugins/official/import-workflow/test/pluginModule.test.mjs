@@ -286,20 +286,13 @@ test('manifest.json stays aligned with module manifest essentials', async () => 
   assert.deepEqual(fileManifest.workflowDefinition, pluginModule.manifest.workflowDefinition)
   assert.deepEqual(fileManifest.requiredCapabilities, pluginModule.manifest.requiredCapabilities)
   assert.deepEqual(fileManifest.adapterModuleRequirements, pluginModule.manifest.adapterModuleRequirements)
-  assert.deepEqual(fileManifest.capabilityRequirements, pluginModule.manifest.capabilityRequirements)
+  assert.equal(fileManifest.capabilityRequirements, undefined)
+  assert.equal(pluginModule.manifest.capabilityRequirements, undefined)
   assert.equal(Array.isArray(fileManifest.adapterModuleRequirements), true)
   assert.equal(fileManifest.adapterModuleRequirements.length > 0, true)
   assert.equal(
     fileManifest.adapterModuleRequirements.some(
       (item) => item.moduleId === 'import' && item.minVersion === '2025.10.0',
-    ),
-    true,
-  )
-  assert.equal(Array.isArray(fileManifest.capabilityRequirements), true)
-  assert.equal(fileManifest.capabilityRequirements.length > 0, true)
-  assert.equal(
-    fileManifest.capabilityRequirements.some(
-      (item) => item.capabilityId === 'workflow.run.start' && item.minVersion === '2025.10.0',
     ),
     true,
   )

@@ -1,0 +1,130 @@
+{
+  "commandMinimumHostVersionOverrides": {
+    "CId_GetTimeAsType": "2025.10.0",
+    "CId_SubtractLocations": "2025.10.0",
+    "CId_AddLengthToLocation": "2025.10.0",
+    "CId_SubtractPositions": "2025.10.0",
+    "CId_AddLengthToPosition": "2025.10.0",
+    "CId_ImportAudioToClipList": "2025.10.0",
+    "CId_SpotClipsByID": "2025.10.0",
+    "CId_GetClipList": "2025.10.0",
+    "CId_GetMediaFileInfo": "2025.10.0",
+    "CId_CreateAudioClips": "2025.10.0",
+    "CId_CreateBatchJob": "2025.10.0",
+    "CId_GetMonitorOutputPath": "2025.10.0",
+    "CId_GetEditSelection": "2025.10.0",
+    "CId_SubscribeToEvents": "2025.10.0",
+    "CId_GetBatchJobStatus": "2025.10.0",
+    "CId_BounceTrack": "2025.10.0",
+    "CId_PollEvents": "2025.10.0",
+    "CId_UnsubscribeFromEvents": "2025.10.0",
+    "CId_CompleteBatchJob": "2025.10.0",
+    "CId_CancelBatchJob": "2025.10.0",
+    "CId_BeginScrub": "2025.10.0",
+    "CId_EndScrub": "2025.10.0",
+    "CId_ContinueScrub": "2025.10.0",
+    "CId_EnableCueProVideoPlugIn": "2025.10.0",
+    "CId_UpdateVideo": "2025.10.0",
+    "CId_EnableAPI": "2025.10.0",
+    "CId_ExchangePublicKeys": "2025.10.0",
+    "CId_CreateSignalPath": "2025.10.0",
+    "CId_SetTrackMainOutputAssignments": "2025.10.0",
+    "CId_GetTrackControlInfo": "2025.10.0",
+    "CId_GetTrackControlBreakpoints": "2025.10.0",
+    "CId_SetTrackControlBreakpoints": "2025.10.0",
+    "CId_InstallMenuHandler": "2025.10.0",
+    "CId_UninstallMenuHandler": "2025.10.0",
+    "CId_SetTrackColor": "2025.10.0",
+    "CId_GetTrackPlaylists": "2025.10.0",
+    "CId_DeleteTracks": "2025.10.0",
+    "CId_GetPlaylistElements": "2025.10.0",
+    "CId_WriteSelectedTranscriptionToJSONFile": "2025.10.0"
+  },
+  "capabilityCommandDependencies": {
+    "daw.automation.splitStereoToMono.execute": [
+      "CId_GetTrackList",
+      "CId_SelectTracksByName",
+      "CId_RenameTargetTrack"
+    ],
+    "daw.session.getInfo": [
+      "CId_GetSessionPath",
+      "CId_GetTransportState"
+    ],
+    "daw.session.getLength": [
+      "CId_GetSessionPath"
+    ],
+    "daw.session.save": [
+      "CId_SaveSession"
+    ],
+    "daw.track.list": [
+      "CId_GetTrackList"
+    ],
+    "daw.track.listNames": [
+      "CId_GetTrackList"
+    ],
+    "daw.track.selection.get": [
+      "CId_GetTrackList"
+    ],
+    "daw.track.rename": [
+      "CId_RenameTargetTrack"
+    ],
+    "daw.track.select": [
+      "CId_SelectTracksByName"
+    ],
+    "daw.track.color.apply": [
+      "CId_SetTrackColor"
+    ],
+    "daw.track.mute.set": [
+      "CId_SetTrackMuteState"
+    ],
+    "daw.track.solo.set": [
+      "CId_SetTrackSoloState"
+    ],
+    "daw.track.hidden.set": [
+      "CId_SetTrackHiddenState"
+    ],
+    "daw.track.inactive.set": [
+      "CId_SetTrackInactiveState"
+    ],
+    "daw.track.recordEnable.set": [
+      "CId_SetTrackRecordEnableState"
+    ],
+    "daw.track.recordSafe.set": [
+      "CId_SetTrackRecordSafeEnableState"
+    ],
+    "daw.track.inputMonitor.set": [
+      "CId_SetTrackInputMonitorState"
+    ],
+    "daw.track.online.set": [
+      "CId_SetTrackOnlineState"
+    ],
+    "daw.track.frozen.set": [
+      "CId_SetTrackFrozenState"
+    ],
+    "daw.track.open.set": [
+      "CId_SetTrackOpenState"
+    ],
+    "daw.clip.selectAllOnTrack": [
+      "CId_SelectAllClipsOnTrack"
+    ],
+    "daw.import.run.start": [
+      "CId_GetSessionPath",
+      "CId_GetTrackList",
+      "CId_Import"
+    ],
+    "daw.export.start": [
+      "CId_ExportMix"
+    ],
+    "daw.export.direct.start": [
+      "CId_ExportMix"
+    ],
+    "daw.export.run.start": [
+      "CId_GetSessionPath",
+      "CId_GetTransportState",
+      "CId_ExportMix"
+    ],
+    "daw.export.mixWithSource": [
+      "CId_GetExportMixSourceList"
+    ]
+  }
+}

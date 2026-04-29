@@ -265,10 +265,8 @@ class PtslCommandRunner:
             ) from exc
         return self._message_to_dict(message)
 
-    def _resolve_required_version(self, entry: PtslCommandCatalogEntry, minimum_host_version: str | None) -> str | None:
-        candidates = [value for value in (entry.introduced_version, minimum_host_version) if value]
-        if not candidates:
-            return minimum_host_version
+    def _resolve_required_version(self, entry: PtslCommandCatalogEntry, minimum_host_version: str | None) -> str:
+        candidates = [value for value in (entry.minimum_host_version, minimum_host_version) if value]
         resolved = candidates[0]
         resolved_tuple = _parse_version(resolved)
         for candidate in candidates[1:]:
@@ -288,6 +286,7 @@ class PtslCommandRunner:
         *,
         capability: str,
         minimum_host_version: str | None = None,
+        host_version: str | None = None,
     ) -> Any:
         entry = self._entries.get(command_name)
         if entry is None:
@@ -302,20 +301,34 @@ class PtslCommandRunner:
             )
 
         required_version = self._resolve_required_version(entry, minimum_host_version)
-        if required_version is not None and self._host_version is not None:
+        resolved_host_version = str(host_version or self._host_version or "").strip()
+        if not resolved_host_version:
+            raise PrestoError(
+                "PTSL_VERSION_UNKNOWN",
+                f"Cannot verify Pro Tools/PTSL version required for {command_name}.",
+                source="runtime",
+                retryable=False,
+                details={
+                    "command_name": command_name,
+                    "minimum_host_version": required_version,
+                },
+                capability=capability,
+                adapter="pro_tools",
+            )
+
+        if required_version is not None:
             required = _parse_version(required_version)
-            current = _parse_version(self._host_version)
+            current = _parse_version(resolved_host_version)
             if required is not None and current is not None and current < required:
                 raise PrestoError(
                     "PTSL_VERSION_UNSUPPORTED",
-                    f"Current Pro Tools/PTSL version {self._host_version} is below required {required_version}.",
+                    f"Current Pro Tools/PTSL version {resolved_host_version} is below required {required_version}.",
                     source="runtime",
                     retryable=False,
                     details={
                         "command_name": command_name,
-                        "host_version": self._host_version,
+                        "host_version": resolved_host_version,
                         "minimum_host_version": required_version,
-                        "introduced_version": entry.introduced_version,
                     },
                     capability=capability,
                     adapter="pro_tools",

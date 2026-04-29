@@ -23,10 +23,11 @@ from .ptsl_catalog import PtslCommandCatalogEntry, list_commands, require_comman
 from .ptsl_runner import PtslCommandRunner
 
 try:  # pragma: no cover - exercised only in a Pro Tools runtime environment
-    from ptsl import Engine, PTSL_pb2 as pt
+    from ptsl import Engine, PTSL_pb2 as pt, ops as ptsl_ops
 except Exception:  # pragma: no cover - evaluated when py-ptsl is unavailable
     Engine = None  # type: ignore[assignment]
     pt = None  # type: ignore[assignment]
+    ptsl_ops = None  # type: ignore[assignment]
 
 
 def _convert_posix_directory_to_hfs(path: str) -> str:
@@ -287,6 +288,7 @@ class ProToolsDawAdapter:
                 "CId_GetSessionPath",
                 {},
                 capability="daw.session.getInfo",
+                host_version=self._detect_host_version(engine),
             )
             session_path = self._string_or_empty(self._record_get(self._record_get(response, "session_path"), "path"))
         except Exception as exc:
@@ -1829,7 +1831,11 @@ class ProToolsDawAdapter:
         )
 
     def _detect_host_version(self, engine: Any) -> str:
-        for attr in ("host_version", "version", "pt_version", "server_version"):
+        ptsl_response_version = self._detect_ptsl_version_response(engine)
+        if ptsl_response_version:
+            return ptsl_response_version
+
+        for attr in ("host_version", "pt_version", "ptsl_version", "server_version", "version"):
             candidate = getattr(engine, attr, None)
             if candidate is None:
                 continue
@@ -1837,7 +1843,7 @@ class ProToolsDawAdapter:
                 value = candidate() if callable(candidate) else candidate
             except Exception:
                 continue
-            text = str(value or "").strip()
+            text = self._normalize_host_version_text(value)
             if text:
                 return text
         return ""
@@ -1845,10 +1851,44 @@ class ProToolsDawAdapter:
     @staticmethod
     def _parse_version_tuple(value: str) -> tuple[int, int] | None:
         text = str(value).strip()
-        match = re.search(r"(\d{4})\D+(\d{1,2})", text)
+        match = re.search(r"(\d{4})(?:\D+(\d{1,2}))?", text)
         if not match:
             return None
-        return int(match.group(1)), int(match.group(2))
+        return int(match.group(1)), int(match.group(2) or "0")
+
+    def _detect_ptsl_version_response(self, engine: Any) -> str:
+        if ptsl_ops is None:
+            return ""
+        op_factory = getattr(ptsl_ops, "CId_GetPTSLVersion", None)
+        client = getattr(engine, "client", None)
+        run = getattr(client, "run", None) if client is not None else None
+        if not callable(op_factory) or not callable(run):
+            return ""
+        try:
+            op = op_factory()
+            run(op)
+        except Exception:
+            return ""
+        return self._normalize_host_version_text(getattr(op, "response", None))
+
+    def _normalize_host_version_text(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, (str, int, float)):
+            version = getattr(value, "version", None)
+            if version is not None:
+                minor = getattr(value, "version_minor", 0) or 0
+                revision = getattr(value, "version_revision", 0) or 0
+                return self._normalize_host_version_text(f"{version}.{minor}.{revision}")
+
+        text = str(value).strip()
+        match = re.search(r"(\d{4})(?:\D+(\d{1,2})(?:\D+(\d{1,3}))?)?", text)
+        if not match:
+            return ""
+        major = match.group(1)
+        minor = match.group(2) or "0"
+        revision = match.group(3) or "0"
+        return f"{int(major)}.{int(minor)}.{int(revision)}"
 
     def _detect_selected_track_names(self, engine: Any) -> list[str]:
         for attr in ("selected_track_names", "get_selected_track_names"):
@@ -2067,6 +2107,7 @@ class ProToolsDawAdapter:
                 payload,
                 capability=capability,
                 minimum_host_version=minimum_host_version,
+                host_version=self._detect_host_version(resolved_engine),
             )
         except PrestoError as exc:
             if exc.code in {"PTSL_CLIENT_UNAVAILABLE", "PTSL_COMMAND_UNAVAILABLE", "PTSL_NOT_INSTALLED", "PTSL_SCHEMA_UNAVAILABLE"}:
@@ -2112,7 +2153,7 @@ class ProToolsDawAdapter:
             "responseMessage": entry.response_message,
             "hasPyPtslOp": entry.has_py_ptsl_op,
             "category": entry.category,
-            "introducedVersion": entry.introduced_version,
+            "minimumHostVersion": entry.minimum_host_version,
         }
 
     def _set_track_toggle_state_batch(

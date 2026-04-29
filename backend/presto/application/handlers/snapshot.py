@@ -6,6 +6,7 @@ from .common import ensure_daw_connected
 from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.errors import PrestoError
 from ...domain.ports import CapabilityExecutionContext
+from ...integrations.daw.ptsl_requirements import minimum_host_version_for_definition
 
 
 def normalize_version_map(raw_map: Any) -> dict[str, str]:
@@ -55,13 +56,15 @@ def daw_adapter_snapshot_payload(ctx: CapabilityExecutionContext, payload: dict[
         version = capability_versions.get(capability_id) or module_versions.get(module_id) or adapter_version
         if module_id not in modules_by_id:
             modules_by_id[module_id] = {"moduleId": module_id, "version": version}
-        capabilities.append(
-            {
-                "capabilityId": capability_id,
-                "moduleId": module_id,
-                "version": version,
-            },
-        )
+        capability_payload = {
+            "capabilityId": capability_id,
+            "moduleId": module_id,
+            "version": version,
+        }
+        minimum_host_version = minimum_host_version_for_definition(definition, str(ctx.target_daw))
+        if minimum_host_version:
+            capability_payload["minimumHostVersion"] = minimum_host_version
+        capabilities.append(capability_payload)
 
     capabilities.sort(key=lambda item: item["capabilityId"])
     modules = [modules_by_id[module_id] for module_id in sorted(modules_by_id.keys())]

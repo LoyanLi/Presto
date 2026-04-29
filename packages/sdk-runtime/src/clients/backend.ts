@@ -37,6 +37,7 @@ export interface DawAdapterCapabilitySnapshot {
   capabilityId: string
   moduleId: string
   version: string
+  minimumHostVersion?: string
 }
 
 export interface BackendCapabilityFieldSupport {

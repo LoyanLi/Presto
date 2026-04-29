@@ -30,7 +30,7 @@ class FakeEngine:
 
 
 def _runner(entries: list[PtslCommandCatalogEntry]) -> PtslCommandRunner:
-    return PtslCommandRunner(entries)
+    return PtslCommandRunner(entries, host_version="2025.10.0")
 
 
 def test_runner_uses_raw_run_command_for_cataloged_commands_even_when_py_ptsl_wrapper_exists() -> None:
@@ -44,7 +44,7 @@ def test_runner_uses_raw_run_command_for_cataloged_commands_even_when_py_ptsl_wr
                 response_message=None,
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2023.09.0",
+                minimum_host_version="2023.09.0",
             )
         ]
     )
@@ -78,7 +78,7 @@ def test_runner_normalizes_declared_response_messages_to_dicts() -> None:
                 response_message="GetTransportStateResponseBody",
                 has_py_ptsl_op=True,
                 category="transport",
-                introduced_version="2025.10.0",
+                minimum_host_version="2025.10.0",
             )
         ]
     )
@@ -112,7 +112,7 @@ def test_runner_rejects_unknown_request_fields() -> None:
                 response_message=None,
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2023.09.0",
+                minimum_host_version="2023.09.0",
             )
         ]
     )
@@ -129,7 +129,7 @@ def test_runner_rejects_unknown_request_fields() -> None:
     assert exc_info.value.details["command_name"] == "CId_SelectTracksByName"
 
 
-def test_runner_enforces_catalog_introduced_version_by_default() -> None:
+def test_runner_enforces_catalog_minimum_host_version_by_default() -> None:
     engine = FakeEngine()
     runner = PtslCommandRunner(
         [
@@ -140,7 +140,7 @@ def test_runner_enforces_catalog_introduced_version_by_default() -> None:
                 response_message="SetTrackRecordEnableStateResponseBody",
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2025.10.0",
+                minimum_host_version="2025.10.0",
             )
         ],
         host_version="2025.06.0",
@@ -157,6 +157,33 @@ def test_runner_enforces_catalog_introduced_version_by_default() -> None:
     assert exc_info.value.code == "PTSL_VERSION_UNSUPPORTED"
 
 
+def test_runner_rejects_execution_when_host_version_is_unknown() -> None:
+    engine = FakeEngine()
+    runner = PtslCommandRunner(
+        [
+            PtslCommandCatalogEntry(
+                command_name="CId_SetTrackRecordEnableState",
+                command_id=88,
+                request_message="SetTrackRecordEnableStateRequestBody",
+                response_message="SetTrackRecordEnableStateResponseBody",
+                has_py_ptsl_op=True,
+                category="track",
+                minimum_host_version="2025.10.0",
+            )
+        ],
+    )
+
+    with pytest.raises(PrestoError) as exc_info:
+        runner.run(
+            engine,
+            "CId_SetTrackRecordEnableState",
+            {"track_names": ["Kick"], "enabled": True},
+            capability="daw.track.recordEnable.set",
+        )
+
+    assert exc_info.value.code == "PTSL_VERSION_UNKNOWN"
+
+
 def test_runner_allows_call_site_to_strengthen_minimum_host_version() -> None:
     engine = FakeEngine()
     runner = PtslCommandRunner(
@@ -168,7 +195,7 @@ def test_runner_allows_call_site_to_strengthen_minimum_host_version() -> None:
                 response_message="SetTrackRecordEnableStateResponseBody",
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2025.06.0",
+                minimum_host_version="2025.06.0",
             )
         ],
         host_version="2025.06.0",
@@ -203,7 +230,7 @@ def test_runner_normalizes_get_track_list_empty_object_response() -> None:
                 response_message="GetTrackListResponseBody",
                 has_py_ptsl_op=True,
                 category="session_read",
-                introduced_version="2022.12.0",
+                minimum_host_version="2022.12.0",
             )
         ]
     )
@@ -253,7 +280,7 @@ def test_runner_ignores_unknown_response_fields_while_preserving_declared_track_
                 response_message="GetTrackListResponseBody",
                 has_py_ptsl_op=True,
                 category="session_read",
-                introduced_version="2022.12.0",
+                minimum_host_version="2022.12.0",
             )
         ]
     )
@@ -319,7 +346,7 @@ def test_runner_normalizes_get_playback_mode_string_enums() -> None:
                 response_message="GetPlaybackModeResponseBody",
                 has_py_ptsl_op=True,
                 category="transport",
-                introduced_version="2022.12.0",
+                minimum_host_version="2022.12.0",
             )
         ]
     )
@@ -350,7 +377,7 @@ def test_runner_normalizes_get_session_interleaved_state_possible_settings() -> 
                 response_message="GetSessionInterleavedStateResponseBody",
                 has_py_ptsl_op=True,
                 category="session_read",
-                introduced_version="2023.09.0",
+                minimum_host_version="2023.09.0",
             )
         ]
     )
@@ -380,7 +407,7 @@ def test_runner_rejects_invalid_declared_response_shapes() -> None:
                 response_message="GetExportMixSourceListResponseBody",
                 has_py_ptsl_op=False,
                 category="export",
-                introduced_version="2025.10.0",
+                minimum_host_version="2025.10.0",
             )
         ]
     )
@@ -402,7 +429,7 @@ def test_runner_omits_serializer_injected_mutually_exclusive_empty_fields_from_r
                 response_message="SetTrackColorResponseBody",
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2022.12.0",
+                minimum_host_version="2022.12.0",
             )
         ]
     )
@@ -434,7 +461,7 @@ def test_runner_preserves_explicit_default_like_request_values_supplied_by_calle
                 response_message=None,
                 has_py_ptsl_op=True,
                 category="track",
-                introduced_version="2022.12.0",
+                minimum_host_version="2022.12.0",
             )
         ]
     )

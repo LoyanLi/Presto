@@ -82,7 +82,8 @@ test('batch ara backup automation manifest stays aligned with dist entry essenti
   assert.equal(fileManifest.entry, pluginModule.manifest.entry)
   assert.deepEqual(fileManifest.requiredCapabilities, pluginModule.manifest.requiredCapabilities)
   assert.deepEqual(fileManifest.adapterModuleRequirements, pluginModule.manifest.adapterModuleRequirements)
-  assert.deepEqual(fileManifest.capabilityRequirements, pluginModule.manifest.capabilityRequirements)
+  assert.equal(fileManifest.capabilityRequirements, undefined)
+  assert.equal(pluginModule.manifest.capabilityRequirements, undefined)
   assert.deepEqual(fileManifest.automationItems, pluginModule.manifest.automationItems)
 })
 
@@ -95,12 +96,7 @@ test('batch ara backup automation requires track hidden and inactive core capabi
     'daw.track.hidden.set',
     'daw.track.inactive.set',
   ])
-  assert.deepEqual(pluginModule.manifest.capabilityRequirements, [
-    { capabilityId: 'daw.track.selection.get', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.rename', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.hidden.set', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.inactive.set', minVersion: '2025.10.0' },
-  ])
+  assert.equal(pluginModule.manifest.capabilityRequirements, undefined)
 })
 
 test('batch ara backup automation resolves zh-CN manifest and runner messages inside the plugin', async () => {

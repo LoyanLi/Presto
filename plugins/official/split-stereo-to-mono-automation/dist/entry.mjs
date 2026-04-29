@@ -76,7 +76,6 @@ const baseManifest = {
   ],
   requiredCapabilities: ['daw.automation.splitStereoToMono.execute'],
   adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
-  capabilityRequirements: [{ capabilityId: 'daw.automation.splitStereoToMono.execute', minVersion: '2025.10.0' }],
 }
 
 export const manifest = baseManifest

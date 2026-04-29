@@ -58,6 +58,7 @@ export function createPluginRecords(plugins: PluginRuntimeListResult['plugins'])
     pluginRoot: plugin.pluginRoot,
     loadable: plugin.loadable,
     supportedDaws: plugin.manifest.supportedDaws,
+    requiredCapabilities: plugin.manifest.requiredCapabilities,
     adapterModuleRequirements: plugin.manifest.adapterModuleRequirements,
     capabilityRequirements: plugin.manifest.capabilityRequirements,
   }))

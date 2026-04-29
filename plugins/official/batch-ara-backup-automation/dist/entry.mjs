@@ -91,12 +91,6 @@ const baseManifest = {
   ],
   requiredCapabilities: ['daw.track.selection.get', 'daw.track.rename', 'daw.track.hidden.set', 'daw.track.inactive.set'],
   adapterModuleRequirements: [{ moduleId: 'automation', minVersion: '2025.10.0' }],
-  capabilityRequirements: [
-    { capabilityId: 'daw.track.selection.get', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.rename', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.hidden.set', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.inactive.set', minVersion: '2025.10.0' },
-  ],
 }
 
 export const manifest = baseManifest

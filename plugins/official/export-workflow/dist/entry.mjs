@@ -82,16 +82,6 @@ const baseManifest = {
     { moduleId: 'export', minVersion: '2025.10.0' },
     { moduleId: 'jobs', minVersion: '2025.10.0' },
   ],
-  capabilityRequirements: [
-    { capabilityId: 'workflow.run.start', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.connection.getStatus', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.session.getInfo', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.list', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.export.mixWithSource', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.export.run.start', minVersion: '2025.10.0' },
-    { capabilityId: 'jobs.get', minVersion: '2025.10.0' },
-    { capabilityId: 'jobs.cancel', minVersion: '2025.10.0' },
-  ],
 }
 
 export const manifest = baseManifest

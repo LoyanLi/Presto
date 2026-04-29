@@ -80,6 +80,88 @@ test('isPluginAvailableForSnapshot rejects plugins whose capability requirements
   )
 })
 
+test('isPluginAvailableForSnapshot rejects plugins when required capability minimum host version is above current host', async () => {
+  const { isPluginAvailableForSnapshot } = await loadHostShellHelpersModule()
+
+  assert.equal(
+    isPluginAvailableForSnapshot(
+      {
+        pluginId: 'official.export-workflow',
+        extensionType: 'workflow',
+        displayName: 'Export Workflow',
+        version: '1.0.0',
+        origin: 'official',
+        status: 'ready',
+        enabled: true,
+        supportedDaws: ['pro_tools'],
+        requiredCapabilities: ['daw.export.mixWithSource', 'daw.export.run.start'],
+      },
+      {
+        targetDaw: 'pro_tools',
+        adapterVersion: '2025.10.0',
+        hostVersion: '2025.05.0',
+        modules: [],
+        capabilities: [
+          {
+            capabilityId: 'daw.export.mixWithSource',
+            moduleId: 'daw',
+            version: '2025.10.0',
+            minimumHostVersion: '2025.06.0',
+          },
+          {
+            capabilityId: 'daw.export.run.start',
+            moduleId: 'export',
+            version: '2025.10.0',
+            minimumHostVersion: '2025.10.0',
+          },
+        ],
+      },
+    ),
+    false,
+  )
+})
+
+test('isPluginAvailableForSnapshot accepts plugins when host satisfies required capability minimum host versions', async () => {
+  const { isPluginAvailableForSnapshot } = await loadHostShellHelpersModule()
+
+  assert.equal(
+    isPluginAvailableForSnapshot(
+      {
+        pluginId: 'official.export-workflow',
+        extensionType: 'workflow',
+        displayName: 'Export Workflow',
+        version: '1.0.0',
+        origin: 'official',
+        status: 'ready',
+        enabled: true,
+        supportedDaws: ['pro_tools'],
+        requiredCapabilities: ['daw.export.mixWithSource', 'daw.export.run.start'],
+      },
+      {
+        targetDaw: 'pro_tools',
+        adapterVersion: '2025.10.0',
+        hostVersion: '2025.10.0',
+        modules: [],
+        capabilities: [
+          {
+            capabilityId: 'daw.export.mixWithSource',
+            moduleId: 'daw',
+            version: '2025.10.0',
+            minimumHostVersion: '2025.06.0',
+          },
+          {
+            capabilityId: 'daw.export.run.start',
+            moduleId: 'export',
+            version: '2025.10.0',
+            minimumHostVersion: '2025.10.0',
+          },
+        ],
+      },
+    ),
+    true,
+  )
+})
+
 test('isPluginAvailableForSnapshot keeps plugins available when daw support and minimum versions are satisfied', async () => {
   const { isPluginAvailableForSnapshot } = await loadHostShellHelpersModule()
 

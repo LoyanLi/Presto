@@ -141,6 +141,7 @@ export interface DawAdapterCapabilitySnapshot {
   capabilityId: string
   moduleId: string
   version: string
+  minimumHostVersion?: string
 }
 
 export interface DawAdapterGetSnapshotResponse {
@@ -158,7 +159,7 @@ export interface DawPtslCommandDescriptor {
   responseMessage?: string | null
   hasPyPtslOp: boolean
   category?: string | null
-  introducedVersion?: string | null
+  minimumHostVersion: string
 }
 
 export interface DawPtslCatalogListResponse {

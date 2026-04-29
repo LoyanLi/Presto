@@ -23,17 +23,12 @@ test('split stereo automation manifest stays aligned with dist entry essentials'
   assert.equal(fileManifest.entry, pluginModule.manifest.entry)
   assert.deepEqual(fileManifest.requiredCapabilities, pluginModule.manifest.requiredCapabilities)
   assert.deepEqual(fileManifest.adapterModuleRequirements, pluginModule.manifest.adapterModuleRequirements)
-  assert.deepEqual(fileManifest.capabilityRequirements, pluginModule.manifest.capabilityRequirements)
+  assert.equal(fileManifest.capabilityRequirements, undefined)
+  assert.equal(pluginModule.manifest.capabilityRequirements, undefined)
   assert.equal(Array.isArray(fileManifest.adapterModuleRequirements), true)
   assert.equal(fileManifest.adapterModuleRequirements.length, 1)
   assert.deepEqual(fileManifest.adapterModuleRequirements[0], {
     moduleId: 'automation',
-    minVersion: '2025.10.0',
-  })
-  assert.equal(Array.isArray(fileManifest.capabilityRequirements), true)
-  assert.equal(fileManifest.capabilityRequirements.length, 1)
-  assert.deepEqual(fileManifest.capabilityRequirements[0], {
-    capabilityId: 'daw.automation.splitStereoToMono.execute',
     minVersion: '2025.10.0',
   })
   assert.equal(fileManifest.requiredRuntimeServices, undefined)

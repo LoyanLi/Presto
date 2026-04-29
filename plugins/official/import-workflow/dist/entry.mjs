@@ -157,24 +157,6 @@ const baseManifest = {
     { moduleId: 'stripSilence', minVersion: '2025.10.0' },
     { moduleId: 'session', minVersion: '2025.10.0' },
   ],
-  capabilityRequirements: [
-    { capabilityId: 'daw.import.analyze', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.import.cache.save', minVersion: '2025.10.0' },
-    { capabilityId: 'workflow.run.start', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.import.planRunItems', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.import.run.start', minVersion: '2025.10.0' },
-    { capabilityId: 'jobs.get', minVersion: '2025.10.0' },
-    { capabilityId: 'jobs.cancel', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.listNames', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.rename', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.select', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.track.color.apply', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.clip.selectAllOnTrack', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.stripSilence.open', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.stripSilence.execute', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.editing.createFadesBasedOnPreset', minVersion: '2025.10.0' },
-    { capabilityId: 'daw.session.save', minVersion: '2025.10.0' },
-  ],
 }
 
 export const manifest = baseManifest

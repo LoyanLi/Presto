@@ -9,7 +9,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_OpenSession",
@@ -18,7 +18,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Import",
@@ -27,7 +27,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetTrackList",
@@ -36,7 +36,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTrackListResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SelectAllClipsOnTrack",
@@ -45,7 +45,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ExtendSelectionToTargetTracks",
@@ -54,7 +54,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_TrimToSelection",
@@ -63,7 +63,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_CreateFadesBasedOnPreset",
@@ -72,7 +72,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_RenameTargetTrack",
@@ -81,7 +81,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ConsolidateClip",
@@ -90,7 +90,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ExportClipsAsFiles",
@@ -99,7 +99,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "export",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ExportSelectedTracksAsAAFOMF",
@@ -108,7 +108,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "export",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetTaskStatus",
@@ -117,7 +117,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTaskStatusResponseBody",
         "has_py_ptsl_op": True,
         "category": "general",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_HostReadyCheck",
@@ -126,7 +126,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "HostReadyCheckResponseBody",
         "has_py_ptsl_op": True,
         "category": "general",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_RefreshTargetAudioFiles",
@@ -135,7 +135,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "RefreshTargetAudioFilesResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_RefreshAllModifiedAudioFiles",
@@ -144,7 +144,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetFileLocation",
@@ -153,7 +153,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetFileLocationResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_CloseSession",
@@ -162,7 +162,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SaveSession",
@@ -171,7 +171,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SaveSessionAs",
@@ -180,7 +180,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Cut",
@@ -189,7 +189,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Copy",
@@ -198,7 +198,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Paste",
@@ -207,7 +207,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Clear",
@@ -216,7 +216,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_CutSpecial",
@@ -225,7 +225,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_CopySpecial",
@@ -234,7 +234,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ClearSpecial",
@@ -243,7 +243,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_PasteSpecial",
@@ -252,7 +252,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ExportMix",
@@ -261,7 +261,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "export",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_Spot",
@@ -270,7 +270,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ExportSessionInfoAsText",
@@ -279,7 +279,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ExportSessionInfoAsTextResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_file",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetDynamicProperties",
@@ -288,7 +288,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "general",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetPlaybackMode",
@@ -297,7 +297,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetRecordMode",
@@ -306,7 +306,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionAudioFormat",
@@ -315,7 +315,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionAudioFormatResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionSampleRate",
@@ -324,7 +324,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionSampleRateResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionBitDepth",
@@ -333,7 +333,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionBitDepthResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionInterleavedState",
@@ -342,7 +342,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionInterleavedStateResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionTimeCodeRate",
@@ -351,7 +351,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionTimeCodeRateResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionFeetFramesRate",
@@ -360,7 +360,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionFeetFramesRateResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionAudioRatePullSettings",
@@ -369,7 +369,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionAudioRatePullSettingsResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionVideoRatePullSettings",
@@ -378,7 +378,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionVideoRatePullSettingsResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionName",
@@ -387,7 +387,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionNameResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionPath",
@@ -396,7 +396,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionPathResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionStartTime",
@@ -405,7 +405,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionStartTimeResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetSessionLength",
@@ -414,7 +414,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionLengthResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionAudioFormat",
@@ -423,7 +423,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionBitDepth",
@@ -432,7 +432,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionInterleavedState",
@@ -441,7 +441,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionTimeCodeRate",
@@ -450,7 +450,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionFeetFramesRate",
@@ -459,7 +459,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionAudioRatePullSettings",
@@ -468,7 +468,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionVideoRatePullSettings",
@@ -477,7 +477,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionStartTime",
@@ -486,7 +486,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_SetSessionLength",
@@ -495,7 +495,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetPTSLVersion",
@@ -504,7 +504,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetPTSLVersionResponseBody",
         "has_py_ptsl_op": True,
         "category": "general",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetPlaybackMode",
@@ -513,7 +513,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetPlaybackModeResponseBody",
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetRecordMode",
@@ -522,7 +522,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetRecordModeResponseBody",
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetTransportArmed",
@@ -531,7 +531,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTransportArmedResponseBody",
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_GetTransportState",
@@ -540,7 +540,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTransportStateResponseBody",
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2022.12.0",
+        "minimum_host_version": "2022.12.0",
     },
     {
         "command_name": "CId_ClearMemoryLocation",
@@ -549,7 +549,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ClearMemoryLocationResponseBody",
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": "2023.03..0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_RenameSelectedClip",
@@ -558,7 +558,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.03..0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_RenameTargetClip",
@@ -567,7 +567,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.03..0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_TogglePlayState",
@@ -576,7 +576,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_ToggleRecordEnable",
@@ -585,7 +585,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_PlayHalfSpeed",
@@ -594,7 +594,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_RecordHalfSpeed",
@@ -603,7 +603,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_EditMemoryLocation",
@@ -612,7 +612,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_GetMemoryLocations",
@@ -621,7 +621,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetMemoryLocationsResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_RegisterConnection",
@@ -630,7 +630,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "RegisterConnectionResponseBody",
         "has_py_ptsl_op": True,
         "category": "general",
-        "introduced_version": "2023.03.0",
+        "minimum_host_version": "2023.03.0",
     },
     {
         "command_name": "CId_CreateMemoryLocation",
@@ -639,7 +639,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.06.0",
+        "minimum_host_version": "2023.06.0",
     },
     {
         "command_name": "CId_CreateNewTracks",
@@ -648,7 +648,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "CreateNewTracksResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_SelectTracksByName",
@@ -657,7 +657,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "SelectTracksByNameResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_GetEditMode",
@@ -666,7 +666,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetEditModeResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_SetEditMode",
@@ -675,7 +675,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_GetEditTool",
@@ -684,7 +684,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetEditToolResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_SetEditTool",
@@ -693,7 +693,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_RecallZoomPreset",
@@ -702,7 +702,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_GetEditModeOptions",
@@ -711,7 +711,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetEditModeOptionsResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_SetEditModeOptions",
@@ -720,7 +720,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_SetTimelineSelection",
@@ -729,7 +729,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_GetTimelineSelection",
@@ -738,7 +738,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTimelineSelectionResponseBody",
         "has_py_ptsl_op": True,
         "category": "transport",
-        "introduced_version": "2023.09.0",
+        "minimum_host_version": "2023.09.0",
     },
     {
         "command_name": "CId_ImportVideo",
@@ -747,7 +747,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ImportVideoResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_write",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SelectMemoryLocation",
@@ -756,7 +756,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackMuteState",
@@ -765,7 +765,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackSoloState",
@@ -774,7 +774,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackSoloSafeState",
@@ -783,7 +783,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackRecordEnableState",
@@ -792,7 +792,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackRecordSafeEnableState",
@@ -801,7 +801,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackInputMonitorState",
@@ -810,7 +810,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackSmartDspState",
@@ -819,7 +819,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackHiddenState",
@@ -828,7 +828,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackInactiveState",
@@ -837,7 +837,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackFrozenState",
@@ -846,7 +846,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackOnlineState",
@@ -855,7 +855,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_SetTrackOpenState",
@@ -864,7 +864,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2023.12.0",
+        "minimum_host_version": "2023.12.0",
     },
     {
         "command_name": "CId_GetSessionIDs",
@@ -873,7 +873,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionIDsResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_file",
-        "introduced_version": "2024.03.0",
+        "minimum_host_version": "2024.03.0",
     },
     {
         "command_name": "CId_GetMemoryLocationsManageMode",
@@ -882,7 +882,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetMemoryLocationsManageModeResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_SetMemoryLocationsManageMode",
@@ -891,7 +891,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_SetMainCounterFormat",
@@ -900,7 +900,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_SetSubCounterFormat",
@@ -909,7 +909,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "session_write",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_GetMainCounterFormat",
@@ -918,7 +918,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetMainCounterFormatResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_GetSubCounterFormat",
@@ -927,7 +927,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSubCounterFormatResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_Undo",
@@ -936,7 +936,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "UndoResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_Redo",
@@ -945,7 +945,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "RedoResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_UndoAll",
@@ -954,7 +954,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "UndoAllResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_RedoAll",
@@ -963,7 +963,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "RedoAllResponseBody",
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_ClearUndoQueue",
@@ -972,7 +972,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_SetTrackDSPModeSafeState",
@@ -981,7 +981,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_GetSessionSystemDelayInfo",
@@ -990,7 +990,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetSessionSystemDelayInfoResponseBody",
         "has_py_ptsl_op": True,
         "category": "session_read",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_GroupClips",
@@ -999,7 +999,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_UngroupClips",
@@ -1008,7 +1008,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_UngroupAllClips",
@@ -1017,7 +1017,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_RegroupClips",
@@ -1026,7 +1026,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_RepeatSelection",
@@ -1035,7 +1035,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_DuplicateSelection",
@@ -1044,7 +1044,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": True,
         "category": "editing",
-        "introduced_version": "2024.06.0",
+        "minimum_host_version": "2024.06.0",
     },
     {
         "command_name": "CId_ClearAllMemoryLocations",
@@ -1053,7 +1053,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ClearAllMemoryLocationsResponseBody",
         "has_py_ptsl_op": True,
         "category": None,
-        "introduced_version": "2024.10.0",
+        "minimum_host_version": "2024.10.0",
     },
     {
         "command_name": "CId_GetTimeAsType",
@@ -1062,7 +1062,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTimeAsTypeResponseBody",
         "has_py_ptsl_op": False,
         "category": "time_utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SubtractLocations",
@@ -1071,7 +1071,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "SubtractLocationsResponseBody",
         "has_py_ptsl_op": False,
         "category": "time_utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_AddLengthToLocation",
@@ -1080,7 +1080,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "AddLengthToLocationResponseBody",
         "has_py_ptsl_op": False,
         "category": "time_utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SubtractPositions",
@@ -1089,7 +1089,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "SubtractPositionsResponseBody",
         "has_py_ptsl_op": False,
         "category": "time_utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_AddLengthToPosition",
@@ -1098,7 +1098,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "AddLengthToPositionResponseBody",
         "has_py_ptsl_op": False,
         "category": "time_utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_ImportAudioToClipList",
@@ -1107,7 +1107,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ImportAudioToClipListResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_write",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SpotClipsByID",
@@ -1116,7 +1116,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetClipList",
@@ -1125,7 +1125,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetClipListResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_read",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetMediaFileInfo",
@@ -1134,7 +1134,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetMediaFileInfoResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_read",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_CreateAudioClips",
@@ -1143,7 +1143,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "CreateAudioClipsResponseBody",
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetExportMixSourceList",
@@ -1152,7 +1152,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetExportMixSourceListResponseBody",
         "has_py_ptsl_op": False,
         "category": None,
-        "introduced_version": "2025.06.0",
+        "minimum_host_version": "2025.06.0",
     },
     {
         "command_name": "CId_CreateBatchJob",
@@ -1161,7 +1161,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "CreateBatchJobResponseBody",
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetMonitorOutputPath",
@@ -1170,7 +1170,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetMonitorOutputPathResponseBody",
         "has_py_ptsl_op": True,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetEditSelection",
@@ -1179,7 +1179,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetEditSelectionResponseBody",
         "has_py_ptsl_op": True,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SubscribeToEvents",
@@ -1188,7 +1188,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetBatchJobStatus",
@@ -1197,7 +1197,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetBatchJobStatusResponseBody",
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_BounceTrack",
@@ -1206,7 +1206,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "export",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_PollEvents",
@@ -1215,7 +1215,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "PollEventsResponseBody",
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_UnsubscribeFromEvents",
@@ -1224,7 +1224,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_CompleteBatchJob",
@@ -1233,7 +1233,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_CancelBatchJob",
@@ -1242,7 +1242,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_BeginScrub",
@@ -1251,7 +1251,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_EndScrub",
@@ -1260,7 +1260,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_ContinueScrub",
@@ -1269,7 +1269,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_EnableCueProVideoPlugIn",
@@ -1278,7 +1278,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "private_api",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_UpdateVideo",
@@ -1287,7 +1287,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_EnableAPI",
@@ -1296,7 +1296,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "EnableAPIResponseBody",
         "has_py_ptsl_op": False,
         "category": "private_api",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_ExchangePublicKeys",
@@ -1305,7 +1305,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "ExchangePublicKeysResponseBody",
         "has_py_ptsl_op": False,
         "category": "private_api",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_CreateSignalPath",
@@ -1314,7 +1314,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "CreateSignalPathResponseBody",
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SetTrackMainOutputAssignments",
@@ -1323,7 +1323,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetTrackControlInfo",
@@ -1332,7 +1332,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTrackControlInfoResponseBody",
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetTrackControlBreakpoints",
@@ -1341,7 +1341,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTrackControlBreakpointsResponseBody",
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SetTrackControlBreakpoints",
@@ -1350,7 +1350,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_InstallMenuHandler",
@@ -1359,7 +1359,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "InstallMenuHandlerResponseBody",
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_UninstallMenuHandler",
@@ -1368,7 +1368,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SetTrackColor",
@@ -1377,7 +1377,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetTrackPlaylists",
@@ -1386,7 +1386,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetTrackPlaylistsResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_read",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_SetTrackTimebase",
@@ -1395,7 +1395,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": "2025.10.0",
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetColorPalette",
@@ -1404,7 +1404,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetColorPaletteResponseBody",
         "has_py_ptsl_op": False,
         "category": "utility",
-        "introduced_version": "2025.10.0",
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_DeleteTracks",
@@ -1413,7 +1413,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": None,
         "has_py_ptsl_op": False,
         "category": "editing",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_GetPlaylistElements",
@@ -1422,7 +1422,7 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "GetPlaylistElementsResponseBody",
         "has_py_ptsl_op": False,
         "category": "session_read",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
     {
         "command_name": "CId_WriteSelectedTranscriptionToJSONFile",
@@ -1431,6 +1431,6 @@ PTSL_COMMAND_CATALOG = (
         "response_message": "WriteSelectedTranscriptionToJSONFileResponseBody",
         "has_py_ptsl_op": False,
         "category": "export",
-        "introduced_version": None,
+        "minimum_host_version": "2025.10.0",
     },
 )
