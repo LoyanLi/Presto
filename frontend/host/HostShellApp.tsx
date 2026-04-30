@@ -427,6 +427,7 @@ export function HostShellApp({
       locale={resolvedLocale}
       extensionType="workflow"
       pluginManagerModel={filteredPluginManagerModel}
+      dawAdapterSnapshot={liveDawAdapterSnapshot}
       pluginSettingsEntries={pluginSettingsEntries}
       onInstallPluginDirectory={onInstallPluginDirectory}
       onInstallPluginZip={onInstallPluginZip}
@@ -441,6 +442,7 @@ export function HostShellApp({
       locale={resolvedLocale}
       extensionType="automation"
       pluginManagerModel={filteredPluginManagerModel}
+      dawAdapterSnapshot={liveDawAdapterSnapshot}
       pluginSettingsEntries={pluginSettingsEntries}
       onInstallPluginDirectory={onInstallPluginDirectory}
       onInstallPluginZip={onInstallPluginZip}
@@ -455,6 +457,7 @@ export function HostShellApp({
       locale={resolvedLocale}
       extensionType="tool"
       pluginManagerModel={filteredPluginManagerModel}
+      dawAdapterSnapshot={liveDawAdapterSnapshot}
       pluginSettingsEntries={pluginSettingsEntries}
       onInstallPluginDirectory={onInstallPluginDirectory}
       onInstallPluginZip={onInstallPluginZip}

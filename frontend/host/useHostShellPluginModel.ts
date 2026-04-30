@@ -1,10 +1,13 @@
 import { useMemo } from 'react'
 
+import type { DawTarget } from '@presto/contracts'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 
 import {
   buildFilteredPluginManagerModel,
+  dawLabel,
   isPluginAvailableForSnapshot,
+  resolvePluginMinimumHostVersionForSnapshot,
   sortPluginSettingsEntries,
 } from './hostShellHelpers'
 import type {
@@ -56,8 +59,23 @@ export function useHostShellPluginModel({
   )
 
   const filteredAutomationEntries = useMemo(
-    () => automationEntries.filter((entry) => isPluginAvailable(entry.pluginId) && isPluginEnabled(entry.pluginId)),
-    [automationEntries, pluginAvailabilityById, pluginManagerModel?.plugins],
+    () => automationEntries
+      .filter((entry) => isPluginAvailable(entry.pluginId) && isPluginEnabled(entry.pluginId))
+      .map((entry) => {
+        const plugin = pluginManagerModel?.plugins.find((record) => record.pluginId === entry.pluginId)
+        const minimumHostVersion = plugin
+          ? resolvePluginMinimumHostVersionForSnapshot(plugin, liveDawAdapterSnapshot)
+          : null
+        if (!minimumHostVersion || !liveDawAdapterSnapshot) {
+          return entry
+        }
+        return {
+          ...entry,
+          currentDawLabel: dawLabel(liveDawAdapterSnapshot.targetDaw as DawTarget),
+          currentDawMinimumHostVersion: minimumHostVersion,
+        }
+      }),
+    [automationEntries, liveDawAdapterSnapshot, pluginAvailabilityById, pluginManagerModel?.plugins],
   )
 
   const filteredPluginPages = useMemo(

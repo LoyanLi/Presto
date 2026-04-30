@@ -36,6 +36,16 @@ const bodyStyle = {
   lineHeight: 1.55,
 }
 
+const metaPillStyle = {
+  justifySelf: 'start',
+  padding: '4px 10px',
+  borderRadius: 999,
+  background: hostShellColors.surface,
+  color: hostShellColors.textMuted,
+  fontSize: 12,
+  fontWeight: 600,
+}
+
 const stepListStyle = {
   display: 'grid',
   gap: 8,
@@ -116,6 +126,10 @@ export function AutomationRunnerCard({
     () => (running ? translateHost(locale, 'automation.generic.running') : translateHost(locale, 'automation.generic.action')),
     [locale, running],
   )
+  const minimumHostVersionLabel =
+    entry.currentDawLabel && entry.currentDawMinimumHostVersion
+      ? `${entry.currentDawLabel} ≥ ${entry.currentDawMinimumHostVersion}`
+      : null
 
   const runAutomation = async () => {
     setRunning(true)
@@ -148,6 +162,7 @@ export function AutomationRunnerCard({
       <div style={{ display: 'grid', gap: 8 }}>
         <h2 style={titleStyle}>{entry.title}</h2>
         {entry.description ? <p style={bodyStyle}>{entry.description}</p> : null}
+        {minimumHostVersionLabel ? <span style={metaPillStyle}>{minimumHostVersionLabel}</span> : null}
       </div>
 
       {entry.optionsSchema.length > 0 ? (

@@ -4,6 +4,9 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+
 import { buildAndImportModule } from '../../ui/test/support/esbuildModule.mjs'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
@@ -41,6 +44,29 @@ test('automation runner card falls back to localized unknown error text', async 
   const message = getAutomationErrorMessage('en', { code: 'TRACK_SELECTION_INVALID' })
 
   assert.equal(message, 'Automation failed.')
+})
+
+test('automation runner card shows current daw minimum version metadata', async () => {
+  const { AutomationRunnerCard } = await loadCardModule()
+
+  const markup = renderToStaticMarkup(
+    React.createElement(AutomationRunnerCard, {
+      locale: 'en',
+      entry: {
+        pluginId: 'official.split-stereo-to-mono-automation',
+        itemId: 'split-stereo-to-mono.card',
+        title: 'Split Stereo To Mono',
+        automationType: 'splitStereoToMono',
+        description: 'Use the current Pro Tools selection.',
+        optionsSchema: [],
+        currentDawMinimumHostVersion: '2023.09.0',
+        currentDawLabel: 'Pro Tools',
+        execute: async () => ({ steps: [], summary: 'done' }),
+      },
+    }),
+  )
+
+  assert.match(markup, /Pro Tools ≥ 2023\.09\.0/)
 })
 
 test('automation runner card source renders host-driven switch and select fields', async () => {

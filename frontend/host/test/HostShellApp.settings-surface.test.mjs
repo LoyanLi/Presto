@@ -529,6 +529,76 @@ test('extensions settings page groups installed workflow and automation extensio
   assert.doesNotMatch(markup, /Installed Plugins/)
 })
 
+test('extensions settings page shows current daw minimum version for plugin requirements', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  const pluginProps = createPluginProps()
+  pluginProps.pluginManagerModel.plugins = pluginProps.pluginManagerModel.plugins.map((plugin) => {
+    if (plugin.pluginId === 'official.import-workflow') {
+      return { ...plugin, requiredCapabilities: ['daw.import.run.start', 'daw.editing.createFadesBasedOnPreset'] }
+    }
+    if (plugin.pluginId === 'official.split-stereo-to-mono-automation') {
+      return { ...plugin, requiredCapabilities: ['daw.automation.splitStereoToMono.execute'] }
+    }
+    return plugin
+  })
+  const dawAdapterSnapshot = {
+    targetDaw: 'pro_tools',
+    adapterVersion: '0.3.11',
+    hostVersion: '2026.04.0',
+    modules: [],
+    capabilities: [
+      {
+        capabilityId: 'daw.import.run.start',
+        moduleId: 'import',
+        version: '2025.10.0',
+        minimumHostVersion: '2022.12.0',
+      },
+      {
+        capabilityId: 'daw.editing.createFadesBasedOnPreset',
+        moduleId: 'ptsl',
+        version: '2025.10.0',
+        minimumHostVersion: '2025.10.0',
+      },
+      {
+        capabilityId: 'daw.automation.splitStereoToMono.execute',
+        moduleId: 'automation',
+        version: '2025.10.0',
+        minimumHostVersion: '2023.09.0',
+      },
+    ],
+  }
+
+  const workflowMarkup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...pluginProps,
+      dawAdapterSnapshot,
+      initialSettingsPageRoute: {
+        kind: 'builtin',
+        pageId: 'workflowExtensions',
+      },
+    }),
+  )
+  const automationMarkup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('settings'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...pluginProps,
+      dawAdapterSnapshot,
+      initialSettingsPageRoute: {
+        kind: 'builtin',
+        pageId: 'automationExtensions',
+      },
+    }),
+  )
+
+  assert.match(workflowMarkup, /Pro Tools ≥ 2025\.10\.0/)
+  assert.match(automationMarkup, /Pro Tools ≥ 2023\.09\.0/)
+})
+
 test('extensions settings page renders through a single root stack container', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/settings/ExtensionsSettingsPage.tsx'), 'utf8')
 

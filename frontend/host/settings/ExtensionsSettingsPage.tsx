@@ -1,6 +1,9 @@
 import { useState, type CSSProperties } from 'react'
 
+import type { DawTarget } from '@presto/contracts'
+import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { Badge, Button, EmptyState, SettingsSection } from '../../ui'
+import { dawLabel, resolvePluginMinimumHostVersionForSnapshot } from '../hostShellHelpers'
 import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
@@ -15,6 +18,7 @@ export interface ExtensionsSettingsPageProps {
   locale: HostLocale
   extensionType: HostExtensionType
   pluginManagerModel?: HostPluginManagerModel
+  dawAdapterSnapshot?: DawAdapterSnapshot | null
   pluginSettingsEntries: readonly HostPluginSettingsEntry[]
   onInstallPluginDirectory?(): void | Promise<void>
   onInstallPluginZip?(): void | Promise<void>
@@ -192,6 +196,15 @@ function ExpandedMetaField({ label, value }: { label: string; value: string }) {
   )
 }
 
+function pluginCurrentDawMinimumLabel(plugin: HostPluginRecord, snapshot: DawAdapterSnapshot | null | undefined): string | null {
+  const minimumHostVersion = resolvePluginMinimumHostVersionForSnapshot(plugin, snapshot ?? null)
+  if (!minimumHostVersion || !snapshot) {
+    return null
+  }
+
+  return `${dawLabel(snapshot.targetDaw as DawTarget)} ≥ ${minimumHostVersion}`
+}
+
 function confirmUninstall(plugin: HostPluginRecord, onUninstallPlugin?: (pluginId: string) => void | Promise<void>) {
   if (!onUninstallPlugin) {
     return
@@ -234,6 +247,7 @@ function ExtensionList({
   locale,
   extensions,
   pluginManagerModel,
+  dawAdapterSnapshot,
   pluginSettingsEntries,
   expandedPluginId,
   onToggleExpanded,
@@ -243,6 +257,7 @@ function ExtensionList({
   locale: HostLocale
   extensions: readonly HostPluginRecord[]
   pluginManagerModel?: HostPluginManagerModel
+  dawAdapterSnapshot?: DawAdapterSnapshot | null
   pluginSettingsEntries: readonly HostPluginSettingsEntry[]
   expandedPluginId: string | null
   onToggleExpanded(pluginId: string): void
@@ -253,6 +268,7 @@ function ExtensionList({
     <div style={listStyle}>
       {extensions.map((plugin, index) => {
         const settingsCount = settingsPageCount(plugin.pluginId, pluginSettingsEntries)
+        const currentDawMinimumLabel = pluginCurrentDawMinimumLabel(plugin, dawAdapterSnapshot)
 
         return (
           <div key={plugin.pluginId} style={index === 0 ? firstListItemStyle : listItemStyle}>
@@ -262,6 +278,9 @@ function ExtensionList({
                 <p style={compactMetaStyle}>{plugin.version}</p>
                 {settingsCount > 0 ? (
                   <span style={settingsBadgeStyle}>{settingsLabel(locale, plugin.pluginId, pluginSettingsEntries)}</span>
+                ) : null}
+                {currentDawMinimumLabel ? (
+                  <span style={settingsBadgeStyle}>{currentDawMinimumLabel}</span>
                 ) : null}
               </div>
             </div>
@@ -295,6 +314,12 @@ function ExtensionList({
                     label={translateHost(locale, 'extensions.meta.settings')}
                     value={settingsLabel(locale, plugin.pluginId, pluginSettingsEntries)}
                   />
+                  {currentDawMinimumLabel ? (
+                    <ExpandedMetaField
+                      label={translateHost(locale, 'extensions.meta.currentDawMinimum')}
+                      value={currentDawMinimumLabel}
+                    />
+                  ) : null}
                   {plugin.pluginRoot ? (
                     <ExpandedMetaField label={translateHost(locale, 'extensions.meta.root')} value={plugin.pluginRoot} />
                   ) : null}
@@ -345,6 +370,7 @@ export function ExtensionsSettingsPage({
   locale,
   extensionType,
   pluginManagerModel,
+  dawAdapterSnapshot,
   pluginSettingsEntries,
   onInstallPluginDirectory,
   onInstallPluginZip,
@@ -390,6 +416,7 @@ export function ExtensionsSettingsPage({
                 locale={locale}
                 extensions={filteredExtensions}
                 pluginManagerModel={pluginManagerModel}
+                dawAdapterSnapshot={dawAdapterSnapshot}
                 pluginSettingsEntries={pluginSettingsEntries}
                 expandedPluginId={expandedPluginId}
                 onToggleExpanded={(pluginId) => {

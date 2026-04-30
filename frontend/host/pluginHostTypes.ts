@@ -27,6 +27,8 @@ export interface HostAutomationEntry {
   description?: string
   automationType: string
   order?: number
+  currentDawLabel?: string
+  currentDawMinimumHostVersion?: string
   optionsSchema: PluginAutomationOptionDefinition[]
   execute(input: Record<string, unknown>): Promise<PluginAutomationRunResult>
 }

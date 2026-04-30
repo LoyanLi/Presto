@@ -153,6 +153,32 @@ function requiredCapabilityHostVersionSatisfied(
   return true
 }
 
+export function resolvePluginMinimumHostVersionForSnapshot(
+  plugin: Pick<HostPluginRecord, 'extensionType' | 'requiredCapabilities'>,
+  snapshot: DawAdapterSnapshot | null,
+): string | null {
+  if (plugin.extensionType === 'tool' || !snapshot || !plugin.requiredCapabilities || plugin.requiredCapabilities.length === 0) {
+    return null
+  }
+
+  const availableCapabilities = new Map(
+    snapshot.capabilities.map((capability) => [capability.capabilityId, capability.minimumHostVersion]),
+  )
+  let minimumHostVersion: string | null = null
+
+  for (const capabilityId of plugin.requiredCapabilities) {
+    const candidate = String(availableCapabilities.get(capabilityId) ?? '').trim()
+    if (!candidate) {
+      continue
+    }
+    if (!minimumHostVersion || compareVersions(candidate, minimumHostVersion) > 0) {
+      minimumHostVersion = candidate
+    }
+  }
+
+  return minimumHostVersion
+}
+
 export function isPluginAvailableForSnapshot(
   plugin: HostPluginRecord,
   snapshot: DawAdapterSnapshot | null,
