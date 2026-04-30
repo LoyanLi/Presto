@@ -1141,7 +1141,7 @@ def test_invoke_track_color_apply_returns_applied_shape() -> None:
 
 
 def test_invoke_track_pan_set_returns_updated_shape() -> None:
-    app = _app_with_fake_daw()
+    app = _app_with_fake_strip_silence()
     request = DummyRequest(app=app)
 
     response = invoke_capability(
@@ -1159,7 +1159,9 @@ def test_invoke_track_pan_set_returns_updated_shape() -> None:
         "trackName": "Kick",
         "value": 0.0,
     }
-    assert app.state.services.daw.pan_updates == [("Kick", 0.0)]
+    assert app.state.services.daw.selected_tracks == ["Kick"]
+    assert app.state.services.daw_ui_profile.pan_reset_requests == [("Kick", 0.0)]
+    assert app.state.services.mac_automation.scripts == ["preflight", "set-track-pan:Kick:0.0"]
 
 
 def test_invoke_strip_silence_open_runs_preflight_and_window_script() -> None:

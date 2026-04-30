@@ -10,6 +10,9 @@ def test_generated_ptsl_catalog_exposes_known_commands() -> None:
     assert "CId_SetTrackRecordEnableState" in names
     assert "CId_DeleteTracks" in names
     assert "CId_GetClipList" in names
+    assert "CId_SetTrackHeight" in names
+    assert "CId_GetTrackMainOutputAssignments" in names
+    assert "CId_SetTrackControlBreakpoints" not in names
 
 
 def test_generated_ptsl_catalog_exposes_command_metadata() -> None:

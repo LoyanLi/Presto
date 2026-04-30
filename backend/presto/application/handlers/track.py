@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from .common import ensure_daw_connected
+from .automation import automation_runtime_error, get_daw_ui_profile, get_mac_automation
 from .transport import map_track_info
+from ...domain.errors import PrestoError
 from ...domain.ports import CapabilityExecutionContext
 
 
@@ -81,9 +83,54 @@ def track_color_apply_payload(ctx: CapabilityExecutionContext, payload: dict[str
 def track_pan_set_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     capability_id = "daw.track.pan.set"
     daw = ensure_daw_connected(ctx, capability_id, payload, raise_on_error=True)
-    track_name = str(payload.get("trackName", ""))
-    value = float(payload.get("value", 0.0))
-    daw.set_track_pan(track_name, value)
+    mac_automation = get_mac_automation(ctx, capability_id)
+    daw_ui_profile = get_daw_ui_profile(ctx, capability_id)
+    track_name = str(payload.get("trackName", "")).strip()
+    try:
+        value = float(payload.get("value", 0.0))
+    except Exception as exc:
+        raise PrestoError(
+            "TRACK_PAN_VALUE_INVALID",
+            "Track pan value must be a number between -1.0 and 1.0.",
+            source="capability",
+            retryable=False,
+            capability=capability_id,
+            adapter="pro_tools",
+            details={
+                "rawCode": "TRACK_PAN_VALUE_INVALID",
+                "rawMessage": "Track pan value must be a number between -1.0 and 1.0.",
+                "trackName": track_name,
+                "value": payload.get("value"),
+            },
+            status_code=400,
+        ) from exc
+    if value < -1.0 or value > 1.0:
+        raise PrestoError(
+            "TRACK_PAN_VALUE_INVALID",
+            "Track pan value must be between -1.0 and 1.0.",
+            source="capability",
+            retryable=False,
+            capability=capability_id,
+            adapter="pro_tools",
+            details={
+                "rawCode": "TRACK_PAN_VALUE_INVALID",
+                "rawMessage": "Track pan value must be between -1.0 and 1.0.",
+                "trackName": track_name,
+                "value": value,
+            },
+            status_code=400,
+        )
+
+    try:
+        daw.select_track(track_name)
+        mac_automation.run_script(daw_ui_profile.build_preflight_accessibility_script())
+        mac_automation.run_script(daw_ui_profile.build_set_track_pan_script(track_name, value))
+    except Exception as exc:
+        raise automation_runtime_error(
+            exc,
+            capability=capability_id,
+            fallback_message=f"Failed to set pan for '{track_name}'.",
+        ) from exc
     return {
         "updated": True,
         "trackName": track_name,

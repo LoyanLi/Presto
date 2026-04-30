@@ -1046,36 +1046,20 @@ class ProToolsDawAdapter:
                 adapter="pro_tools",
             )
 
-        request = {
-            "track_name": normalized_track_name,
-            "control_id": {
-                "section": "TSId_MainOut",
-                "control_type": "TCType_Pan",
-                "pan": {
-                    "pan_space": "PSpace_Stereo",
-                    "parameter": "PCParameter_Pan",
-                    "channel": "SChannel_Mono",
-                },
-            },
-            "breakpoints": [
-                {
-                    "time": {
-                        "location": "0",
-                        "time_type": "TLType_Samples",
-                    },
-                    "value": normalized_pan,
-                }
-            ],
-        }
-        self._run_ptsl_command(
-            command_name="CId_SetTrackControlBreakpoints",
-            payload=request,
+        raise PrestoError(
+            "TRACK_PAN_UNAVAILABLE",
+            "PTSL 2026.04 no longer exposes SetTrackControlBreakpoints; use the UI automation capability path for track pan.",
+            source="runtime",
+            retryable=False,
+            details=self._raw_error_details(
+                "TRACK_PAN_UNAVAILABLE",
+                "PTSL 2026.04 no longer exposes SetTrackControlBreakpoints; use the UI automation capability path for track pan.",
+                address=self.address,
+                track_name=normalized_track_name,
+                value=normalized_pan,
+            ),
             capability="daw.track.pan.set",
-            unavailable_code="TRACK_PAN_UNAVAILABLE",
-            unavailable_message="The current Pro Tools engine cannot set pan.",
-            failed_code="TRACK_PAN_SET_FAILED",
-            failed_message=f"Failed to update pan for '{normalized_track_name}'.",
-            failed_details={"track_name": normalized_track_name, "value": normalized_pan},
+            adapter="pro_tools",
         )
 
     def apply_track_color_batch(

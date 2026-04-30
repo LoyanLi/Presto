@@ -14,6 +14,9 @@ except Exception:  # pragma: no cover
     pt = None  # type: ignore[assignment]
 
 
+_SCHEMA_UNAVAILABLE = object()
+
+
 def _parse_version(value: str | None) -> tuple[int, int, int] | None:
     if not value:
         return None
@@ -91,7 +94,14 @@ class PtslCommandRunner:
             ]
         return serialized
 
-    def _resolve_message_type(self, message_name: str | None, *, kind: str, capability: str, command_name: str) -> Any | None:
+    def _resolve_message_type(
+        self,
+        message_name: str | None,
+        *,
+        kind: str,
+        capability: str,
+        command_name: str,
+    ) -> Any | None | object:
         if message_name is None:
             return None
         if pt is None:
@@ -106,15 +116,7 @@ class PtslCommandRunner:
             )
         message_type = getattr(pt, message_name, None)
         if message_type is None:
-            raise PrestoError(
-                "PTSL_SCHEMA_UNAVAILABLE",
-                f"PTSL {kind} schema '{message_name}' not found.",
-                source="runtime",
-                retryable=False,
-                details={"command_name": command_name, "message_name": message_name, "message_kind": kind},
-                capability=capability,
-                adapter="pro_tools",
-            )
+            return _SCHEMA_UNAVAILABLE
         return message_type
 
     def _normalize_request_payload(
@@ -143,6 +145,8 @@ class PtslCommandRunner:
                     adapter="pro_tools",
                 )
             return {}
+        if message_type is _SCHEMA_UNAVAILABLE:
+            return normalized_payload
 
         try:
             message = message_type()
@@ -228,6 +232,8 @@ class PtslCommandRunner:
             capability=capability,
             command_name=entry.command_name,
         )
+        if message_type is _SCHEMA_UNAVAILABLE:
+            return response
         assert message_type is not None
 
         try:

@@ -544,40 +544,18 @@ def test_apply_track_color_uses_track_names_request_from_proto() -> None:
     ]
 
 
-def test_set_track_pan_uses_track_control_breakpoints_command() -> None:
+def test_set_track_pan_is_not_exposed_through_ptsl_2026_catalog() -> None:
     adapter = ProToolsDawAdapter(address="127.0.0.1:31416")
     engine = FakeSelectionEngine()
     adapter._engine = engine
     adapter._connected = True
 
-    adapter.set_track_pan("Kick", 0.0)
+    with pytest.raises(PrestoError) as exc_info:
+        adapter.set_track_pan("Kick", 0.0)
 
-    assert engine.command_calls == [
-        (
-            _pt_constant("CId_SetTrackControlBreakpoints"),
-            {
-                "track_name": "Kick",
-                "control_id": {
-                    "section": "TSId_MainOut",
-                    "control_type": "TCType_Pan",
-                    "pan": {
-                        "pan_space": "PSpace_Stereo",
-                        "parameter": "PCParameter_Pan",
-                        "channel": "SChannel_Mono",
-                    },
-                },
-                "breakpoints": [
-                    {
-                        "time": {
-                            "location": "0",
-                            "time_type": "TLType_Samples",
-                        },
-                        "value": 0.0,
-                    }
-                ],
-            },
-        )
-    ]
+    assert exc_info.value.code == "TRACK_PAN_UNAVAILABLE"
+    assert exc_info.value.capability == "daw.track.pan.set"
+    assert engine.command_calls == []
 
 
 def test_set_track_hidden_state_uses_ptsl_track_names_request() -> None:

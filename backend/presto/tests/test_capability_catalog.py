@@ -92,12 +92,12 @@ def test_capability_catalog_declares_workflow_scope_portability_and_implementati
         assert set(definition.implementations.keys()) == set(definition.supported_daws)
         assert definition.canonical_source in definition.implementations
 
-    track_mute = definitions["daw.track.mute.set"]
-    track_mute_impl = track_mute.implementations["pro_tools"]
-    assert track_mute.workflow_scope == "shared"
-    assert track_mute.portability == "canonical"
-    assert track_mute_impl.kind == "handler"
-    assert track_mute_impl.handler == "daw.track.mute.set"
+    track_pan = definitions["daw.track.pan.set"]
+    track_pan_impl = track_pan.implementations["pro_tools"]
+    assert track_pan.workflow_scope == "shared"
+    assert track_pan.portability == "canonical"
+    assert track_pan_impl.kind == "ui_automation"
+    assert track_pan_impl.handler == "daw.track.pan.set"
 
     ptsl_execute = definitions["daw.ptsl.command.execute"]
     ptsl_execute_impl = ptsl_execute.implementations["pro_tools"]
@@ -123,7 +123,7 @@ def test_generated_ptsl_semantic_capabilities_use_vendor_neutral_public_ids() ->
         and definition.implementations[definition.canonical_source].kind == "ptsl_command"
     ]
 
-    assert len(public_ptsl_command_capabilities) == 143
+    assert len(public_ptsl_command_capabilities) == 137
     assert all(not definition.id.startswith("daw.ptsl.") for definition in public_ptsl_command_capabilities)
 
     create_session = definitions["daw.sessionFile.createSession"]
@@ -133,6 +133,8 @@ def test_generated_ptsl_semantic_capabilities_use_vendor_neutral_public_ids() ->
     assert create_session.portability == "daw_specific"
     assert implementation.kind == "ptsl_command"
     assert implementation.command == "CId_CreateSession"
+    assert "daw.editing.setTrackControlBreakpoints" not in definitions
+    assert definitions["daw.editing.setTrackHeight"].implementations["pro_tools"].command == "CId_SetTrackHeight"
 
 
 def test_duplicate_ptsl_commands_collapse_into_existing_canonical_public_capabilities() -> None:

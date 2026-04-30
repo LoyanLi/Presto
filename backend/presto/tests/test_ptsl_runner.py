@@ -129,6 +129,39 @@ def test_runner_rejects_unknown_request_fields() -> None:
     assert exc_info.value.details["command_name"] == "CId_SelectTracksByName"
 
 
+def test_runner_sends_raw_json_when_declared_request_schema_is_not_in_py_ptsl() -> None:
+    engine = FakeEngine(responses={155: {"height": "TH_Small"}})
+    runner = PtslCommandRunner(
+        [
+            PtslCommandCatalogEntry(
+                command_name="CId_SetTrackHeight",
+                command_id=155,
+                request_message="SetTrackHeightRequestBody",
+                response_message="SetTrackHeightResponseBody",
+                has_py_ptsl_op=False,
+                category="editing",
+                minimum_host_version="2026.04.0",
+            )
+        ],
+        host_version="2026.04.0",
+    )
+
+    response = runner.run(
+        engine,
+        "CId_SetTrackHeight",
+        {"track_names": ["Kick"], "height": "TH_Small"},
+        capability="daw.editing.setTrackHeight",
+    )
+
+    assert response == {"height": "TH_Small"}
+    assert engine.client.run_command_calls == [
+        (
+            155,
+            {"track_names": ["Kick"], "height": "TH_Small"},
+        )
+    ]
+
+
 def test_runner_enforces_catalog_minimum_host_version_by_default() -> None:
     engine = FakeEngine()
     runner = PtslCommandRunner(

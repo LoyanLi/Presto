@@ -214,7 +214,7 @@ test('generated capability registry includes full vendor-neutral public daw sema
   const publicSemantic = source.match(/kind":"ptsl_command","command":"CId_[^"]+"/g) ?? []
   const ptslSemanticIdsMatch = capabilityIdsSource.match(/export const PTSL_SEMANTIC_CAPABILITY_IDS = (\[[\s\S]*?\]) as const/)
 
-  assert.equal(publicSemantic.length, 143)
+  assert.equal(publicSemantic.length, 137)
   assert.ok(ptslSemanticIdsMatch)
   assert.doesNotMatch(ptslSemanticIdsMatch[1], /daw\.ptsl\./)
   assert.match(ptslSemanticIdsMatch[1], /daw\.sessionFile\.createSession/)

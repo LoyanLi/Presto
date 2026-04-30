@@ -17,6 +17,8 @@ def test_ptsl_requirements_json_contains_known_sections() -> None:
 
     assert set(raw.keys()) == {"commandMinimumHostVersionOverrides", "capabilityCommandDependencies"}
     assert raw["commandMinimumHostVersionOverrides"]["CId_GetTimeAsType"] == "2025.10.0"
+    assert raw["commandMinimumHostVersionOverrides"]["CId_SetTrackHeight"] == "2026.04.0"
+    assert "CId_SetTrackControlBreakpoints" not in raw["commandMinimumHostVersionOverrides"]
     assert raw["capabilityCommandDependencies"]["daw.export.run.start"] == [
         "CId_GetSessionPath",
         "CId_GetTransportState",
@@ -73,3 +75,6 @@ def test_ptsl_requirements_calculates_capability_minimum_host_versions() -> None
     assert ptsl_requirements.minimum_host_version_for_definition(
         definitions["daw.export.mixWithSource"], "pro_tools"
     ) == "2025.06.0"
+    assert ptsl_requirements.minimum_host_version_for_definition(
+        definitions["daw.editing.setTrackHeight"], "pro_tools"
+    ) == "2026.04.0"

@@ -218,7 +218,9 @@
       "version": 1
     },
     "dependsOn": [
-      "daw"
+      "daw",
+      "mac_automation",
+      "daw_ui_profile"
     ],
     "workflowScope": "shared",
     "portability": "canonical",
@@ -794,7 +796,7 @@
     },
     "implementations": {
       "pro_tools": {
-        "kind": "handler",
+        "kind": "ui_automation",
         "handler": "daw.track.pan.set"
       }
     },
