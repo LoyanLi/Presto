@@ -24,3 +24,14 @@ test('useDawStatusPolling models DAW status as connected, disconnected, or unkno
   assert.match(source, /status:\s*current\.status/)
   assert.doesNotMatch(source, /connected:\s*false,\s*[\s\S]*statusLabel:\s*translateHost\(resolvedLocale, 'general\.disconnected'\)/)
 })
+
+test('useDawStatusPolling probes the DAW connection before startup and manual status reads', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/hooks/useDawStatusPolling.ts'), 'utf8')
+
+  assert.match(source, /const DAW_CONNECT_PROBE_TIMEOUT_SECONDS = 5/)
+  assert.match(source, /const pendingConnectionProbeRef = useRef\(true\)/)
+  assert.match(source, /const shouldProbeConnection = pendingConnectionProbeRef\.current[\s\S]*await refreshDawStatus\(\{ probeConnection: shouldProbeConnection \}\)/)
+  assert.match(source, /timeoutId = setTimeout\(\(\) => \{\s*void refreshDawStatus\(\{ probeConnection: false \}\)/)
+  assert.match(source, /refresh: \(\) => \{\s*pendingConnectionProbeRef\.current = true/)
+  assert.match(source, /DAW connection probing is best-effort/)
+})

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
@@ -8,6 +8,8 @@ import { translateHost } from '../i18n'
 import { dawLabel } from '../hostShellHelpers'
 
 export type HostDawConnectionState = 'connected' | 'disconnected' | 'unknown'
+
+const DAW_CONNECT_PROBE_TIMEOUT_SECONDS = 5
 
 type HostDawStatusState = {
   status: HostDawConnectionState
@@ -50,8 +52,9 @@ export function useDawStatusPolling({
   resolvedLocale,
   initialSnapshot = null,
 }: UseDawStatusPollingInput) {
-  const [checkingDawConnection, setCheckingDawConnection] = useState(false)
+  const [checkingDawConnection, setCheckingDawConnection] = useState(true)
   const [dawRefreshKey, setDawRefreshKey] = useState(0)
+  const pendingConnectionProbeRef = useRef(true)
   const [dawStatus, setDawStatus] = useState<HostDawStatusState>(() => ({
     ...UNKNOWN_DAW_STATUS,
     targetLabel: dawLabel(preferences.dawTarget),
@@ -64,6 +67,7 @@ export function useDawStatusPolling({
   }, [initialSnapshot])
 
   useEffect(() => {
+    pendingConnectionProbeRef.current = true
     setDawStatus((current) => ({
       ...current,
       targetLabel: dawLabel(preferences.dawTarget),
@@ -74,7 +78,7 @@ export function useDawStatusPolling({
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-    const refreshDawStatus = async () => {
+    const refreshDawStatus = async ({ probeConnection }: { probeConnection: boolean }) => {
       if (!developerPresto?.daw?.connection || typeof developerPresto.daw.connection.getStatus !== 'function') {
         if (!cancelled) {
           setCheckingDawConnection(false)
@@ -88,6 +92,13 @@ export function useDawStatusPolling({
       }
 
       try {
+        if (probeConnection && typeof developerPresto.daw.connection.connect === 'function') {
+          try {
+            await developerPresto.daw.connection.connect({ timeoutSeconds: DAW_CONNECT_PROBE_TIMEOUT_SECONDS })
+          } catch {
+            // DAW connection probing is best-effort; the status read below owns the visible state.
+          }
+        }
         const status = await developerPresto.daw.connection.getStatus()
         const sessionName = status.sessionName ?? ''
 
@@ -124,13 +135,19 @@ export function useDawStatusPolling({
         if (!cancelled) {
           setCheckingDawConnection(false)
           timeoutId = setTimeout(() => {
-            void refreshDawStatus()
+            void refreshDawStatus({ probeConnection: false })
           }, 5000)
         }
       }
     }
 
-    void refreshDawStatus()
+    const runInitialRefresh = async () => {
+      const shouldProbeConnection = pendingConnectionProbeRef.current
+      pendingConnectionProbeRef.current = false
+      await refreshDawStatus({ probeConnection: shouldProbeConnection })
+    }
+
+    void runInitialRefresh()
 
     return () => {
       cancelled = true
@@ -142,7 +159,10 @@ export function useDawStatusPolling({
 
   const triggerRefresh = useMemo(
     () => ({
-      refresh: () => setDawRefreshKey((current) => current + 1),
+      refresh: () => {
+        pendingConnectionProbeRef.current = true
+        setDawRefreshKey((current) => current + 1)
+      },
       setChecking: (next: boolean) => setCheckingDawConnection(next),
       setStatus: setDawStatus,
     }),

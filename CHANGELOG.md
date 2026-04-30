@@ -4,8 +4,20 @@
 
 ## [0.3.11](docs/releases/v0.3.11-release.md) - 2026-04-30
 
-- 统一应用、workspace package、Tauri、Rust crate、contracts 与 backend 版本基线到 `0.3.11`。
-- PTSL 命令最低宿主版本元数据收口为 `minimumHostVersion` / `minimum_host_version`，插件宿主可根据插件声明的 `requiredCapabilities` 自动判断当前 Pro Tools/PTSL 版本是否满足需求。
+- 统一应用、workspace package、Tauri、Rust crate、contracts、SDK runtime 与 backend 版本基线到 `0.3.11`，并同步 README、插件开发文档、版本兼容性文档与 release note。
+- PTSL 命令版本模型收口为单一最低宿主版本语义：后端 catalog 使用 `minimum_host_version`，SDK / host snapshot 使用 `minimumHostVersion`，不再暴露容易误读的 `introducedVersion`。
+- 新增 `backend/presto/integrations/daw/ptsl_requirements.json` 与 `ptsl_requirements.py`，集中维护 PTSL 命令最低版本覆盖和 composed capability 的命令依赖；host 可根据插件 `requiredCapabilities` 反查 capability snapshot，并自动计算插件当前 DAW 的最低 Pro Tools/PTSL 版本要求。
+- 官方 workflow / automation 插件 manifest 移除手写 `capabilityRequirements` 版本要求，避免插件包内重复维护版本号；插件可用性现在以宿主当前 DAW snapshot、adapter module requirement、capability requirement 与 capability minimum host version 共同判断。
+- 修复部分 workflow 在版本要求收口后被错误判定不可用的问题；`daw.adapter.getSnapshot` 会把每个 capability 的最低 host 版本带给前端，插件宿主据此判断当前 Pro Tools 版本是否满足导入、导出和自动化流程需求。
+- PTSL catalog 生成脚本改为从 `PTSL.proto` 的 `@since Pro Tools ...` 提取初始最低版本，并用集中 requirements 文件补齐当前 SDK 中缺失或需要修正的版本信息；生成时会校验所有 override 必须指向当前 catalog 中存在的命令。
+- 使用 Pro Tools `PTSL_SDK_CPP.2026.04.0.1301892` 更新内核适配器：当前 PTSL catalog 从 159 条变为 153 条，新增 `CId_SetTrackHeight`、`CId_ClearTrackMainOutputAssignments`、`CId_ShowRendererWindow`、`CId_GetRendererOutSignalPath`、`CId_DeleteSignalPaths`、`CId_GetTrackMainOutputAssignments`，并把这 6 个新命令的最低版本标记为 `2026.04.0`。
+- 移除 26.4 SDK 已删除的 PTSL 命令暴露，包括 scrub、Cue Pro Video、API key exchange、track control breakpoint、menu handler 和 playlist element 相关命令；生成的 public DAW semantic wrapper 数量从 143 调整为 137。
+- `daw.track.pan.set` 不再依赖已被 26.4 移除的 `CId_SetTrackControlBreakpoints`，改为走现有 macOS UI automation 路径：先选择目标轨道，再执行 Accessibility preflight 和 track pan 脚本；直接调用 Pro Tools adapter 的旧 PTSL pan 方法会返回明确的 `TRACK_PAN_UNAVAILABLE`。
+- PTSL runner 对当前 `py-ptsl 601.0.0` 尚未包含的 26.4 新 schema 做了兼容执行处理：已有 Python schema 的命令继续做 request / response 校验；新 SDK 中已存在但 `py-ptsl` 暂未提供消息类的命令，会按 catalog command id 直发 raw JSON，并在 coverage 报告中明确列出 unresolved schema。
+- 已安装扩展列表现在会显示当前插件在当前 DAW 下的最低版本要求，例如 `Pro Tools ≥ 2025.10.0`；Workflow Extensions、Automation Extensions 的折叠列表和展开详情都使用同一套自动推导结果。
+- Automation 首页卡片同样显示当前 DAW 最低版本要求；automation entry 由宿主在过滤可用性时附加 `currentDawLabel` 和 `currentDawMinimumHostVersion`，卡片只负责展示，避免 automation UI 自行重复计算。
+- 优化 app 启动与手动刷新时的 DAW 连接状态路径：前端 DAW 状态 hook 会先做短超时 PTSL 连接探测，再读取 status，避免状态从 unknown、disconnected 到 connected 逐次跳变；后台定时轮询仍只读 status，并保持后端 `daw.connection.getStatus` 的只读语义。
+- `0.3.11` 尚未生成正式安装包；本条目记录的是 `v0.3.10` 之后的代码与协议变化，安装包文件名、体积与 SHA-256 会在实际打包后补入对应 release note。
 
 ## [0.3.10](docs/releases/v0.3.10-release.md) - 2026-04-27
 
