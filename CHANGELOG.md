@@ -2,6 +2,11 @@
 
 本文件按发布顺序汇总用户可见变化；`0.3.x` 正式版本的完整发布说明和安装包校验值见对应 `docs/releases/v*-release.md`。
 
+## [0.3.11](docs/releases/v0.3.11-release.md) - 2026-04-30
+
+- 统一应用、workspace package、Tauri、Rust crate、contracts 与 backend 版本基线到 `0.3.11`。
+- PTSL 命令最低宿主版本元数据收口为 `minimumHostVersion` / `minimum_host_version`，插件宿主可根据插件声明的 `requiredCapabilities` 自动判断当前 Pro Tools/PTSL 版本是否满足需求。
+
 ## [0.3.10](docs/releases/v0.3.10-release.md) - 2026-04-27
 
 - 导出执行链路补齐明确生命周期事件：`export.run.accepted`、`export.run.started`、`export.file.succeeded`、`export.run.succeeded`、`export.run.failed`，原始 runtime log 终于能按真实顺序反映导出状态。
