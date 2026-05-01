@@ -20,7 +20,6 @@
 - 撤回 app 启动与手动刷新时由前端状态轮询主动建立 PTSL 连接的实现；DAW 状态 hook 重新保持只读 `daw.connection.getStatus`，避免打开 app 后的后台探测占用 DAW/backend 通道并影响导入流程启动。
 - 修复 Tauri 启动阶段 backend supervisor 的并发 healthcheck 竞态：当 backend 仍处于 `starting` 时，后续 capability 请求不再把暂未 ready 的实例误判为故障并强制 `stop -> restart`，`npm run tauri:dev` 启动后不再出现 backend 自己把自己清掉、browse 后一直卡住不导入的情况。
 - Import Workflow 的导入后 rename 阶段现在会在重命名轨道后继续选择目标轨道和 timeline clips，并直接调用底层 `daw.editing.renameSelectedClip` / `CId_RenameSelectedClip`，让片段名同步改为最终名称且不重命名源文件。
-- `0.3.11` 当前已生成 `arm64` macOS 安装包：`Presto_0.3.11_arm64.dmg`，SHA-256 `d820a310a01943d618760a2119745db1c77244d0485c370a103d8dde33a5b8ed`，DMG 体积 `28388983` bytes（约 `27.1 MiB`）；同批 size report 记录 `.app` 体积 `84145700` bytes（约 `80.2 MiB`）。`x64` 安装包这次未重打，待单独补充。
 
 ## [0.3.10](docs/releases/v0.3.10-release.md) - 2026-04-27
 
