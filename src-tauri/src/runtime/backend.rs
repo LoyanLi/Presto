@@ -564,8 +564,12 @@ fn wait_for_backend_ready(state: &Arc<RuntimeState>) -> Result<(), String> {
     Err(format!("backend_not_ready_on_port_{port}"))
 }
 
+fn backend_should_restart_after_healthcheck(phase: &str, healthcheck_ok: bool) -> bool {
+    !healthcheck_ok && phase != "starting"
+}
+
 fn ensure_backend_available(state: &Arc<RuntimeState>) -> Result<(), String> {
-    {
+    let (port, phase) = {
         let mut backend = state
             .backend_state
             .lock()
@@ -576,20 +580,22 @@ fn ensure_backend_available(state: &Arc<RuntimeState>) -> Result<(), String> {
             start_backend(state)?;
             return Ok(());
         }
-    }
-
-    let port = {
-        let backend = state
-            .backend_state
-            .lock()
-            .map_err(|_| "backend_lock_failed".to_string())?;
-        backend.port
+        (backend.port, backend.phase.clone())
     };
 
-    if http_json_request("GET", port, "/api/v1/health", None)
+    let healthcheck_ok = http_json_request("GET", port, "/api/v1/health", None)
         .map(|response| response.status_code == 200)
-        .unwrap_or(false)
-    {
+        .unwrap_or(false);
+
+    if healthcheck_ok {
+        return Ok(());
+    }
+
+    if phase == "starting" {
+        return wait_for_backend_ready(state);
+    }
+
+    if !backend_should_restart_after_healthcheck(&phase, healthcheck_ok) {
         return Ok(());
     }
 
@@ -831,8 +837,8 @@ fn state_version() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        backend_env_vars, backend_error_response_to_capability_response, classify_backend_stderr_line,
-        HttpJsonResponse,
+        backend_env_vars, backend_error_response_to_capability_response,
+        backend_should_restart_after_healthcheck, classify_backend_stderr_line, HttpJsonResponse,
     };
     use serde_json::{json, Value};
     use std::path::Path;
@@ -919,5 +925,15 @@ mod tests {
             message,
             "backend.stderr INFO:     Uvicorn running on http://127.0.0.1:18500"
         );
+    }
+
+    #[test]
+    fn backend_healthcheck_does_not_restart_while_backend_is_starting() {
+        assert!(!backend_should_restart_after_healthcheck("starting", false));
+    }
+
+    #[test]
+    fn backend_healthcheck_restarts_running_backend_when_healthcheck_fails() {
+        assert!(backend_should_restart_after_healthcheck("running", false));
     }
 }

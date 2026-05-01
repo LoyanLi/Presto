@@ -65,6 +65,35 @@
               "$ref": "item.finalTrackName"
             }
           }
+        },
+        {
+          "stepId": "select_track_for_clip_rename",
+          "usesCapability": "daw.track.select",
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "select_clips_for_clip_rename",
+          "usesCapability": "daw.clip.selectAllOnTrack",
+          "input": {
+            "trackName": {
+              "$ref": "item.finalTrackName"
+            }
+          }
+        },
+        {
+          "stepId": "rename_selected_clip",
+          "usesCapability": "daw.editing.renameSelectedClip",
+          "input": {
+            "clip_location": "CLocation_Timeline",
+            "new_name": {
+              "$ref": "item.finalTrackName"
+            },
+            "rename_file": false
+          }
         }
       ]
     },

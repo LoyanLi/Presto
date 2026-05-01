@@ -144,6 +144,7 @@ const baseManifest = {
     'daw.track.select',
     'daw.track.color.apply',
     'daw.clip.selectAllOnTrack',
+    'daw.editing.renameSelectedClip',
     'daw.stripSilence.open',
     'daw.stripSilence.execute',
     'daw.editing.createFadesBasedOnPreset',

@@ -319,8 +319,19 @@ test('workflow definition batches post-import operations in the same order shown
     Object.keys(definition.steps[0]?.input ?? {}).sort(),
     ['deleteIxmlIfPresent', 'folderPaths', 'importMode', 'orderedFilePaths'],
   )
-  assert.deepEqual(renameSteps.map((step) => step.stepId), ['rename_track'])
-  assert.deepEqual(renameSteps.map((step) => step.usesCapability), ['daw.track.rename'])
+  assert.deepEqual(
+    renameSteps.map((step) => step.stepId),
+    ['rename_track', 'select_track_for_clip_rename', 'select_clips_for_clip_rename', 'rename_selected_clip'],
+  )
+  assert.deepEqual(
+    renameSteps.map((step) => step.usesCapability),
+    ['daw.track.rename', 'daw.track.select', 'daw.clip.selectAllOnTrack', 'daw.editing.renameSelectedClip'],
+  )
+  assert.deepEqual(renameSteps[3]?.input, {
+    clip_location: 'CLocation_Timeline',
+    new_name: { $ref: 'item.finalTrackName' },
+    rename_file: false,
+  })
   assert.deepEqual(colorSteps.map((step) => step.stepId), ['apply_color'])
   assert.deepEqual(colorSteps.map((step) => step.usesCapability), ['daw.track.color.apply'])
   assert.deepEqual(stripSteps.map((step) => step.stepId), ['select_track', 'select_clips', 'strip_silence'])

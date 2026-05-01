@@ -25,13 +25,13 @@ test('useDawStatusPolling models DAW status as connected, disconnected, or unkno
   assert.doesNotMatch(source, /connected:\s*false,\s*[\s\S]*statusLabel:\s*translateHost\(resolvedLocale, 'general\.disconnected'\)/)
 })
 
-test('useDawStatusPolling probes the DAW connection before startup and manual status reads', async () => {
+test('useDawStatusPolling keeps status reads side-effect free instead of connecting during startup', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/hooks/useDawStatusPolling.ts'), 'utf8')
 
-  assert.match(source, /const DAW_CONNECT_PROBE_TIMEOUT_SECONDS = 5/)
-  assert.match(source, /const pendingConnectionProbeRef = useRef\(true\)/)
-  assert.match(source, /const shouldProbeConnection = pendingConnectionProbeRef\.current[\s\S]*await refreshDawStatus\(\{ probeConnection: shouldProbeConnection \}\)/)
-  assert.match(source, /timeoutId = setTimeout\(\(\) => \{\s*void refreshDawStatus\(\{ probeConnection: false \}\)/)
-  assert.match(source, /refresh: \(\) => \{\s*pendingConnectionProbeRef\.current = true/)
-  assert.match(source, /DAW connection probing is best-effort/)
+  assert.match(source, /const \[checkingDawConnection, setCheckingDawConnection\] = useState\(false\)/)
+  assert.match(source, /const refreshDawStatus = async \(\) =>/)
+  assert.match(source, /void refreshDawStatus\(\)/)
+  assert.doesNotMatch(source, /developerPresto\.daw\.connection\.connect/)
+  assert.doesNotMatch(source, /DAW_CONNECT_PROBE_TIMEOUT_SECONDS/)
+  assert.doesNotMatch(source, /pendingConnectionProbeRef/)
 })
