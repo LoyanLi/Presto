@@ -1,13 +1,12 @@
 export const MUSIC_MIX_PROJECT_TOOL_ID = 'music-mix-project-tool'
 export const MUSIC_MIX_PROJECT_RESOURCE_ID = 'music-mix-project-script'
-export const DEFAULT_SECTION_IDS = [
-  '01_Received',
-  '02_DAW_Projects',
-  '03_Exports',
-  '04_Documents',
-  '05_Archive',
+export const DEFAULT_DIRECTORY_LABELS = [
+  'Received',
+  'DAW_Projects',
+  'Exports',
+  'Documents',
+  'Archive',
 ]
-export const MUSIC_MIX_PROJECT_STORAGE_KEY = 'musicMixProjectTool.settings.v1'
 
 function normalizePath(value) {
   const normalized = String(value ?? '').replace(/\\/g, '/').trim()
@@ -43,17 +42,22 @@ function normalizeSongName(value) {
   return String(value ?? '').trim().replace(/[\\/]+/g, ' ')
 }
 
-function dedupe(values) {
-  const seen = new Set()
-  const result = []
-  for (const value of values) {
-    if (seen.has(value)) {
-      continue
-    }
-    seen.add(value)
-    result.push(value)
-  }
-  return result
+function normalizeSectionLabel(value) {
+  return String(value ?? '').trim().replace(/[\\/]+/g, ' ')
+}
+
+function normalizeRawSections(sections) {
+  return (Array.isArray(sections) ? sections : [])
+    .map((section) => normalizeSectionLabel(section))
+    .filter(Boolean)
+}
+
+export function createDefaultDirectoryItems() {
+  return DEFAULT_DIRECTORY_LABELS.map((label, index) => ({
+    id: `default-${index + 1}`,
+    label,
+    selected: true,
+  }))
 }
 
 export function normalizeMusicMixProjectInput(input = {}) {
@@ -61,7 +65,7 @@ export function normalizeMusicMixProjectInput(input = {}) {
     baseRoot: normalizePath(input.baseRoot),
     date: normalizeDateValue(input.date),
     songName: normalizeSongName(input.songName),
-    sections: buildSelectedDirectories(input.sections),
+    sections: normalizeRawSections(input.sections),
   }
 }
 
@@ -91,7 +95,7 @@ export function buildProjectTargetPath(input = {}) {
 }
 
 export function buildSelectedDirectories(sections) {
-  return dedupe(Array.isArray(sections) ? sections : []).filter((section) => DEFAULT_SECTION_IDS.includes(String(section ?? '')))
+  return normalizeRawSections(sections).map((section, index) => `${String(index + 1).padStart(2, '0')}_${section}`)
 }
 
 export function buildMusicMixProjectScriptArgs(input = {}) {
@@ -103,7 +107,7 @@ export function buildMusicMixProjectScriptArgs(input = {}) {
     formatProjectFolderName(normalized),
   ]
 
-  for (const section of normalized.sections) {
+  for (const section of buildSelectedDirectories(normalized.sections)) {
     args.push('--section', section)
   }
 

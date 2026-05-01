@@ -37,6 +37,31 @@ export function ToolPanel({ title, description, actions, children, className }) 
   )
 }
 
+export function ToolSectionHeader({ title, actions, className }) {
+  return h(
+    'div',
+    { className: ['mmpt-section-header', className].filter(Boolean).join(' ') },
+    h('h2', { className: 'mmpt-section-title' }, title),
+    actions ? h('div', { className: 'mmpt-section-actions' }, actions) : null,
+  )
+}
+
+export function ToolFieldGrid({ children, className }) {
+  return h(
+    'div',
+    { className: ['mmpt-field-grid', className].filter(Boolean).join(' ') },
+    children,
+  )
+}
+
+export function ToolActionBar({ actions, children, className }) {
+  return h(
+    'div',
+    { className: ['mmpt-action-bar', className].filter(Boolean).join(' ') },
+    actions ?? children ?? null,
+  )
+}
+
 export function ToolInput({ label, hint, className, ...props }) {
   if (typeof sharedUi.Input === 'function') {
     return h(sharedUi.Input, {
@@ -59,11 +84,13 @@ export function ToolInput({ label, hint, className, ...props }) {
   )
 }
 
-export function ToolButton({ children, className, ...props }) {
+export function ToolButton({ children, className, variant = 'primary', ...props }) {
   if (typeof sharedUi.Button === 'function') {
     return h(sharedUi.Button, {
       ...props,
-      className,
+      className: [className, variant !== 'primary' ? `mmpt-button--${variant}` : '']
+        .filter(Boolean)
+        .join(' '),
     }, children)
   }
 
@@ -72,7 +99,7 @@ export function ToolButton({ children, className, ...props }) {
     {
       ...props,
       type: props.type ?? 'button',
-      className: ['mmpt-button', className].filter(Boolean).join(' '),
+      className: ['mmpt-button', `mmpt-button--${variant}`, className].filter(Boolean).join(' '),
     },
     children,
   )

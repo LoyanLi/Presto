@@ -34,7 +34,7 @@ const baseManifest = {
       toolId: 'music-mix-project-tool',
       pageId: 'music-mix-project-tool.page.main',
       title: tMusicMixProject(null, 'page.title'),
-      description: 'Create a dated music mix project folder with the standard section layout.',
+      description: 'Create a dated music mix project folder with a selectable folder list.',
       order: 10,
       runnerExport: 'runMusicMixProjectTool',
     },

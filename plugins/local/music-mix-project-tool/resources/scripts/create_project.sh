@@ -35,6 +35,14 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TEMPLATES_DIR="${SCRIPT_DIR%/scripts}/templates"
 PROJECT_ROOT="${BASE_ROOT%/}/${FOLDER_NAME}"
 
+normalize_section_name() {
+  local raw="$1"
+  raw="${raw#*_}"
+  raw="${raw//_/}"
+  raw="${raw// /}"
+  printf '%s' "$raw" | tr '[:upper:]' '[:lower:]'
+}
+
 mkdir -p "$PROJECT_ROOT"
 echo "CREATED_ROOT=$PROJECT_ROOT"
 
@@ -43,7 +51,7 @@ for SECTION in "${SECTIONS[@]}"; do
   mkdir -p "$SECTION_PATH"
   echo "CREATED_DIR=$SECTION_PATH"
 
-  if [[ "$SECTION" == "04_Documents" ]]; then
+  if [[ "$(normalize_section_name "$SECTION")" == "documents" ]]; then
     PROJECT_NOTES_PATH="${SECTION_PATH}/00_Project_Notes.md"
     REVISION_LOG_PATH="${SECTION_PATH}/01_Revision_Log.md"
     cat "$TEMPLATES_DIR/project-notes.md" > "$PROJECT_NOTES_PATH"

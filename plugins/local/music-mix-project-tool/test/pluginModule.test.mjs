@@ -250,13 +250,18 @@ test('tool manifest declares only the required permissions and bundled script re
 
 test('tool page renders required inputs, checkboxes, storage-backed copy, and preview', async () => {
   const { pageModule, restore } = await loadPageModuleWithHookHarness({
-    1: '/tmp/mixes',
-    2: '2026-05-01',
-    3: 'Blue Sky',
-    4: ['01_Received', '02_DAW_Projects', '03_Exports', '04_Documents', '05_Archive'],
-    5: '',
-    6: false,
-    7: null,
+    1: '2026-05-01',
+    2: 'Blue Sky',
+    3: [
+      { id: 'default-1', label: 'Received', selected: true },
+      { id: 'default-2', label: 'DAW_Projects', selected: true },
+      { id: 'default-3', label: 'Exports', selected: true },
+      { id: 'default-4', label: 'Documents', selected: true },
+      { id: 'default-5', label: 'Archive', selected: true },
+    ],
+    4: '',
+    5: false,
+    6: null,
   })
 
   try {
@@ -264,59 +269,96 @@ test('tool page renders required inputs, checkboxes, storage-backed copy, and pr
       React.createElement(pageModule.MusicMixProjectToolPage, {
         context: {
           locale: { requested: 'en', resolved: 'en' },
-          storage: {
-            async get() {
-              return null
-            },
-            async set() {},
-          },
         },
         host: createHostMock(),
       }),
     )
 
-    assert.match(markup, /Base Root/)
     assert.match(markup, /Date/)
+    assert.match(markup, /type="date"/)
     assert.match(markup, /Song Name/)
-    assert.match(markup, /01_Received/)
-    assert.match(markup, /02_DAW_Projects/)
-    assert.match(markup, /03_Exports/)
-    assert.match(markup, /04_Documents/)
-    assert.match(markup, /05_Archive/)
+    assert.match(markup, /Preview/)
+    assert.match(markup, /Received/)
+    assert.match(markup, /DAW_Projects/)
+    assert.match(markup, /Exports/)
+    assert.match(markup, /Documents/)
+    assert.match(markup, /Archive/)
     assert.match(markup, /260501_Blue Sky/)
-    assert.match(markup, /\/tmp\/mixes\/260501_Blue Sky/)
+    assert.match(markup, /Choose destination when creating/)
+    assert.match(markup, /Add Folder/)
     assert.match(markup, /Create Project/)
-    assert.match(markup, /Remembered as the default base root/)
+    assert.match(markup, /01/)
+    assert.match(markup, /02/)
+    assert.match(markup, /ui-panel/)
+    assert.doesNotMatch(markup, /Project Setup/)
+    assert.doesNotMatch(markup, /Base Root/)
+    assert.doesNotMatch(markup, /Remembered as the default base root/)
+    assert.doesNotMatch(markup, /Create one music mix project folder and choose the directories for this run\./)
+    assert.doesNotMatch(markup, /Music Mix Project Tool/)
+    assert.doesNotMatch(markup, /ui-stat-chip/)
   } finally {
     restore()
   }
 })
 
-test('tool page source routes create actions through host.runTool and plugin-local storage', async () => {
-  const [pageSource, cssSource] = await Promise.all([
+test('tool page source routes create actions through host.runTool after a directory prompt', async () => {
+  const [pageSource, uiSource, cssSource] = await Promise.all([
     readFile(new URL('../dist/MusicMixProjectToolPage.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../dist/ui.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../dist/music-mix-project-tool.css', import.meta.url), 'utf8'),
   ])
 
   assert.match(pageSource, /host\.runTool/)
-  assert.match(pageSource, /context\.storage/)
+  assert.match(pageSource, /host\.dialog\.openDirectory/)
   assert.match(pageSource, /shell\.openPath/)
+  assert.doesNotMatch(pageSource, /context\.storage/)
+  assert.doesNotMatch(pageSource, /mmpt-page-header/)
+  assert.match(pageSource, /ToolSectionHeader/)
+  assert.match(pageSource, /ToolActionBar/)
+  assert.match(pageSource, /ToolFieldGrid/)
+  assert.doesNotMatch(pageSource, /ToolStat/)
+  assert.match(uiSource, /export function ToolSectionHeader/)
+  assert.match(uiSource, /export function ToolActionBar/)
+  assert.match(uiSource, /export function ToolFieldGrid/)
   assert.match(cssSource, /\.mmpt-preview-path\s*\{/)
-  assert.match(cssSource, /\.mmpt-section-grid\s*\{/)
+  assert.match(cssSource, /\.mmpt-directory-list\s*\{/)
+  assert.match(cssSource, /\.mmpt-action-bar\s*\{/)
+  assert.match(cssSource, /\.mmpt-grid\s*\{[\s\S]*overflow:\s*hidden;/)
+  assert.match(cssSource, /\.mmpt-preview-list\s*\{/)
+  assert.match(cssSource, /\.mmpt-panel--folders\s*\{[\s\S]*grid-row:\s*1\s*\/\s*span\s*3;/)
+  assert.match(cssSource, /\.mmpt-panel--folders\s*\{[\s\S]*align-self:\s*stretch;/)
+  assert.match(cssSource, /\.mmpt-panel--folders\s+\.ui-panel__body\s*\{[\s\S]*max-height:\s*min\(56vh,\s*560px\);[\s\S]*overflow-y:\s*auto;/)
+  assert.match(pageSource, /mmpt-directory-row__meta/)
+  assert.match(pageSource, /mmpt-directory-field/)
+  assert.match(cssSource, /\.mmpt-directory-row\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 1px color-mix/)
+  assert.match(cssSource, /\.mmpt-directory-row:is\(:hover,\s*:focus-within\)\s*\{/)
+  assert.match(cssSource, /\.mmpt-directory-row__meta\s*\{/)
+  assert.match(cssSource, /\.mmpt-directory-toggle input\s*\{[\s\S]*width:\s*16px;[\s\S]*height:\s*16px;/)
+  assert.match(cssSource, /\.mmpt-action-bar\s*\{[\s\S]*justify-content:\s*flex-end;/)
 })
 
 test('create action calls host.runTool with the normalized project payload', async () => {
   const { pageModule, restore } = await loadPageModuleWithHookHarness({
-    1: '/tmp/mixes',
-    2: '2026-05-01',
-    3: 'Blue Sky',
-    4: ['01_Received', '04_Documents'],
-    5: '',
-    6: false,
-    7: null,
+    1: '2026-05-01',
+    2: 'Blue Sky',
+    3: [
+      { id: 'default-1', label: 'Received', selected: true },
+      { id: 'default-2', label: 'Documents', selected: true },
+      { id: 'custom-1', label: 'Ignored', selected: false },
+    ],
+    4: '',
+    5: false,
+    6: null,
   })
   const calls = []
+  const openDirectoryCalls = []
   const host = createHostMock({
+    dialog: {
+      openDirectory: async () => {
+        openDirectoryCalls.push(true)
+        return { canceled: false, paths: ['/tmp/mixes'] }
+      },
+    },
     runTool: async (request) => {
       calls.push(request)
       return {
@@ -330,10 +372,10 @@ test('create action calls host.runTool with the normalized project payload', asy
             summary: 'Music mix project created.',
             result: {
               createdRoot: '/tmp/mixes/260501_Blue Sky',
-              createdDirectories: ['01_Received', '04_Documents'],
+              createdDirectories: ['01_Received', '02_Documents'],
               createdFiles: [
-                '/tmp/mixes/260501_Blue Sky/04_Documents/00_Project_Notes.md',
-                '/tmp/mixes/260501_Blue Sky/04_Documents/01_Revision_Log.md',
+                '/tmp/mixes/260501_Blue Sky/02_Documents/00_Project_Notes.md',
+                '/tmp/mixes/260501_Blue Sky/02_Documents/01_Revision_Log.md',
               ],
             },
           },
@@ -346,12 +388,6 @@ test('create action calls host.runTool with the normalized project payload', asy
     const tree = pageModule.MusicMixProjectToolPage({
       context: {
         locale: { requested: 'en', resolved: 'en' },
-        storage: {
-          async get() {
-            return null
-          },
-          async set() {},
-        },
       },
       host,
     })
@@ -366,6 +402,7 @@ test('create action calls host.runTool with the normalized project payload', asy
     restore()
   }
 
+  assert.equal(openDirectoryCalls.length, 1)
   assert.deepEqual(calls, [
     {
       toolId: 'music-mix-project-tool',
@@ -373,7 +410,7 @@ test('create action calls host.runTool with the normalized project payload', asy
         baseRoot: '/tmp/mixes',
         date: '260501',
         songName: 'Blue Sky',
-        sections: ['01_Received', '04_Documents'],
+        sections: ['Received', 'Documents'],
       },
     },
   ])
@@ -404,7 +441,7 @@ test('runner blocks when the target path already exists', async () => {
           baseRoot: '/tmp/mixes',
           date: '2026-05-01',
           songName: 'Blue Sky',
-          sections: ['01_Received'],
+          sections: ['Received'],
         },
       ),
     /already exists/i,
@@ -433,9 +470,9 @@ test('runner executes the bundled create-project script with the expected args',
             stdout: [
               'CREATED_ROOT=/tmp/mixes/260501_Blue Sky',
               'CREATED_DIR=/tmp/mixes/260501_Blue Sky/01_Received',
-              'CREATED_DIR=/tmp/mixes/260501_Blue Sky/04_Documents',
-              'CREATED_FILE=/tmp/mixes/260501_Blue Sky/04_Documents/00_Project_Notes.md',
-              'CREATED_FILE=/tmp/mixes/260501_Blue Sky/04_Documents/01_Revision_Log.md',
+              'CREATED_DIR=/tmp/mixes/260501_Blue Sky/02_Documents',
+              'CREATED_FILE=/tmp/mixes/260501_Blue Sky/02_Documents/00_Project_Notes.md',
+              'CREATED_FILE=/tmp/mixes/260501_Blue Sky/02_Documents/01_Revision_Log.md',
             ].join('\n'),
             stderr: '',
           }
@@ -447,7 +484,7 @@ test('runner executes the bundled create-project script with the expected args',
       baseRoot: '/tmp/mixes',
       date: '2026-05-01',
       songName: 'Blue Sky',
-      sections: ['01_Received', '04_Documents'],
+      sections: ['Received', 'Documents'],
     },
   )
 
@@ -462,18 +499,18 @@ test('runner executes the bundled create-project script with the expected args',
         '--section',
         '01_Received',
         '--section',
-        '04_Documents',
+        '02_Documents',
       ],
     },
   ])
   assert.equal(result.result.createdRoot, '/tmp/mixes/260501_Blue Sky')
   assert.deepEqual(result.result.createdDirectories, [
     '/tmp/mixes/260501_Blue Sky/01_Received',
-    '/tmp/mixes/260501_Blue Sky/04_Documents',
+    '/tmp/mixes/260501_Blue Sky/02_Documents',
   ])
   assert.deepEqual(result.result.createdFiles, [
-    '/tmp/mixes/260501_Blue Sky/04_Documents/00_Project_Notes.md',
-    '/tmp/mixes/260501_Blue Sky/04_Documents/01_Revision_Log.md',
+    '/tmp/mixes/260501_Blue Sky/02_Documents/00_Project_Notes.md',
+    '/tmp/mixes/260501_Blue Sky/02_Documents/01_Revision_Log.md',
   ])
 })
 
@@ -491,18 +528,18 @@ test('bundled shell script creates the expected directories and document files',
       '--section',
       '01_Received',
       '--section',
-      '04_Documents',
+      '02_Documents',
       '--section',
-      '05_Archive',
+      '03_Archive',
     ])
 
     const createdRoot = path.join(tempRoot, '260501_Blue Sky')
-    const projectNotesPath = path.join(createdRoot, '04_Documents', '00_Project_Notes.md')
-    const revisionLogPath = path.join(createdRoot, '04_Documents', '01_Revision_Log.md')
+    const projectNotesPath = path.join(createdRoot, '02_Documents', '00_Project_Notes.md')
+    const revisionLogPath = path.join(createdRoot, '02_Documents', '01_Revision_Log.md')
 
     await access(path.join(createdRoot, '01_Received'))
-    await access(path.join(createdRoot, '04_Documents'))
-    await access(path.join(createdRoot, '05_Archive'))
+    await access(path.join(createdRoot, '02_Documents'))
+    await access(path.join(createdRoot, '03_Archive'))
     await access(projectNotesPath)
     await access(revisionLogPath)
 

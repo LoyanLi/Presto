@@ -1,14 +1,19 @@
 import React from './react-shared.mjs'
 import { tMusicMixProject } from './i18n.mjs'
 import {
-  DEFAULT_SECTION_IDS,
-  MUSIC_MIX_PROJECT_STORAGE_KEY,
   buildMusicMixProjectToolRunRequest,
-  buildProjectTargetPath,
+  createDefaultDirectoryItems,
   formatProjectFolderName,
   normalizeMusicMixProjectInput,
 } from './toolCore.mjs'
-import { ToolButton, ToolInput, ToolPanel, ToolStat } from './ui.mjs'
+import {
+  ToolActionBar,
+  ToolButton,
+  ToolFieldGrid,
+  ToolInput,
+  ToolPanel,
+  ToolSectionHeader,
+} from './ui.mjs'
 
 const h = React.createElement
 
@@ -46,68 +51,96 @@ function readRunResult(job) {
   }
 }
 
-function toggleSection(currentSections, sectionId) {
-  const current = Array.isArray(currentSections) ? currentSections : []
-  if (current.includes(sectionId)) {
-    return current.filter((section) => section !== sectionId)
+function normalizeDirectoryLabel(value) {
+  return String(value ?? '').trim().replace(/[\\/]+/g, ' ')
+}
+
+function buildSelectedSectionLabels(directoryItems) {
+  return (Array.isArray(directoryItems) ? directoryItems : [])
+    .filter((item) => item?.selected)
+    .map((item) => normalizeDirectoryLabel(item?.label))
+    .filter(Boolean)
+}
+
+function toggleDirectorySelection(directoryItems, directoryId) {
+  return (Array.isArray(directoryItems) ? directoryItems : []).map((item) =>
+    item.id === directoryId
+      ? {
+          ...item,
+          selected: !item.selected,
+        }
+      : item,
+  )
+}
+
+function updateDirectoryLabel(directoryItems, directoryId, label) {
+  return (Array.isArray(directoryItems) ? directoryItems : []).map((item) =>
+    item.id === directoryId
+      ? {
+          ...item,
+          label,
+        }
+      : item,
+  )
+}
+
+function addCustomDirectoryItem(directoryItems) {
+  const currentItems = Array.isArray(directoryItems) ? directoryItems : []
+  return [
+    ...currentItems,
+    {
+      id: `custom-${currentItems.length + 1}`,
+      label: '',
+      selected: false,
+    },
+  ]
+}
+
+function getSelectedDirectoryOrder(directoryItems, directoryId) {
+  let selectedCount = 0
+  for (const item of Array.isArray(directoryItems) ? directoryItems : []) {
+    if (item?.selected) {
+      selectedCount += 1
+    }
+    if (item?.id === directoryId) {
+      return item?.selected ? String(selectedCount).padStart(2, '0') : '--'
+    }
   }
-  return [...current, sectionId]
+  return '--'
 }
 
 export function MusicMixProjectToolPage({ host, context }) {
-  const [baseRoot, setBaseRoot] = React.useState('')
   const [date, setDate] = React.useState(createTodayValue())
   const [songName, setSongName] = React.useState('')
-  const [sections, setSections] = React.useState(DEFAULT_SECTION_IDS)
+  const [directoryItems, setDirectoryItems] = React.useState(() => createDefaultDirectoryItems())
   const [statusMessage, setStatusMessage] = React.useState('')
   const [isRunning, setIsRunning] = React.useState(false)
   const [lastRun, setLastRun] = React.useState(null)
 
-  React.useEffect(() => {
-    let cancelled = false
-
-    async function loadDefaultBaseRoot() {
-      const stored = await context.storage?.get?.(MUSIC_MIX_PROJECT_STORAGE_KEY)
-      const rememberedBaseRoot = typeof stored?.defaultBaseRoot === 'string' ? stored.defaultBaseRoot.trim() : ''
-      if (!cancelled && rememberedBaseRoot && !String(baseRoot ?? '').trim()) {
-        setBaseRoot(rememberedBaseRoot)
-      }
-    }
-
-    void loadDefaultBaseRoot().catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [baseRoot, context.storage])
-
+  const selectedSections = React.useMemo(
+    () => buildSelectedSectionLabels(directoryItems),
+    [directoryItems],
+  )
   const previewInput = React.useMemo(
     () =>
       normalizeMusicMixProjectInput({
-        baseRoot,
         date,
         songName,
-        sections,
+        sections: selectedSections,
       }),
-    [baseRoot, date, sections, songName],
+    [date, selectedSections, songName],
   )
   const folderName = formatProjectFolderName(previewInput)
-  const targetPath = buildProjectTargetPath(previewInput)
   const lastRunResult = readRunResult(lastRun)
-
-  const browseBaseRoot = React.useCallback(async () => {
-    const selectedPath = await selectFirstPath(host.dialog.openDirectory)
-    if (!selectedPath) {
-      setStatusMessage(tMusicMixProject(context, 'status.directorySelectionCanceled'))
-      return
-    }
-
-    setBaseRoot(selectedPath)
-    setStatusMessage('')
-  }, [context, host.dialog])
 
   const createProject = React.useCallback(async () => {
     if (isRunning) {
+      return
+    }
+
+    const selectedPath = await selectFirstPath(host.dialog.openDirectory)
+    if (!selectedPath) {
+      setStatusMessage(tMusicMixProject(context, 'status.directorySelectionCanceled'))
       return
     }
 
@@ -116,25 +149,22 @@ export function MusicMixProjectToolPage({ host, context }) {
 
     try {
       const normalized = normalizeMusicMixProjectInput({
-        baseRoot,
+        baseRoot: selectedPath,
         date,
         songName,
-        sections,
+        sections: buildSelectedSectionLabels(directoryItems),
       })
       const response = await host.runTool(buildMusicMixProjectToolRunRequest(normalized))
       const nextJob = response?.job ?? null
       const nextResult = readRunResult(nextJob)
       setLastRun(nextJob)
       setStatusMessage(nextResult.summary || tMusicMixProject(context, 'summary.created', { createdRoot: nextResult.createdRoot }))
-      await context.storage?.set?.(MUSIC_MIX_PROJECT_STORAGE_KEY, {
-        defaultBaseRoot: normalized.baseRoot,
-      })
     } catch (error) {
       setStatusMessage(toErrorMessage(error, tMusicMixProject(context, 'status.createFailed')))
     } finally {
       setIsRunning(false)
     }
-  }, [baseRoot, context, date, host, isRunning, sections, songName])
+  }, [context, date, directoryItems, host, isRunning, songName])
 
   const openCreatedFolder = React.useCallback(async () => {
     if (!lastRunResult.createdRoot) {
@@ -148,115 +178,172 @@ export function MusicMixProjectToolPage({ host, context }) {
     'section',
     { className: 'mmpt-shell' },
     h(
-      ToolPanel,
-      {
-        title: tMusicMixProject(context, 'page.root.title'),
-        description: tMusicMixProject(context, 'page.root.description'),
-        className: 'mmpt-panel',
-      },
+      'div',
+      { className: 'mmpt-grid' },
       h(
-        'div',
-        { className: 'mmpt-form-grid' },
+        ToolPanel,
+        {
+          title: tMusicMixProject(context, 'section.setup'),
+          className: 'mmpt-panel mmpt-panel--setup',
+        },
         h(
-          'div',
-          { className: 'mmpt-base-root-row' },
+          ToolFieldGrid,
+          { className: 'mmpt-setup-grid' },
           h(ToolInput, {
-            label: tMusicMixProject(context, 'field.baseRoot'),
-            hint: tMusicMixProject(context, 'field.baseRootHint'),
-            value: baseRoot,
-            onChange: (event) => setBaseRoot(event.target.value),
-            className: 'mmpt-base-root-input',
+            label: tMusicMixProject(context, 'field.date'),
+            type: 'date',
+            value: date,
+            onChange: (event) => setDate(event.target.value),
           }),
-          h(
-            ToolButton,
-            {
-              onClick: browseBaseRoot,
-              className: 'mmpt-inline-button',
-            },
-            tMusicMixProject(context, 'action.browse'),
-          ),
+          h(ToolInput, {
+            label: tMusicMixProject(context, 'field.songName'),
+            value: songName,
+            onChange: (event) => setSongName(event.target.value),
+          }),
         ),
-        h(ToolInput, {
-          label: tMusicMixProject(context, 'field.date'),
-          value: date,
-          onChange: (event) => setDate(event.target.value),
-        }),
-        h(ToolInput, {
-          label: tMusicMixProject(context, 'field.songName'),
-          value: songName,
-          onChange: (event) => setSongName(event.target.value),
-        }),
         h(
           'div',
-          { className: 'mmpt-section-block' },
-          h('p', { className: 'mmpt-section-label' }, tMusicMixProject(context, 'field.sections')),
+          { className: 'mmpt-preview-list' },
           h(
             'div',
-            { className: 'mmpt-section-grid' },
-            DEFAULT_SECTION_IDS.map((sectionId) =>
+            { className: 'mmpt-preview-row mmpt-preview-row--path' },
+            h('span', { className: 'mmpt-preview-label' }, tMusicMixProject(context, 'field.previewTargetPath')),
+            h('p', { className: 'mmpt-preview-path' }, tMusicMixProject(context, 'field.previewTargetPathPending')),
+          ),
+        ),
+      ),
+      h(
+        ToolPanel,
+        {
+          title: tMusicMixProject(context, 'field.sections'),
+          actions: h(
+            ToolButton,
+            {
+              onClick: () => setDirectoryItems((currentItems) => addCustomDirectoryItem(currentItems)),
+              className: 'mmpt-inline-button',
+              variant: 'secondary',
+            },
+            tMusicMixProject(context, 'action.addFolder'),
+          ),
+          className: 'mmpt-panel mmpt-panel--folders',
+        },
+        h(
+          ToolSectionHeader,
+          {
+            title: tMusicMixProject(context, 'field.sections'),
+            className: 'mmpt-screen-reader-only',
+          },
+        ),
+        h(
+          'div',
+          { className: 'mmpt-directory-list' },
+          directoryItems.map((item) =>
+            h(
+              'div',
+              { key: item.id, className: 'mmpt-directory-row' },
               h(
-                'label',
-                { key: sectionId, className: 'mmpt-checkbox' },
-                h('input', {
-                  type: 'checkbox',
-                  checked: sections.includes(sectionId),
-                  onChange: () => setSections((currentSections) => toggleSection(currentSections, sectionId)),
+                'div',
+                { className: 'mmpt-directory-row__meta' },
+                h('span', { className: 'mmpt-directory-order' }, getSelectedDirectoryOrder(directoryItems, item.id)),
+                h(
+                  'label',
+                  { className: 'mmpt-directory-toggle' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: item.selected,
+                    onChange: () => setDirectoryItems((currentItems) => toggleDirectorySelection(currentItems, item.id)),
+                  }),
+                  h('span', { className: 'mmpt-directory-toggle-label' }, tMusicMixProject(context, 'field.directoryEnabled')),
+                ),
+              ),
+              h(
+                'div',
+                { className: 'mmpt-directory-field' },
+                h(ToolInput, {
+                  value: item.label,
+                  placeholder: tMusicMixProject(context, 'field.folderNamePlaceholder'),
+                  className: 'mmpt-directory-name',
+                  onChange: (event) => setDirectoryItems((currentItems) => updateDirectoryLabel(currentItems, item.id, event.target.value)),
                 }),
-                h('span', null, sectionId),
               ),
             ),
           ),
         ),
       ),
-    ),
-    h(
-      'div',
-      { className: 'mmpt-preview-grid' },
-      h(ToolStat, {
-        label: tMusicMixProject(context, 'field.previewFolderName'),
-        value: folderName,
-      }),
       h(
         ToolPanel,
         {
-          title: tMusicMixProject(context, 'field.previewTargetPath'),
+          title: tMusicMixProject(context, 'section.preview'),
           className: 'mmpt-panel mmpt-panel--preview',
         },
-        h('p', { className: 'mmpt-preview-path' }, targetPath),
+        h(
+          'div',
+          { className: 'mmpt-preview-list' },
+          h(
+            'div',
+            { className: 'mmpt-preview-row' },
+            h('span', { className: 'mmpt-preview-label' }, tMusicMixProject(context, 'field.previewFolderName')),
+            h('strong', { className: 'mmpt-preview-value' }, folderName),
+          ),
+        ),
       ),
-    ),
-    h(
-      'div',
-      { className: 'mmpt-actions' },
-      h(
-        ToolButton,
-        {
-          onClick: createProject,
-          disabled: isRunning,
-        },
-        tMusicMixProject(context, 'action.create'),
-      ),
-      lastRunResult.createdRoot
+      statusMessage || lastRunResult.createdRoot
         ? h(
-            ToolButton,
+            ToolPanel,
             {
-              onClick: openCreatedFolder,
-              className: 'mmpt-inline-button',
+              title: tMusicMixProject(context, 'field.lastRun'),
+              className: 'mmpt-panel mmpt-panel--result',
             },
-            tMusicMixProject(context, 'action.openCreatedFolder'),
+            h(
+              'div',
+              { className: 'mmpt-preview-list' },
+              statusMessage
+                ? h(
+                    'div',
+                    { className: 'mmpt-preview-row' },
+                    h('span', { className: 'mmpt-preview-label' }, tMusicMixProject(context, 'field.lastRun')),
+                    h('strong', { className: 'mmpt-preview-value' }, statusMessage),
+                  )
+                : null,
+              lastRunResult.createdRoot
+                ? h(
+                    'div',
+                    { className: 'mmpt-preview-row mmpt-preview-row--path' },
+                    h('span', { className: 'mmpt-preview-label' }, tMusicMixProject(context, 'field.previewTargetPath')),
+                    h('p', { className: 'mmpt-preview-path' }, lastRunResult.createdRoot),
+                  )
+                : null,
+            ),
           )
         : null,
     ),
-    statusMessage || lastRunResult.createdRoot
-      ? h(
-          ToolPanel,
+    h(
+      ToolActionBar,
+      { className: 'mmpt-actions' },
+      [
+        h(
+          ToolButton,
           {
-            title: tMusicMixProject(context, 'field.lastRun'),
-            className: 'mmpt-panel',
+            key: 'create',
+            onClick: createProject,
+            disabled: isRunning,
           },
-          statusMessage ? h('p', { className: 'mmpt-status-message' }, statusMessage) : null,
-          lastRunResult.createdRoot ? h('p', { className: 'mmpt-preview-path' }, lastRunResult.createdRoot) : null,
-        )
-      : null,
+          tMusicMixProject(context, 'action.create'),
+        ),
+        lastRunResult.createdRoot
+          ? h(
+              ToolButton,
+              {
+                key: 'open',
+                onClick: openCreatedFolder,
+                className: 'mmpt-inline-button',
+                variant: 'secondary',
+              },
+              tMusicMixProject(context, 'action.openCreatedFolder'),
+            )
+          : null,
+        h('span', { key: 'spacer', className: 'mmpt-action-spacer', 'aria-hidden': 'true' }, '\u200b'),
+      ],
+    ),
   )
 }
