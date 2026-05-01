@@ -16,10 +16,11 @@
 - PTSL runner 对当前 `py-ptsl 601.0.0` 尚未包含的 26.4 新 schema 做了兼容执行处理：已有 Python schema 的命令继续做 request / response 校验；新 SDK 中已存在但 `py-ptsl` 暂未提供消息类的命令，会按 catalog command id 直发 raw JSON，并在 coverage 报告中明确列出 unresolved schema。
 - 已安装扩展列表现在会显示当前插件在当前 DAW 下的最低版本要求，例如 `Pro Tools ≥ 2025.10.0`；Workflow Extensions、Automation Extensions 的折叠列表和展开详情都使用同一套自动推导结果。
 - Automation 首页卡片同样显示当前 DAW 最低版本要求；automation entry 由宿主在过滤可用性时附加 `currentDawLabel` 和 `currentDawMinimumHostVersion`，卡片只负责展示，避免 automation UI 自行重复计算。
+- 修复 `Runs` 页在切换宿主语言后出现中英文混搭的问题；workflow / automation 排行现在优先使用当前 locale 下已加载插件的本地化标题，历史运行统计里按旧语言持久化的标签只作为 fallback，不再把英文 `Import Workflow` 混进中文界面。
 - 撤回 app 启动与手动刷新时由前端状态轮询主动建立 PTSL 连接的实现；DAW 状态 hook 重新保持只读 `daw.connection.getStatus`，避免打开 app 后的后台探测占用 DAW/backend 通道并影响导入流程启动。
 - 修复 Tauri 启动阶段 backend supervisor 的并发 healthcheck 竞态：当 backend 仍处于 `starting` 时，后续 capability 请求不再把暂未 ready 的实例误判为故障并强制 `stop -> restart`，`npm run tauri:dev` 启动后不再出现 backend 自己把自己清掉、browse 后一直卡住不导入的情况。
 - Import Workflow 的导入后 rename 阶段现在会在重命名轨道后继续选择目标轨道和 timeline clips，并直接调用底层 `daw.editing.renameSelectedClip` / `CId_RenameSelectedClip`，让片段名同步改为最终名称且不重命名源文件。
-- `0.3.11` 尚未生成正式安装包；本条目记录的是 `v0.3.10` 之后的代码与协议变化，安装包文件名、体积与 SHA-256 会在实际打包后补入对应 release note。
+- `0.3.11` 当前已生成 `arm64` macOS 安装包：`Presto_0.3.11_arm64.dmg`，SHA-256 `d820a310a01943d618760a2119745db1c77244d0485c370a103d8dde33a5b8ed`，DMG 体积 `28388983` bytes（约 `27.1 MiB`）；同批 size report 记录 `.app` 体积 `84145700` bytes（约 `80.2 MiB`）。`x64` 安装包这次未重打，待单独补充。
 
 ## [0.3.10](docs/releases/v0.3.10-release.md) - 2026-04-27
 
