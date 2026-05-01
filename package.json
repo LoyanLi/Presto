@@ -16,7 +16,7 @@
     "clean:local": "node scripts/clean-local-artifacts.mjs",
     "version:sync": "node scripts/sync-version.mjs",
     "test": "npm run test:node && npm run test:python",
-    "test:node": "node --test frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs",
+    "test:node": "node --test frontend/host/test/*.test.mjs frontend/tauri/test/*.test.mjs host-plugin-runtime/test/*.test.mjs packages/contracts/test/*.test.mjs plugins/official/*/test/*.test.mjs plugins/local/*/test/*.test.mjs",
     "test:python": "cd backend && python3 -m pytest presto/tests",
     "tauri:prepare:all": "npm run tauri:build:frontend && npm run tauri:prepare:python && npm run tauri:prepare:resources",
     "tauri:prepare:python": "node scripts/prepare-tauri-python.mjs",

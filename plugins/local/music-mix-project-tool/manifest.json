@@ -1,0 +1,45 @@
+{
+  "pluginId": "loyan.music-mix-project-tool",
+  "extensionType": "tool",
+  "version": "1.0.0",
+  "hostApiVersion": "0.1.0",
+  "supportedDaws": [],
+  "uiRuntime": "react18",
+  "displayName": "Music Mix Project Tool",
+  "description": "Create a music mix project folder from one fixed template under a remembered base root.",
+  "entry": "dist/entry.mjs",
+  "styleEntry": "dist/music-mix-project-tool.css",
+  "pages": [
+    {
+      "pageId": "music-mix-project-tool.page.main",
+      "path": "/tools/music-mix-project-tool",
+      "title": "Music Mix Project Tool",
+      "mount": "tools",
+      "componentExport": "MusicMixProjectToolPage"
+    }
+  ],
+  "tools": [
+    {
+      "toolId": "music-mix-project-tool",
+      "pageId": "music-mix-project-tool.page.main",
+      "title": "Music Mix Project Tool",
+      "description": "Create a dated music mix project folder with the standard section layout.",
+      "order": 10,
+      "runnerExport": "runMusicMixProjectTool"
+    }
+  ],
+  "toolRuntimePermissions": [
+    "dialog.openDirectory",
+    "fs.read",
+    "shell.openPath",
+    "process.execBundled"
+  ],
+  "bundledResources": [
+    {
+      "resourceId": "music-mix-project-script",
+      "kind": "script",
+      "relativePath": "resources/scripts/create_project.sh"
+    }
+  ],
+  "requiredCapabilities": []
+}

@@ -9,6 +9,8 @@ node_modules/
 dist/
 !plugins/official/*/dist/
 !plugins/official/*/dist/**
+!plugins/local/*/dist/
+!plugins/local/*/dist/**
 build/*
 !build/macos/
 build/macos/*
