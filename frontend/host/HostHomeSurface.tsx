@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { CSSProperties, ReactElement } from 'react'
 
 import type { PrestoClient } from '@presto/contracts'
@@ -260,6 +261,16 @@ export function HostHomeSurface({
     (surface === 'workflows' && workspacePageRoute !== null) ||
     (surface === 'tools' && toolPageRoute !== null)
 
+  const runMetricLabelOverrides = useMemo(
+    () => ({
+      workflow: Object.fromEntries(pluginHomeEntries.map((entry) => [`${entry.pluginId}.run`, entry.title])),
+      automation: Object.fromEntries(
+        automationEntries.map((entry) => [`${entry.pluginId}:${entry.itemId}`, entry.title]),
+      ),
+    }),
+    [automationEntries, pluginHomeEntries],
+  )
+
   const renderHomeContent = (): ReactElement => (
     <>
       <div style={titleBarStyle}>
@@ -468,7 +479,7 @@ export function HostHomeSurface({
     }
 
     if (surface === 'runs') {
-      return <HostRunsSurface locale={locale} />
+      return <HostRunsSurface locale={locale} labelOverrides={runMetricLabelOverrides} />
     }
 
     return renderHomeContent()

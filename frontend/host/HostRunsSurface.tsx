@@ -15,6 +15,7 @@ import {
 
 type RunMetricKind = 'workflow' | 'automation' | 'tool' | 'command'
 type RunsSurfaceViewMode = 'overview' | RunMetricKind
+type RunMetricLabelOverrides = Partial<Record<Exclude<RunMetricKind, 'command'>, Record<string, string>>>
 
 const runsSurfaceOverviewGridClassName = 'host-runs-surface__overview-grid'
 
@@ -362,15 +363,25 @@ function renderMetricLabel(
   locale: HostLocale,
   item: HostRunMetricListItem,
   kind: RunMetricKind,
+  labelOverrides?: RunMetricLabelOverrides,
 ): string {
   if (kind === 'command') {
     return formatCapabilityLabel(locale, item.key)
   }
 
+  const override = labelOverrides?.[kind]?.[item.key]
+  if (override && override.trim().length > 0) {
+    return override
+  }
+
   return item.label ?? item.key
 }
 
-function buildRunSections(locale: HostLocale, summary: HostRunMetricsSummary) {
+function buildRunSections(
+  locale: HostLocale,
+  summary: HostRunMetricsSummary,
+  labelOverrides?: RunMetricLabelOverrides,
+) {
   return runSectionDefinitions.map((definition) => {
     const topItem = summary[definition.topKey]
 
@@ -382,7 +393,9 @@ function buildRunSections(locale: HostLocale, summary: HostRunMetricsSummary) {
       title: translateHost(locale, definition.listTitleKey),
       description: definition.descriptionKey ? translateHost(locale, definition.descriptionKey) : undefined,
       items: summary[definition.summaryKey],
-      highlightLabel: topItem ? renderMetricLabel(locale, topItem, definition.id) : translateHost(locale, 'runs.highlights.none'),
+      highlightLabel: topItem
+        ? renderMetricLabel(locale, topItem, definition.id, labelOverrides)
+        : translateHost(locale, 'runs.highlights.none'),
       highlightMeta: topItem
         ? translateHost(locale, 'runs.lastUsed', {
             value: formatMetricTimestamp(locale, topItem.lastUsedAt),
@@ -398,12 +411,14 @@ function RankingSection({
   items,
   kind,
   description,
+  labelOverrides,
 }: {
   locale: HostLocale
   title: string
   items: HostRunMetricListItem[]
   kind: RunMetricKind
   description?: string
+  labelOverrides?: RunMetricLabelOverrides
 }) {
   return (
     <section style={sectionCardStyle}>
@@ -418,7 +433,7 @@ function RankingSection({
             {items.map((item, index) => (
               <li key={item.key} style={index === 0 ? firstListItemStyle : listItemStyle}>
                 <div style={listItemInfoStyle}>
-                  <p style={listItemNameStyle}>{renderMetricLabel(locale, item, kind)}</p>
+                  <p style={listItemNameStyle}>{renderMetricLabel(locale, item, kind, labelOverrides)}</p>
                   <p style={listItemMetaStyle}>
                     {translateHost(locale, 'runs.lastUsed', {
                       value: formatMetricTimestamp(locale, item.lastUsedAt),
@@ -444,13 +459,15 @@ export function HostRunsSurfaceView({
   locale,
   summary,
   initialView = 'overview',
+  labelOverrides,
 }: {
   locale: HostLocale
   summary: HostRunMetricsSummary
   initialView?: RunsSurfaceViewMode
+  labelOverrides?: RunMetricLabelOverrides
 }) {
   const [view, setView] = useState<RunsSurfaceViewMode>(initialView)
-  const sections = useMemo(() => buildRunSections(locale, summary), [locale, summary])
+  const sections = useMemo(() => buildRunSections(locale, summary, labelOverrides), [locale, labelOverrides, summary])
   const activeSection = view === 'overview' ? null : sections.find((section) => section.id === view) ?? sections[0]
 
   const isEmpty =
@@ -502,6 +519,7 @@ export function HostRunsSurfaceView({
                 description={activeSection.description}
                 items={activeSection.items}
                 kind={activeSection.kind}
+                labelOverrides={labelOverrides}
               />
             </div>
           ) : (
@@ -530,9 +548,15 @@ export function HostRunsSurfaceView({
   )
 }
 
-export function HostRunsSurface({ locale }: { locale: HostLocale }) {
+export function HostRunsSurface({
+  locale,
+  labelOverrides,
+}: {
+  locale: HostLocale
+  labelOverrides?: RunMetricLabelOverrides
+}) {
   const snapshot = useSyncExternalStore(subscribeHostRunMetrics, getHostRunMetricsSnapshot, getHostRunMetricsSnapshot)
   const summary = useMemo(() => createHostRunMetricsSummary(snapshot), [snapshot])
 
-  return <HostRunsSurfaceView locale={locale} summary={summary} />
+  return <HostRunsSurfaceView locale={locale} summary={summary} labelOverrides={labelOverrides} />
 }

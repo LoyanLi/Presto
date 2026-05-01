@@ -286,6 +286,63 @@ test('runs surface renders translated workflow-step command labels in zh-CN deta
   assert.doesNotMatch(markup, /selectAllOnTrack/)
 })
 
+test('runs surface prefers current localized workflow and automation labels over stale stored labels', async () => {
+  const { HostRunsSurfaceView } = await loadRunsSurface()
+  const markup = renderToStaticMarkup(
+    React.createElement(HostRunsSurfaceView, {
+      locale: 'zh-CN',
+      initialView: 'workflow',
+      summary: {
+        totals: { workflowRuns: 3, automationRuns: 1, toolRuns: 0, commandRuns: 0 },
+        topWorkflow: {
+          key: 'official.import-workflow.run',
+          label: 'Import Workflow',
+          count: 3,
+          lastUsedAt: '2026-04-12T12:00:00.000Z',
+        },
+        topAutomation: {
+          key: 'official.batch-ara-backup:run',
+          label: 'Batch ARA Backup',
+          count: 1,
+          lastUsedAt: '2026-04-12T11:00:00.000Z',
+        },
+        topTool: null,
+        topCommand: null,
+        workflows: [
+          {
+            key: 'official.import-workflow.run',
+            label: 'Import Workflow',
+            count: 3,
+            lastUsedAt: '2026-04-12T12:00:00.000Z',
+          },
+        ],
+        automations: [
+          {
+            key: 'official.batch-ara-backup:run',
+            label: 'Batch ARA Backup',
+            count: 1,
+            lastUsedAt: '2026-04-12T11:00:00.000Z',
+          },
+        ],
+        tools: [],
+        commands: [],
+      },
+      labelOverrides: {
+        workflow: {
+          'official.import-workflow.run': '导入流程',
+        },
+        automation: {
+          'official.batch-ara-backup:run': '批量 ARA 备份',
+        },
+      },
+    }),
+  )
+
+  assert.match(markup, /导入流程/)
+  assert.doesNotMatch(markup, /Import Workflow/)
+  assert.doesNotMatch(markup, /Batch ARA Backup/)
+})
+
 test('runs surface keeps partially empty categories inside overview cards and detail lists', async () => {
   const { HostRunsSurfaceView } = await loadRunsSurface()
   const overviewMarkup = renderToStaticMarkup(
