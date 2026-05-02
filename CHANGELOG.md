@@ -2,6 +2,20 @@
 
 本文件按发布顺序汇总用户可见变化；`0.3.x` 正式版本的完整发布说明和安装包校验值见对应 `docs/releases/v*-release.md`。
 
+## [0.3.12](docs/releases/v0.3.12-release.md) - 2026-05-02
+
+- 统一应用、workspace package、Tauri、Rust crate、contracts、SDK runtime 与 backend 版本基线到 `0.3.12`，并同步 README、插件开发文档、版本兼容性文档与 release note。
+- 新增本地 `music-mix-project-tool` 工具插件：提供工程创建脚本、项目笔记 / revision log 模板、工具核心测试和打包后的插件入口，为混音项目初始化提供独立工具入口。
+- 优化 Music Mix Project Tool 页面：刷新工具 UI、补齐本地化与执行反馈，让本地工具插件更接近正式 host 工具页体验。
+- 修复宿主启动时 DAW 状态短暂显示 unavailable 的问题；启动阶段保持 disconnected/unknown 语义，避免首次打开设置页时误报不可用。
+- 统一 jobs 取消路径：HTTP `/jobs/{job_id}/cancel` 与 `jobs.cancel` capability 现在共用同一取消逻辑，会设置后台 job handle，并在导出任务中调用 DAW `cancel_export()`。
+- 修复 workflow 取消等待中的 child job 时只改状态、不触发 child job 实际取消的问题；父 workflow 取消会同时取消正在 await 的导入/导出子任务句柄。
+- 修复 jobs 列表 `total_count` 被 `limit` 截断的问题，分页/统计现在返回筛选后的总数。
+- 修复 `config.update` 中配置先落盘、keychain 后失败导致状态不一致的问题；现在 API key 写入成功后才保存 config。
+- 修复更新检查页面版本展示格式不一致的问题；GitHub tag 的 `v0.3.x` 在更新页面和弹窗中会统一展示为 `0.3.x`。
+- 本次只更新版本号与发布文档，暂不生成新的安装包；`0.3.12` 安装包校验值将在实际打包后补充。
+
+
 ## [0.3.11](docs/releases/v0.3.11-release.md) - 2026-04-30
 
 - 统一应用、workspace package、Tauri、Rust crate、contracts、SDK runtime 与 backend 版本基线到 `0.3.11`，并同步 README、插件开发文档、版本兼容性文档与 release note。

@@ -1,1 +1,1 @@
-export const PRESTO_VERSION = '0.3.11'
+export const PRESTO_VERSION = '0.3.12'
