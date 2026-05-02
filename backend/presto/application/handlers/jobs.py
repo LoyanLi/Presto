@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 
 from .common import validation_error
+from ..jobs.cancellation import cancel_managed_job
 from ...domain.errors import PrestoErrorPayload
 from ...domain.jobs import JobRecord, JobsCreateRequest, JobsListRequest, JobsUpdateRequest
 from ...domain.ports import CapabilityExecutionContext
@@ -53,16 +54,12 @@ def list_jobs_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) 
 
 def cancel_job_payload(ctx: CapabilityExecutionContext, payload: dict[str, Any]) -> dict[str, Any]:
     job_id = str(payload.get("jobId", ""))
-    result = ctx.jobs.cancel(job_id)
-    ctx.job_handle_registry.cancel(job_id)
-    job = ctx.jobs.get(job_id)
-    if job.capability in {"daw.export.start", "daw.export.direct.start", "daw.export.run.start"}:
-        cancel_export = getattr(ctx.daw, "cancel_export", None) if ctx.daw is not None else None
-        if callable(cancel_export):
-            try:
-                cancel_export()
-            except Exception:
-                pass
+    result = cancel_managed_job(
+        job_manager=ctx.jobs,
+        job_handle_registry=ctx.job_handle_registry,
+        daw=ctx.daw,
+        job_id=job_id,
+    )
     return {"cancelled": result.cancelled, "jobId": result.job_id}
 
 

@@ -28,6 +28,7 @@ from presto.application.service_container import ServiceContainer, build_service
 from presto.domain.errors import PrestoError, PrestoValidationError
 from presto.domain.jobs import JobProgress, JobRecord, JobsCreateRequest
 from presto.main_api import create_app
+from presto.transport.http.routes.jobs import cancel_job as cancel_http_job
 from presto.transport.http.routes.invoke import invoke_capability
 from presto.transport.http.schemas.capabilities import CapabilityInvokeRequestSchema
 
@@ -1258,6 +1259,35 @@ def test_jobs_cancel_stops_running_export_before_completion(tmp_path: Path) -> N
     )
 
     assert cancel_response.success is True
+    cancelled_job = _wait_for_job_state(app, start_response["jobId"], "cancelled")
+    assert cancelled_job.progress.phase == "cancelled"
+    assert cancelled_job.finished_at is not None
+    assert app.state.services.daw.export_cancel_calls == 1
+
+
+def test_http_jobs_cancel_stops_running_export_before_completion(tmp_path: Path) -> None:
+    app = _app_with_fake_daw()
+    app.state.services.daw.export_block_until_released = True
+    output_path = tmp_path / "exports"
+    start_response = start_export_run(
+        app.state.services,
+        {
+            "outputPath": str(output_path),
+            "fileName": "mix-print",
+            "fileType": "WAV",
+            "offline": True,
+        },
+        capability_id="daw.export.start",
+    )
+
+    assert start_response["jobId"]
+    assert app.state.services.daw.export_started_event.wait(timeout=2)
+
+    response = cancel_http_job(start_response["jobId"], DummyRequest(app=app))
+
+    assert response.job_id == start_response["jobId"]
+    assert response.action == "cancel"
+    assert response.success is True
     cancelled_job = _wait_for_job_state(app, start_response["jobId"], "cancelled")
     assert cancelled_job.progress.phase == "cancelled"
     assert cancelled_job.finished_at is not None

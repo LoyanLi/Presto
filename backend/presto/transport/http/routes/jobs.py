@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Query, Request
 
+from ....application.jobs.cancellation import cancel_managed_job
 from ....application.service_container import ServiceContainer
 from ....domain.jobs import JobState, JobsListRequest
 from ..schemas.jobs import JobActionResponseSchema, JobDetailResponseSchema, JobListResponseSchema, JobSchema
@@ -46,7 +47,12 @@ def list_jobs(
 @router.post("/jobs/{job_id}/cancel", response_model=JobActionResponseSchema)
 def cancel_job(job_id: str, request: Request) -> JobActionResponseSchema:
     services = _services(request)
-    result = services.job_manager.cancel(job_id)
+    result = cancel_managed_job(
+        job_manager=services.job_manager,
+        job_handle_registry=services.job_handle_registry,
+        daw=services.daw,
+        job_id=job_id,
+    )
     return JobActionResponseSchema(job_id=result.job_id, action="cancel", success=result.cancelled)
 
 
