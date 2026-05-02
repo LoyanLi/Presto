@@ -37,8 +37,6 @@ def update_config_payload(ctx: CapabilityExecutionContext, payload: dict[str, An
     if not isinstance(config, dict):
         raise validation_error("config is required.", field="config", capability="config.update")
 
-    config_store.save(config)
-
     api_key = payload.get("apiKey")
     if api_key is not None:
         if not isinstance(api_key, str) or not api_key.strip():
@@ -47,5 +45,7 @@ def update_config_payload(ctx: CapabilityExecutionContext, payload: dict[str, An
         service = str(ai_naming.get("keychainService", "openai")).strip() if isinstance(ai_naming, dict) else "openai"
         account = str(ai_naming.get("keychainAccount", "api_key")).strip() if isinstance(ai_naming, dict) else "api_key"
         keychain_store.set_api_key(service or "openai", account or "api_key", api_key.strip())
+
+    config_store.save(config)
 
     return {"saved": True}

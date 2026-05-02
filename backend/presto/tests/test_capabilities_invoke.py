@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from types import SimpleNamespace
 
 import pytest
@@ -427,11 +428,14 @@ class FakeConfigStore:
 class FakeKeychainStore:
     def __init__(self) -> None:
         self.values: dict[tuple[str, str], str] = {}
+        self.fail_on_set = False
 
     def get_api_key(self, service: str, account: str) -> str | None:
         return self.values.get((service, account))
 
     def set_api_key(self, service: str, account: str, api_key: str) -> None:
+        if self.fail_on_set:
+            raise RuntimeError("keychain_failed")
         self.values[(service, account)] = api_key
 
     def delete_api_key(self, service: str, account: str) -> None:
@@ -924,6 +928,30 @@ def test_invoke_config_update_saves_config_and_api_key() -> None:
     assert response.data == {"saved": True}
     assert app.state.services.config_store.load()["uiPreferences"]["developerModeEnabled"] is False
     assert app.state.services.keychain_store.get_api_key("openai", "api_key") == "sk-test"
+
+
+def test_invoke_config_update_does_not_save_config_when_api_key_fails() -> None:
+    app = _app_with_fake_daw_and_config()
+    request = DummyRequest(app=app)
+    config = copy.deepcopy(app.state.services.config_store.load())
+    config["uiPreferences"]["developerModeEnabled"] = False
+    app.state.services.keychain_store.fail_on_set = True
+
+    with pytest.raises(RuntimeError, match="keychain_failed"):
+        invoke_capability(
+            request,
+            CapabilityInvokeRequestSchema(
+                requestId="req-3b-keychain-fail",
+                capability="config.update",
+                payload={
+                    "config": config,
+                    "apiKey": "sk-test",
+                },
+            ),
+        )
+
+    assert app.state.services.config_store.load()["uiPreferences"]["developerModeEnabled"] is True
+    assert app.state.services.keychain_store.get_api_key("openai", "api_key") is None
 
 
 def test_invoke_daw_connection_connect_returns_connection_shape() -> None:
