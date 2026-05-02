@@ -8,11 +8,11 @@ use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Child, Command},
+    process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
@@ -473,7 +473,10 @@ fn append_log(
 }
 
 fn write_execution_log(state: &Arc<RuntimeState>, entry: Option<&Value>) -> Result<Value, String> {
-    append_execution_log(state, entry.ok_or_else(|| "missing_execution_log_entry".to_string())?)?;
+    append_execution_log(
+        state,
+        entry.ok_or_else(|| "missing_execution_log_entry".to_string())?,
+    )?;
     Ok(json!({ "ok": true }))
 }
 
@@ -511,15 +514,20 @@ fn append_line_to_path(path: &Path, line: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn serialize_execution_log_entry(entry: &Value, default_session_id: &str) -> Result<String, String> {
+fn serialize_execution_log_entry(
+    entry: &Value,
+    default_session_id: &str,
+) -> Result<String, String> {
     let object = entry
         .as_object()
         .ok_or_else(|| "invalid_execution_log_entry".to_string())?;
     let level = required_log_field(object, "level")?;
     let source = required_log_field(object, "source")?;
     let event = required_log_field(object, "event")?;
-    let message = humanize_execution_log_message(object, &event, &required_log_field(object, "message")?);
-    let _session_id = optional_log_field(object, "sessionId").unwrap_or_else(|| default_session_id.to_string());
+    let message =
+        humanize_execution_log_message(object, &event, &required_log_field(object, "message")?);
+    let _session_id =
+        optional_log_field(object, "sessionId").unwrap_or_else(|| default_session_id.to_string());
     let timestamp = optional_log_field(object, "ts").unwrap_or_else(timestamp_now);
     let context = format_execution_log_context(object, &event);
     let mut content = format!("[{timestamp}] [{level}] [{source}] {message}");
@@ -552,7 +560,8 @@ fn humanize_execution_log_message(
             optional_log_field(object, "capability").unwrap_or_else(|| "capability".to_string())
         ),
         "capability.invoke.failed" => {
-            let capability = optional_log_field(object, "capability").unwrap_or_else(|| "capability".to_string());
+            let capability = optional_log_field(object, "capability")
+                .unwrap_or_else(|| "capability".to_string());
             let error_summary = object
                 .get("data")
                 .and_then(Value::as_object)
@@ -574,19 +583,23 @@ fn humanize_execution_log_message(
             }
         }
         "workflow.run.accepted" => {
-            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            let workflow =
+                optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
             format!("Queued workflow {workflow}")
         }
         "workflow.run.started" => {
-            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            let workflow =
+                optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
             format!("Started workflow {workflow}")
         }
         "workflow.run.succeeded" => {
-            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            let workflow =
+                optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
             format!("Finished workflow {workflow}")
         }
         "workflow.run.failed" => {
-            let workflow = optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
+            let workflow =
+                optional_log_field(object, "workflowId").unwrap_or_else(|| "workflow".to_string());
             format!("Failed workflow {workflow}")
         }
         "workflow.step.started" => format!(
@@ -621,7 +634,9 @@ fn humanize_execution_log_message(
                 .map(str::trim)
                 .filter(|value| !value.is_empty());
             match (snapshot_name, mix_source_name) {
-                (Some(snapshot), Some(source_name)) => format!("Exported {snapshot} via {source_name}"),
+                (Some(snapshot), Some(source_name)) => {
+                    format!("Exported {snapshot} via {source_name}")
+                }
                 (Some(snapshot), None) => format!("Exported {snapshot}"),
                 (None, Some(source_name)) => format!("Exported file via {source_name}"),
                 (None, None) => "Exported file".to_string(),
@@ -648,7 +663,9 @@ fn format_execution_log_context(object: &Map<String, Value>, event: &str) -> Str
     if let Some(plugin_id) = optional_log_field(object, "pluginId") {
         parts.push(format!("plugin={plugin_id}"));
     }
-    if event != "capability.invoke.start" && event != "capability.invoke.succeeded" && event != "capability.invoke.failed"
+    if event != "capability.invoke.start"
+        && event != "capability.invoke.succeeded"
+        && event != "capability.invoke.failed"
     {
         if let Some(capability) = optional_log_field(object, "capability") {
             parts.push(format!("capability={capability}"));
@@ -731,10 +748,16 @@ fn compact_log_payload(value: &Value) -> Value {
         );
         if let Some(settings) = object.get("exportSettings").and_then(Value::as_object) {
             if let Some(file_format) = settings.get("file_format").and_then(Value::as_str) {
-                summary.insert("fileFormat".to_string(), Value::String(file_format.to_string()));
+                summary.insert(
+                    "fileFormat".to_string(),
+                    Value::String(file_format.to_string()),
+                );
             }
             if let Some(output_path) = settings.get("output_path").and_then(Value::as_str) {
-                summary.insert("outputPath".to_string(), Value::String(output_path.to_string()));
+                summary.insert(
+                    "outputPath".to_string(),
+                    Value::String(output_path.to_string()),
+                );
             }
             if let Some(mix_sources) = settings.get("mix_sources").and_then(Value::as_array) {
                 summary.insert("mixSourceCount".to_string(), json!(mix_sources.len()));
@@ -784,7 +807,10 @@ fn compact_log_result(value: &Value) -> Value {
     if let Some(source_list) = object.get("sourceList").and_then(Value::as_array) {
         let mut summary = Map::new();
         if let Some(source_type) = object.get("sourceType").and_then(Value::as_str) {
-            summary.insert("sourceType".to_string(), Value::String(source_type.to_string()));
+            summary.insert(
+                "sourceType".to_string(),
+                Value::String(source_type.to_string()),
+            );
         }
         summary.insert("sourceCount".to_string(), json!(source_list.len()));
         summary.insert(
@@ -805,7 +831,13 @@ fn compact_log_result(value: &Value) -> Value {
         let mut summary = Map::new();
         summary.insert(
             "sections".to_string(),
-            Value::Array(config.keys().take(8).map(|key| Value::String(key.clone())).collect()),
+            Value::Array(
+                config
+                    .keys()
+                    .take(8)
+                    .map(|key| Value::String(key.clone()))
+                    .collect(),
+            ),
         );
         if let Some(host_preferences) = config.get("hostPreferences").and_then(Value::as_object) {
             if let Some(target) = host_preferences.get("dawTarget") {
@@ -817,7 +849,10 @@ fn compact_log_result(value: &Value) -> Value {
         }
         if let Some(ui_preferences) = config.get("uiPreferences").and_then(Value::as_object) {
             if let Some(enabled) = ui_preferences.get("developerModeEnabled") {
-                summary.insert("developerModeEnabled".to_string(), compact_log_value(enabled));
+                summary.insert(
+                    "developerModeEnabled".to_string(),
+                    compact_log_value(enabled),
+                );
             }
         }
         return json!({ "config": summary });
@@ -848,7 +883,11 @@ fn compact_log_error(value: &Value) -> Value {
         }
     }
     if let Some(details) = object.get("details").and_then(Value::as_object) {
-        let detail_keys = details.keys().take(6).map(|key| Value::String(key.clone())).collect::<Vec<_>>();
+        let detail_keys = details
+            .keys()
+            .take(6)
+            .map(|key| Value::String(key.clone()))
+            .collect::<Vec<_>>();
         if !detail_keys.is_empty() {
             summary.insert("detailKeys".to_string(), Value::Array(detail_keys));
         }
@@ -870,7 +909,8 @@ fn compact_log_value(value: &Value) -> Value {
         }
         Value::Object(object) => {
             let sanitized = sanitize_log_value(value, 0);
-            let serialized = serde_json::to_string(&sanitized).unwrap_or_else(|_| "null".to_string());
+            let serialized =
+                serde_json::to_string(&sanitized).unwrap_or_else(|_| "null".to_string());
             if serialized.len() <= 512 {
                 sanitized
             } else {
@@ -946,9 +986,16 @@ fn truncate_log_string(value: &str, limit: usize) -> String {
 
 fn is_redacted_log_key(key: &str) -> bool {
     let lowered = key.to_ascii_lowercase();
-    ["token", "secret", "password", "authorization", "apikey", "api_key"]
-        .iter()
-        .any(|fragment| lowered.contains(fragment))
+    [
+        "token",
+        "secret",
+        "password",
+        "authorization",
+        "apikey",
+        "api_key",
+    ]
+    .iter()
+    .any(|fragment| lowered.contains(fragment))
 }
 
 fn increment_backend_log_count(state: &Arc<RuntimeState>) -> Result<(), String> {
@@ -1255,7 +1302,9 @@ fn execute_bundled_process(
     }) else {
         return Ok(build_process_error(
             "BUNDLED_RESOURCE_NOT_FOUND",
-            format!("Bundled resource \"{resource_id}\" is not declared for plugin \"{plugin_id}\"."),
+            format!(
+                "Bundled resource \"{resource_id}\" is not declared for plugin \"{plugin_id}\"."
+            ),
             None,
             None,
         ));
@@ -1283,21 +1332,18 @@ fn execute_bundled_process(
         ));
     }
 
-    let executable_path = match plugins::resolve_plugin_relative_path(
-        &plugin.plugin_root,
-        &relative_path,
-        true,
-    ) {
-        Ok(path) => path,
-        Err(_) => {
-            return Ok(build_process_error(
-                "BUNDLED_RESOURCE_PATH_INVALID",
-                format!("Bundled resource \"{resource_id}\" has an invalid relativePath."),
-                None,
-                None,
-            ));
-        }
-    };
+    let executable_path =
+        match plugins::resolve_plugin_relative_path(&plugin.plugin_root, &relative_path, true) {
+            Ok(path) => path,
+            Err(_) => {
+                return Ok(build_process_error(
+                    "BUNDLED_RESOURCE_PATH_INVALID",
+                    format!("Bundled resource \"{resource_id}\" has an invalid relativePath."),
+                    None,
+                    None,
+                ));
+            }
+        };
     if !executable_path.exists() {
         let mut details = Map::new();
         details.insert(
@@ -1323,7 +1369,7 @@ fn execute_bundled_process(
         }
     }
 
-    let capture = match run_command_capture(&mut command) {
+    let capture = match run_command_capture_with_timeout(&mut command, Duration::from_secs(120)) {
         Ok(result) => result,
         Err(error) => {
             let mut details = Map::new();
@@ -1356,7 +1402,10 @@ fn execute_bundled_process(
         "exitCode".to_string(),
         Value::Number(serde_json::Number::from(capture.exit_code)),
     );
-    object.insert("stdout".to_string(), Value::String(capture.output_text.clone()));
+    object.insert(
+        "stdout".to_string(),
+        Value::String(capture.output_text.clone()),
+    );
     if !capture.stderr_text.is_empty() {
         object.insert(
             "stderr".to_string(),
@@ -1393,7 +1442,7 @@ fn execute_bundled_process(
         object.insert(
             "error".to_string(),
             json!({
-                "code": "BUNDLED_PROCESS_EXIT_NONZERO",
+                "code": if capture.timed_out { "BUNDLED_PROCESS_TIMEOUT" } else { "BUNDLED_PROCESS_EXIT_NONZERO" },
                 "message": message,
                 "details": details,
             }),
@@ -1510,6 +1559,7 @@ struct ProcessCapture {
     exit_code: i64,
     output_text: String,
     stderr_text: String,
+    timed_out: bool,
 }
 
 fn normalize_command_text(raw: &[u8]) -> String {
@@ -1539,7 +1589,67 @@ fn run_command_capture(command: &mut Command) -> Result<ProcessCapture, String> 
         exit_code: i64::from(result.status.code().unwrap_or(-1)),
         output_text: normalize_command_text(&result.stdout),
         stderr_text: normalize_command_text(&result.stderr),
+        timed_out: false,
     })
+}
+
+fn read_child_output(child: &mut std::process::Child) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        pipe.read_to_end(&mut stdout)
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(mut pipe) = child.stderr.take() {
+        pipe.read_to_end(&mut stderr)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok((stdout, stderr))
+}
+
+fn run_command_capture_with_timeout(
+    command: &mut Command,
+    timeout: Duration,
+) -> Result<ProcessCapture, String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+            let (stdout, stderr) = read_child_output(&mut child)?;
+            return Ok(ProcessCapture {
+                success: status.success(),
+                exit_code: i64::from(status.code().unwrap_or(-1)),
+                output_text: normalize_command_text(&stdout),
+                stderr_text: normalize_command_text(&stderr),
+                timed_out: false,
+            });
+        }
+
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            let (stdout, stderr) = read_child_output(&mut child)?;
+            let stderr_text = normalize_command_text(&stderr);
+            return Ok(ProcessCapture {
+                success: false,
+                exit_code: -1,
+                output_text: normalize_command_text(&stdout),
+                stderr_text: if stderr_text.is_empty() {
+                    format!(
+                        "Bundled process timed out after {} seconds.",
+                        timeout.as_secs()
+                    )
+                } else {
+                    stderr_text
+                },
+                timed_out: true,
+            });
+        }
+
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn run_mac_accessibility_command(args: Vec<String>) -> Result<Value, String> {
@@ -1718,7 +1828,9 @@ mod tests {
         )
         .expect("serialize execution log");
 
-        assert!(serialized.contains("[2026-04-23T15:00:00.000Z] [info] [plugin.host] export started request=req-1"));
+        assert!(serialized.contains(
+            "[2026-04-23T15:00:00.000Z] [info] [plugin.host] export started request=req-1"
+        ));
         assert!(!serialized.contains('\n'));
         assert!(serialized.contains("data={"));
         assert!(serialized.contains("\"password\":\"***REDACTED***\""));
@@ -1754,7 +1866,8 @@ mod tests {
         )
         .expect("serialize execution log");
 
-        assert!(serialized.contains("[info] [backend.execution] Succeeded daw.track.list request=req-1"));
+        assert!(serialized
+            .contains("[info] [backend.execution] Succeeded daw.track.list request=req-1"));
         assert!(!serialized.contains('\n'));
         assert!(!serialized.contains("\"capability\": \"daw.track.list\""));
         assert!(serialized.contains("data={"));
@@ -1839,8 +1952,14 @@ mod tests {
         entries.sort();
 
         assert_eq!(entries.len(), 10);
-        assert_eq!(entries.first().map(String::as_str), Some("presto-2026-04-23T00-00-02.log"));
-        assert_eq!(entries.last().map(String::as_str), Some("presto-2026-04-23T00-00-11.log"));
+        assert_eq!(
+            entries.first().map(String::as_str),
+            Some("presto-2026-04-23T00-00-02.log")
+        );
+        assert_eq!(
+            entries.last().map(String::as_str),
+            Some("presto-2026-04-23T00-00-11.log")
+        );
 
         fs::remove_dir_all(&temp_dir).expect("cleanup temp dir");
     }
