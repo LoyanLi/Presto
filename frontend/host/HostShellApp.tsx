@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 
-import type { DawTarget, PrestoClient } from '@presto/contracts'
+import type { DawConnectionGetStatusResponse, DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { getThemeMode, getThemePreference, setThemePreference, subscribeThemeMode, subscribeThemePreference } from '../ui'
@@ -76,6 +76,7 @@ export interface HostShellAppProps {
   pluginPages?: readonly HostRenderedPluginPage[]
   pluginManagerModel?: HostPluginManagerModel
   dawAdapterSnapshot?: DawAdapterSnapshot | null
+  initialDawConnectionStatus?: DawConnectionGetStatusResponse | null
   initialWorkspacePageRoute?: HostWorkspacePageRoute | null
   initialToolPageRoute?: HostToolPageRoute | null
   initialSettingsPageRoute?: HostSettingsPageRoute | LegacySettingsRouteInput | null
@@ -98,6 +99,7 @@ export function HostShellApp({
   pluginPages = [],
   pluginManagerModel,
   dawAdapterSnapshot = null,
+  initialDawConnectionStatus = null,
   initialWorkspacePageRoute = null,
   initialToolPageRoute = null,
   initialSettingsPageRoute = null,
@@ -130,6 +132,7 @@ export function HostShellApp({
     preferences,
     resolvedLocale,
     initialSnapshot: dawAdapterSnapshot,
+    initialConnectionStatus: initialDawConnectionStatus,
   })
   const {
     surface,

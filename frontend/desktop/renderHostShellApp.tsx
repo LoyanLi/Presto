@@ -5,8 +5,14 @@ import '../ui/styles.css'
 import { createPluginSharedUiApi, ensureMaterialWebRegistered } from '../ui'
 import { HostShellApp, createHostShellState } from '../host'
 import { useHostPluginCatalogState } from './useHostPluginCatalogState'
-import type { PrestoClient } from '@presto/contracts'
+import type { DawConnectionGetStatusResponse, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
+import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
+
+type InitialDawBootstrap = {
+  snapshot: DawAdapterSnapshot | null
+  connectionStatus: DawConnectionGetStatusResponse | null
+}
 
 function getInitialShellViewId(searchParams: URLSearchParams): 'home' | 'settings' | 'developer' {
   const smokeTarget = searchParams.get('smokeTarget')
@@ -40,6 +46,25 @@ function renderStartupShell(container: HTMLElement): void {
   `
 }
 
+async function loadInitialDawBootstrap(client: PrestoClient, runtime: PrestoRuntime): Promise<InitialDawBootstrap> {
+  let snapshot: DawAdapterSnapshot | null = null
+  let connectionStatus: DawConnectionGetStatusResponse | null = null
+
+  try {
+    snapshot = await runtime.backend.getDawAdapterSnapshot()
+  } catch {
+    snapshot = null
+  }
+
+  try {
+    connectionStatus = await client.daw.connection.getStatus()
+  } catch {
+    connectionStatus = null
+  }
+
+  return { snapshot, connectionStatus }
+}
+
 export function renderHostShellApp({
   client,
   runtime,
@@ -62,7 +87,7 @@ export function renderHostShellApp({
     ui: pluginSharedUi,
   }
 
-  function App() {
+  function App({ initialDawBootstrap }: { initialDawBootstrap: InitialDawBootstrap }) {
     const state = createHostShellState(getInitialShellViewId(searchParams))
     const {
       automationEntries,
@@ -91,6 +116,8 @@ export function renderHostShellApp({
         automationEntries={automationEntries}
         pluginPages={pluginPages}
         pluginManagerModel={pluginManagerModel}
+        dawAdapterSnapshot={initialDawBootstrap.snapshot}
+        initialDawConnectionStatus={initialDawBootstrap.connectionStatus}
         onRefreshPlugins={() => void refreshPlugins()}
         onInstallPluginDirectory={() => void installPluginDirectory()}
         onInstallPluginZip={() => void installPluginZip()}
@@ -106,7 +133,10 @@ export function renderHostShellApp({
   }
 
   renderStartupShell(container)
-  createRoot(container).render(<App />)
+  void (async () => {
+    const initialDawBootstrap = await loadInitialDawBootstrap(client, runtime)
+    createRoot(container).render(<App initialDawBootstrap={initialDawBootstrap} />)
+  })()
 }
 
 declare global {

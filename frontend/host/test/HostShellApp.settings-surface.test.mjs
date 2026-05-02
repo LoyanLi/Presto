@@ -751,7 +751,7 @@ test('general and workflow settings reuse the shared ui Select used by automatio
   assert.match(dawSource, /SUPPORTED_DAW_TARGETS/)
 })
 
-test('daw settings page renders the explicit unavailable status instead of disconnected when the DAW state is unknown', async () => {
+test('daw settings page treats the unknown startup state as disconnected instead of unavailable', async () => {
   const { DawSettingsPage } = await loadHostModule()
 
   const markup = renderToStaticMarkup(
@@ -762,7 +762,7 @@ test('daw settings page renders the explicit unavailable status instead of disco
         status: 'unknown',
         targetLabel: 'Pro Tools',
         sessionName: '',
-        statusLabel: 'Unavailable',
+        statusLabel: 'Disconnected',
         lastError: 'Probe failed.',
       },
       checkingConnection: false,
@@ -771,9 +771,43 @@ test('daw settings page renders the explicit unavailable status instead of disco
     }),
   )
 
-  assert.match(markup, /Unavailable/)
+  assert.match(markup, /Disconnected/)
   assert.match(markup, /Probe failed\./)
-  assert.doesNotMatch(markup, />Disconnected</)
+  assert.doesNotMatch(markup, /Unavailable/)
+})
+
+test('host shell initial connection indicator does not flash unavailable before the first DAW status poll', async () => {
+  const { HostShellApp, createHostShellState } = await loadHostModule()
+  globalThis.localStorage = {
+    getItem() {
+      return JSON.stringify({
+        language: 'system',
+        developerMode: false,
+        dawTarget: 'pro_tools',
+      })
+    },
+    setItem() {},
+  }
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      languages: ['en-US'],
+      language: 'en-US',
+    },
+    configurable: true,
+  })
+  globalThis.matchMedia = () => ({ matches: false })
+
+  const markup = renderToStaticMarkup(
+    React.createElement(HostShellApp, {
+      state: createHostShellState('home'),
+      developerPresto: {},
+      developerRuntime: {},
+      ...createPluginProps(),
+    }),
+  )
+
+  assert.match(markup, /DAW connection Disconnected/)
+  assert.doesNotMatch(markup, /DAW connection Unavailable/)
 })
 
 test('general settings markup keeps shared select styling for appearance controls after the split', async () => {

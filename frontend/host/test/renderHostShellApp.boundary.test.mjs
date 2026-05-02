@@ -17,3 +17,15 @@ test('renderHostShellApp delegates plugin catalog orchestration to a dedicated h
   assert.doesNotMatch(source, /runtime\.plugins\.setEnabled\(/)
   assert.doesNotMatch(source, /runtime\.plugins\.uninstall\(/)
 })
+
+test('renderHostShellApp bootstraps DAW status before mounting the host shell', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/desktop/renderHostShellApp.tsx'), 'utf8')
+
+  assert.match(source, /async function loadInitialDawBootstrap/)
+  assert.match(source, /await runtime\.backend\.getDawAdapterSnapshot\(\)/)
+  assert.match(source, /await client\.daw\.connection\.getStatus\(\)/)
+  assert.match(source, /const initialDawBootstrap = await loadInitialDawBootstrap\(client, runtime\)/)
+  assert.match(source, /dawAdapterSnapshot=\{initialDawBootstrap\.snapshot\}/)
+  assert.match(source, /initialDawConnectionStatus=\{initialDawBootstrap\.connectionStatus\}/)
+  assert.match(source, /createRoot\(container\)\.render\(<App initialDawBootstrap=\{initialDawBootstrap\} \/>\)/)
+})

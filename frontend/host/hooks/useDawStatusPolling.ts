@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { DawTarget, PrestoClient } from '@presto/contracts'
+import type { DawConnectionGetStatusResponse, DawTarget, PrestoClient } from '@presto/contracts'
 import type { PrestoRuntime } from '@presto/sdk-runtime'
 import type { DawAdapterSnapshot } from '@presto/sdk-runtime/clients/backend'
 import { formatHostErrorMessage } from '../errorDisplay'
@@ -17,8 +17,8 @@ type HostDawStatusState = {
   lastError: string
 }
 
-const UNKNOWN_DAW_STATUS: HostDawStatusState = {
-  status: 'unknown',
+const DEFAULT_DAW_STATUS: HostDawStatusState = {
+  status: 'disconnected',
   targetLabel: 'Pro Tools',
   sessionName: '',
   statusLabel: '',
@@ -41,6 +41,7 @@ type UseDawStatusPollingInput = {
   preferences: { dawTarget: DawTarget }
   resolvedLocale: string
   initialSnapshot?: DawAdapterSnapshot | null
+  initialConnectionStatus?: DawConnectionGetStatusResponse | null
 }
 
 export function useDawStatusPolling({
@@ -49,14 +50,20 @@ export function useDawStatusPolling({
   preferences,
   resolvedLocale,
   initialSnapshot = null,
+  initialConnectionStatus = null,
 }: UseDawStatusPollingInput) {
   const [checkingDawConnection, setCheckingDawConnection] = useState(false)
   const [dawRefreshKey, setDawRefreshKey] = useState(0)
-  const [dawStatus, setDawStatus] = useState<HostDawStatusState>(() => ({
-    ...UNKNOWN_DAW_STATUS,
-    targetLabel: dawLabel(preferences.dawTarget),
-    statusLabel: statusLabelFor(resolvedLocale, 'unknown'),
-  }))
+  const [dawStatus, setDawStatus] = useState<HostDawStatusState>(() => {
+    const initialStatus: HostDawConnectionState = initialConnectionStatus?.connected ? 'connected' : 'disconnected'
+    return {
+      status: initialStatus,
+      targetLabel: dawLabel((initialConnectionStatus?.targetDaw ?? preferences.dawTarget) as DawTarget),
+      sessionName: initialConnectionStatus?.connected ? (initialConnectionStatus.sessionName ?? '') : DEFAULT_DAW_STATUS.sessionName,
+      statusLabel: statusLabelFor(resolvedLocale, initialStatus),
+      lastError: DEFAULT_DAW_STATUS.lastError,
+    }
+  })
   const [liveDawAdapterSnapshot, setLiveDawAdapterSnapshot] = useState<DawAdapterSnapshot | null>(initialSnapshot)
 
   useEffect(() => {
@@ -88,6 +95,17 @@ export function useDawStatusPolling({
       }
 
       try {
+        if (!cancelled && developerRuntime?.backend && typeof developerRuntime.backend.getDawAdapterSnapshot === 'function') {
+          try {
+            const snapshot = await developerRuntime.backend.getDawAdapterSnapshot()
+            if (!cancelled) {
+              setLiveDawAdapterSnapshot(snapshot)
+            }
+          } catch {
+            // Keep the last known adapter snapshot when polling fails.
+          }
+        }
+
         const status = await developerPresto.daw.connection.getStatus()
         const sessionName = status.sessionName ?? ''
 
@@ -100,16 +118,6 @@ export function useDawStatusPolling({
             statusLabel: statusLabelFor(resolvedLocale, nextStatus),
             lastError: '',
           })
-        }
-        if (!cancelled && developerRuntime?.backend && typeof developerRuntime.backend.getDawAdapterSnapshot === 'function') {
-          try {
-            const snapshot = await developerRuntime.backend.getDawAdapterSnapshot()
-            if (!cancelled) {
-              setLiveDawAdapterSnapshot(snapshot)
-            }
-          } catch {
-            // Keep the last known adapter snapshot when polling fails.
-          }
         }
       } catch (error) {
         if (!cancelled) {

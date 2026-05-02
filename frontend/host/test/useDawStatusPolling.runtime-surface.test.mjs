@@ -16,11 +16,13 @@ test('useDawStatusPolling reads session name from daw.connection.getStatus witho
   assert.doesNotMatch(source, /developerPresto\.session\.getInfo/)
 })
 
-test('useDawStatusPolling models DAW status as connected, disconnected, or unknown instead of forcing probe failures into disconnected', async () => {
+test('useDawStatusPolling starts disconnected while preserving current status on probe failures', async () => {
   const source = await readFile(path.join(repoRoot, 'frontend/host/hooks/useDawStatusPolling.ts'), 'utf8')
 
   assert.match(source, /export type HostDawConnectionState = 'connected' \| 'disconnected' \| 'unknown'/)
-  assert.match(source, /status:\s*'unknown'/)
+  assert.match(source, /status:\s*'disconnected'/)
+  assert.match(source, /const initialStatus: HostDawConnectionState = initialConnectionStatus\?\.connected \? 'connected' : 'disconnected'/)
+  assert.match(source, /statusLabel:\s*statusLabelFor\(resolvedLocale, initialStatus\)/)
   assert.match(source, /status:\s*current\.status/)
   assert.doesNotMatch(source, /connected:\s*false,\s*[\s\S]*statusLabel:\s*translateHost\(resolvedLocale, 'general\.disconnected'\)/)
 })
@@ -34,4 +36,15 @@ test('useDawStatusPolling keeps status reads side-effect free instead of connect
   assert.doesNotMatch(source, /developerPresto\.daw\.connection\.connect/)
   assert.doesNotMatch(source, /DAW_CONNECT_PROBE_TIMEOUT_SECONDS/)
   assert.doesNotMatch(source, /pendingConnectionProbeRef/)
+})
+
+test('useDawStatusPolling refreshes the adapter snapshot before reading connection status', async () => {
+  const source = await readFile(path.join(repoRoot, 'frontend/host/hooks/useDawStatusPolling.ts'), 'utf8')
+
+  const snapshotIndex = source.indexOf('await developerRuntime.backend.getDawAdapterSnapshot()')
+  const statusIndex = source.indexOf('await developerPresto.daw.connection.getStatus()')
+
+  assert.notEqual(snapshotIndex, -1)
+  assert.notEqual(statusIndex, -1)
+  assert.ok(snapshotIndex < statusIndex)
 })
