@@ -1616,6 +1616,10 @@ fn check_for_updates(_state: &Arc<RuntimeState>, request: Option<&Value>) -> Res
         "curl",
         &[
             "-fsSL",
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "15",
             "-H",
             "Accept: application/vnd.github+json",
             "-H",
