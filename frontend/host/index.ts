@@ -26,6 +26,7 @@ export type { DeveloperCapabilityConsoleProps } from './DeveloperCapabilityConso
 export { DeveloperCapabilityConsole } from './DeveloperCapabilityConsole'
 export type { HostShellState, HostShellViewId } from './hostShellState'
 export { createHostShellState } from './hostShellState'
+export { formatVersionLabel } from './versionLabels'
 export type { HostShellLanguage, HostShellPreferences } from './shellPreferences'
 export {
   getHostShellPreferences,

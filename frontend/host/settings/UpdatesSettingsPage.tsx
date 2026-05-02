@@ -5,6 +5,7 @@ import { hostShellColors } from '../hostShellColors'
 import type { HostLocale } from '../i18n'
 import { translateHost } from '../i18n'
 import type { HostShellPreferences } from '../shellPreferences'
+import { formatVersionLabel } from '../versionLabels'
 import { actionButtonStyle, sectionDescriptionStyle, sectionStyle, sectionTitleStyle, stackStyle } from './pageStyles'
 
 export interface UpdatesSettingsPageProps {
@@ -32,17 +33,22 @@ export function UpdatesSettingsPage({
   onOpenReleasePage,
   onIncludePrereleaseUpdatesChange,
 }: UpdatesSettingsPageProps) {
+  const currentVersionLabel = formatVersionLabel(appVersion) || '-'
+  const latestVersionLabel = latestRelease
+    ? formatVersionLabel(latestRelease.tagName) || latestRelease.tagName
+    : translateHost(locale, 'settings.update.notChecked')
+
   return (
     <div style={stackStyle}>
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>{translateHost(locale, 'settings.update.title')}</h2>
         <div style={{ display: 'grid', gap: 10 }}>
           <p style={sectionDescriptionStyle}>
-            {translateHost(locale, 'settings.update.currentVersion', { value: appVersion })}
+            {translateHost(locale, 'settings.update.currentVersion', { value: currentVersionLabel })}
           </p>
           <p style={sectionDescriptionStyle}>
             {translateHost(locale, 'settings.update.latestVersion', {
-              value: latestRelease?.tagName || translateHost(locale, 'settings.update.notChecked'),
+              value: latestVersionLabel,
             })}
           </p>
           <Switch
@@ -60,7 +66,7 @@ export function UpdatesSettingsPage({
               }}
             >
               {hasNewRelease
-                ? translateHost(locale, 'settings.update.available', { value: latestRelease.tagName })
+                ? translateHost(locale, 'settings.update.available', { value: latestVersionLabel })
                 : translateHost(locale, 'settings.update.upToDate')}
             </p>
           ) : null}

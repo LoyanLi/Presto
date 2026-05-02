@@ -446,6 +446,36 @@ test('permissions settings render a flat permission checklist with status and a 
   assert.match(markup, /Open System Settings/)
 })
 
+test('updates settings normalizes version labels without tag prefixes', async () => {
+  const { UpdatesSettingsPage } = await loadHostModule()
+  const markup = renderToStaticMarkup(
+    React.createElement(UpdatesSettingsPage, {
+      locale: 'zh-CN',
+      appVersion: '0.3.11',
+      latestRelease: {
+        repo: 'LoyanLi/Presto',
+        tagName: 'v0.3.10',
+        name: 'v0.3.10',
+        htmlUrl: 'https://github.com/LoyanLi/Presto/releases/tag/v0.3.10',
+        publishedAt: '2026-05-01T00:00:00Z',
+        prerelease: false,
+        draft: false,
+      },
+      checkingUpdate: false,
+      updateError: '',
+      hasNewRelease: false,
+      includePrereleaseUpdates: false,
+      onCheckForUpdates() {},
+      onOpenReleasePage() {},
+      onIncludePrereleaseUpdatesChange() {},
+    }),
+  )
+
+  assert.match(markup, /当前版本：\s*0\.3\.11/)
+  assert.match(markup, /最新发布：\s*0\.3\.10/)
+  assert.doesNotMatch(markup, /最新发布：\s*v0\.3\.10/)
+})
+
 test('general settings only keep appearance controls after builtin host pages are split', async () => {
   const { HostShellApp, createHostShellState } = await loadHostModule()
   const markup = renderToStaticMarkup(

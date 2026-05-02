@@ -41,6 +41,7 @@ import { useHostShellNavigationState } from './useHostShellNavigationState'
 import { useHostShellPreferencesState } from './useHostShellPreferencesState'
 import { useHostShellRuntimeState } from './useHostShellRuntimeState'
 import { useHostShellPluginModel } from './useHostShellPluginModel'
+import { formatVersionLabel } from './versionLabels'
 
 const defaultReleasePageUrl = 'https://github.com/LoyanLi/Presto/releases'
 const macAccessibilitySettingsUrl = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
@@ -560,8 +561,12 @@ export function HostShellApp({
     ? {
       title: translateHost(resolvedLocale, 'settings.update.dialog.title'),
       body: translateHost(resolvedLocale, 'settings.update.dialog.body'),
-      currentVersion: translateHost(resolvedLocale, 'settings.update.dialog.currentVersion', { value: appVersion }),
-      latestVersion: translateHost(resolvedLocale, 'settings.update.dialog.latestVersion', { value: latestRelease.tagName }),
+      currentVersion: translateHost(resolvedLocale, 'settings.update.dialog.currentVersion', {
+        value: formatVersionLabel(appVersion) || appVersion,
+      }),
+      latestVersion: translateHost(resolvedLocale, 'settings.update.dialog.latestVersion', {
+        value: formatVersionLabel(latestRelease.tagName) || latestRelease.tagName,
+      }),
       channel: translateHost(resolvedLocale, 'settings.update.dialog.channel', {
         value: latestRelease.prerelease
           ? translateHost(resolvedLocale, 'settings.update.preview')
