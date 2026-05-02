@@ -13,6 +13,7 @@ from ...domain.capabilities import DEFAULT_DAW_TARGET
 from ...domain.errors import PrestoError, PrestoErrorPayload, PrestoValidationError
 from ...domain.jobs import JobProgress, JobRecord, JobsUpdateRequest
 from .common import runtime_from_context
+from ..jobs.cancellation import cancel_managed_job
 
 
 def _utc_now() -> str:
@@ -184,10 +185,12 @@ def _await_child_job(
 ) -> dict[str, Any]:
     while True:
         if cancel_event.is_set():
-            try:
-                services.job_manager.cancel(child_job_id)
-            except Exception:
-                pass
+            cancel_managed_job(
+                job_manager=services.job_manager,
+                job_handle_registry=services.job_handle_registry,
+                daw=services.daw,
+                job_id=child_job_id,
+            )
             raise PrestoError("WORKFLOW_CANCELLED", "Workflow execution cancelled.", capability="workflow.run.start")
 
         child_job = services.job_manager.get(child_job_id)

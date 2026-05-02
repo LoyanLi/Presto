@@ -294,6 +294,73 @@ def test_workflow_run_start_mirrors_child_job_progress_while_awaiting_import(tmp
     assert services.daw.imported_paths == [str(first_file), str(second_file)]
 
 
+def test_workflow_cancel_cancels_awaited_child_job_handle(tmp_path: Path) -> None:
+    services = _services()
+    services.daw.block_after_import_count = 1
+    first_file = tmp_path / "Kick.wav"
+    second_file = tmp_path / "Snare.wav"
+    first_file.write_bytes(b"RIFF")
+    second_file.write_bytes(b"RIFF")
+
+    accepted = execute_capability(
+        services,
+        "workflow.run.start",
+        {
+            "pluginId": "official.import-workflow",
+            "workflowId": "test.workflow.cancel-child",
+            "definition": {
+                "workflowId": "test.workflow.cancel-child",
+                "version": "1.0.0",
+                "inputSchemaId": "test.workflow.import.v1",
+                "steps": [
+                    {
+                        "stepId": "import_files",
+                        "usesCapability": "daw.import.run.start",
+                        "awaitJob": True,
+                        "input": {
+                            "folderPaths": {"$ref": "input.folderPaths"},
+                            "orderedFilePaths": {"$ref": "input.orderedFilePaths"},
+                        },
+                    }
+                ],
+            },
+            "allowedCapabilities": ["daw.import.run.start"],
+            "input": {
+                "folderPaths": [str(tmp_path)],
+                "orderedFilePaths": [str(first_file), str(second_file)],
+            },
+        },
+    )
+    parent_job_id = accepted["jobId"]
+
+    deadline = time.time() + 3.0
+    child_job_id = ""
+    while time.time() < deadline:
+        child_jobs = [job for job in services.job_manager.list().jobs if job.capability == "daw.import.run.start"]
+        if child_jobs and child_jobs[0].progress.current == 1:
+            child_job_id = child_jobs[0].job_id
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow child import job did not start")
+
+    child_handle = services.job_handle_registry.get(child_job_id)
+    assert child_handle is not None
+    services.job_handle_registry.cancel(parent_job_id)
+
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        if services.job_manager.get(parent_job_id).state == "cancelled":
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("workflow parent job did not cancel")
+
+    assert services.job_manager.get(child_job_id).state == "cancelled"
+    assert child_handle.cancel_event.is_set() is True
+    services.daw.import_release_event.set()
+
+
 def test_workflow_run_start_advances_to_batched_post_import_stage_after_import_finishes(tmp_path: Path) -> None:
     services = _services()
     services.daw.block_after_import_count = 1
