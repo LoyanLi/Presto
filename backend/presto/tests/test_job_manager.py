@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from presto.application.jobs.manager import InMemoryJobManager
 from presto.domain.errors import PrestoErrorPayload
-from presto.domain.jobs import JobProgress, JobRecord, JobsUpdateRequest
+from presto.domain.jobs import JobProgress, JobRecord, JobsListRequest, JobsUpdateRequest
 
 
 def _running_job() -> JobRecord:
@@ -64,3 +64,17 @@ def test_job_manager_ignores_stale_updates_after_terminal_transition() -> None:
     assert stored.result == {"steps": {"rename": "Lead Vox"}}
     assert stored.error == PrestoErrorPayload(code="INITIAL", message="initial")
     assert stored.finished_at is not None
+
+
+def test_job_manager_list_total_count_ignores_limit() -> None:
+    second_job = _running_job()
+    second_job.job_id = "job-2"
+    second_job.capability = "daw.export.start"
+    third_job = _running_job()
+    third_job.job_id = "job-3"
+    manager = InMemoryJobManager([_running_job(), second_job, third_job])
+
+    result = manager.list(filter=JobsListRequest(capabilities=("workflow.run.start",), limit=1))
+
+    assert [job.job_id for job in result.jobs] == ["job-1"]
+    assert result.total_count == 2

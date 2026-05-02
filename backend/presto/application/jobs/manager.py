@@ -189,8 +189,10 @@ class InMemoryJobManager(JobManagerProtocol):
                 if filter.capabilities is not None:
                     allowed_capabilities = set(filter.capabilities)
                     jobs = [job for job in jobs if job.capability in allowed_capabilities]
+                total_count = len(jobs)
                 if filter.limit is not None:
                     jobs = jobs[: max(0, int(filter.limit))]
+                    return JobsListResponse(jobs=jobs, total_count=total_count)
             return JobsListResponse(jobs=jobs, total_count=len(jobs))
 
     def cancel(self, job_id: str) -> JobsCancelResponse:
