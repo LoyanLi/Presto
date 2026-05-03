@@ -15,6 +15,7 @@
 - 修复更新检查页面版本展示格式不一致的问题；GitHub tag 的 `v0.3.x` 在更新页面和弹窗中会统一展示为 `0.3.x`。
 - 修复启动和手动更新检查在网络卡住时可能无限等待的问题；GitHub release 请求现在有连接和总时长超时边界。
 - 修复工具插件 bundled process 无超时边界的问题；宿主会在进程超时后终止子进程并返回明确的 `BUNDLED_PROCESS_TIMEOUT`。
+- 修复 Export Workflow 创建 snapshot 时读取旧轨道状态的问题；点击创建时会实时读取当前 Pro Tools session 和 track list，再把最新 mute/solo 状态写入 snapshot。
 - 修复 runtime capability list bridge 截断 metadata 的问题；`workflowScope`、`portability`、`implementations`、`fieldSupport` 等字段现在会从后端 schema 保真映射到 SDK runtime，避免 Developer Console 和插件可用性判断读取到不完整能力目录。
 - 修复 `backend.daw-target.set` 的持久化职责边界；Rust runtime 现在直接写入 `<app data>/config.json` 中的 `hostPreferences.dawTarget`，再执行后端重启链路，不再反向依赖正在被管理的 backend capability。
 - 收口 Rust runtime 根文件职责：backend supervisor state、插件候选 / workflow definition 引用和 mobile progress state 下沉到各自领域模块，`runtime.rs` 保持根装配、共享 helper 和 operation dispatch。
