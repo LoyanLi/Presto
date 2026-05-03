@@ -90,7 +90,7 @@ src-tauri/src/runtime.rs
 ### 3.5 共享协议和 SDK
 
 - `packages/contracts/`：capability、插件、任务、错误协议
-- `packages/contracts-manifest/`：capability、schema 和 DAW target 事实源
+- `packages/contracts-manifest/`：capability、schema、DAW target 和 app config 默认值事实源
 - `packages/sdk-core/`：capability client
 - `packages/sdk-runtime/`：宿主 runtime client
 
@@ -98,17 +98,20 @@ src-tauri/src/runtime.rs
 
 - 当前桌面主干已经是 `Tauri`，不是 Electron 主进程 + preload 模式。
 - Rust 宿主通过 `runtime_invoke` 直接落到 `src-tauri/src/runtime.rs`，不再依赖打包态 Node sidecar。
-- `src-tauri/src/runtime.rs` 现在只保留根级状态、共享 helper 和 operation dispatch；backend、插件、mobile progress 已按领域拆到独立模块。
+- `src-tauri/src/runtime.rs` 现在只保留根级装配、共享 helper 和 operation dispatch；backend supervisor state、插件候选模型、mobile progress state 都已放回对应领域模块。
 - 打包态 Rust runtime 通过 bundle 内 `backend/`、`frontend/`、`plugins/` 资源和 bundled Python runtime + `PYTHONHOME` 管理本地 FastAPI 后端。
 - 桌面打包路径会把 `PRESTO_APP_DATA_DIR` 注入后端，所以 backend config 会落到应用数据目录下的 `config.json`，不再只活在后端进程内存里。
 - Rust runtime 初始化时会先从 `<app data>/config.json` 读取 `hostPreferences.dawTarget`，用它给 backend supervisor 设定初始 `target_daw`，而不是只靠 Renderer 启动后再纠正。
 - `backend/presto/application/daw_runtime.py` 是当前多 DAW 扩展接缝；`target_daw` 会先解析运行时依赖，再进入 capability 执行链，但当前只实现了 `pro_tools` factory。
 - `0.3.x` 版本线当前只继续扩 `Pro Tools` 支持面，不会把 `logic`、`cubase`、`nuendo` 从 reserved 提升为 supported；其他 `DAW` 的真实落地从 `0.4.x` 再开始。
 - `packages/contracts-manifest/daw-targets.json` 现在是 DAW target 的唯一事实源；`scripts/generate-contracts.mjs` 会生成 `packages/contracts/src/generated/dawTargets.ts`、`backend/presto/domain/daw_targets_generated.py` 和 `src-tauri/src/runtime/daw_targets_generated.rs`。
+- `packages/contracts-manifest/app-config-defaults.json` 现在是默认 app config 的唯一事实源；生成产物分别落到 `packages/contracts/src/generated/appConfigDefaults.ts`、`backend/presto/application/app_config_defaults_generated.py` 和 `src-tauri/src/runtime/app_config_defaults_generated.rs`。
 - Rust capability bridge 在 `/api/v1/capabilities/invoke` 非 `200` 时不会把后端错误压扁成 transport string，而是保留 `success / requestId / capability / error` 这套结构化 envelope，把 FastAPI 错误语义带回 Host。
+- Rust capability list bridge 会把后端的 `workflow_scope`、`portability`、`implementations`、`field_support` 等 metadata 保真映射成 SDK runtime 使用的 camelCase 结构；Developer Console 和 Host 不能再依赖缺字段的局部 capability view。
 - 插件发现不再按“当前运行中的 DAW”裁掉已安装插件；Rust runtime 负责发现与校验，当前 DAW 下是否可用由 Host 层基于 `supportedDaws` 再做可用性判断。
 - 插件 manifest 的关键约束现在在 Rust runtime 安装/发现入口统一校验，包括保留 DAW target、重复字段、页面/自动化/设置页结构，以及 workflow definition 引用闭包。
 - `backend.daw-target.set` 现在由 Rust runtime 独占持久化和重启链路；Renderer 只更新本地宿主状态，不再通过 generic preferences config 路径双写 `hostPreferences.dawTarget`。
+- `backend.daw-target.set` 写 `<app data>/config.json` 时不依赖后端 `config.get/config.update` capability；runtime 先直接持久化目标 DAW，再执行 `stop -> set target -> start -> wait ready`。
 - React Host 当前已经没有额外历史 runtime 层；宿主状态主要拆分在 `frontend/host/` 和 `frontend/desktop/` 的专用 hook 与装配入口里。
 - `frontend/host/HostRunsSurface.tsx` 当前承担两层交互：默认总览显示 `workflow` / `automation` / `tool` / `command` 的聚合卡片；进入详情后只渲染单一榜单，并通过 tabs 切换分类，而不是一次并列四份滚动列表。
 - capability 是跨宿主、后端、插件的正式业务协议中心。
@@ -116,6 +119,7 @@ src-tauri/src/runtime.rs
 - 当前真实支持的 DAW 只有 `pro_tools`。
 - 如果在 `0.3.x` 里谈“完整覆盖 `PTSL`”，它只应该指 backend-private 的 `Pro Tools` 内部命令层，而不是 public capability 与 `PTSL` 一一对应。
 - 版本号的唯一手工源头现在是仓库根 `package.json`；`packages/contracts/src/version.ts` 和 `backend/presto/version.py` 都是同步生成的派生常量。
+- workspace package 的公开入口以各自 `package.json#exports` 为准；`packages/contracts` 与 `packages/sdk-runtime` 不再保留和 `exports` 并行的包根转发文件。
 
 ## 5. 建议从哪里读代码
 
@@ -132,6 +136,7 @@ src-tauri/src/runtime.rs
 9. `backend/presto/application/daw_runtime.py`
 10. `backend/presto/application/service_container.py`
 11. `packages/contracts-manifest/daw-targets.json`
-12. `scripts/generate-contracts.mjs`
-13. `host-plugin-runtime/browser.ts`
-14. `packages/contracts/src/*`
+12. `packages/contracts-manifest/app-config-defaults.json`
+13. `scripts/generate-contracts.mjs`
+14. `host-plugin-runtime/browser.ts`
+15. `packages/contracts/src/*`

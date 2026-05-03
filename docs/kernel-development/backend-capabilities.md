@@ -62,6 +62,7 @@
 - `config_store` 通过 `integrations/config_store.py::create_default_config_store()` 解析：
   - 如果没有 `PRESTO_APP_DATA_DIR`，回退到 `InMemoryConfigStore()`
   - 如果存在 `PRESTO_APP_DATA_DIR`，则持久化到 `<PRESTO_APP_DATA_DIR>/config.json`
+- 默认 app config 不在 `integrations/config_store.py` 手写；它来自 `packages/contracts-manifest/app-config-defaults.json`，并由 `scripts/generate-contracts.mjs` 生成到 `backend/presto/application/app_config_defaults_generated.py`
 - `keychain_store` 是 `InMemoryKeychainStore()`
 - `job_manager` 是 `InMemoryJobManager()`
 
@@ -159,15 +160,25 @@
 
 - `packages/contracts-manifest/capabilities.json` 提供 capability 清单事实源
 - `packages/contracts-manifest/daw-targets.json` 提供 DAW target 事实源
-- `scripts/generate-contracts.mjs` 同时生成 capability catalog 和 DAW target 共享产物
+- `packages/contracts-manifest/app-config-defaults.json` 提供默认 app config 事实源
+- `scripts/generate-contracts.mjs` 同时生成 capability catalog、DAW target 和默认 app config 共享产物
 - `backend/presto/application/capabilities/catalog.py` 使用生成结果
 - `backend/presto/domain/capabilities.py` 通过 `domain/daw_targets_generated.py` 读取 `DawTarget`、`DEFAULT_DAW_TARGET`、`RESERVED_DAW_TARGETS` 和 `SUPPORTED_DAW_TARGETS`
+- `backend/presto/integrations/config_store.py` 通过 `application/app_config_defaults_generated.py` 读取默认 config
 
 所以新增 capability 的顺序必须是：
 
 1. 先改 `contracts` 与 manifest 事实源
 2. 生成共享产物
 3. 再改后端和前端实现
+
+如果要改默认配置结构或默认值，顺序是：
+
+1. 先改 `packages/contracts-manifest/app-config-defaults.json`
+2. 运行 `scripts/generate-contracts.mjs`
+3. 再改读取、迁移或 UI 表达逻辑
+
+不要在 Python config store、Rust runtime 和 TypeScript 类型里分别手写同一份默认结构。
 
 ## 7. 错误处理模型
 

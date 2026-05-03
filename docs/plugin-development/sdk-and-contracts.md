@@ -26,7 +26,7 @@
 
 ## 3. `packages/contracts-manifest` 是跨语言事实源
 
-这里保存 capability、schema 和 DAW target 相关事实源。
+这里保存 capability、schema、DAW target 和默认 app config 相关事实源。
 
 它的作用是：
 
@@ -39,8 +39,10 @@
 - `capabilities.json`
 - `schemas.json`
 - `daw-targets.json`
+- `app-config-defaults.json`
 
 这不是给插件直接 import 运行时代码的地方。
+插件也不应该绕过 package exports 去引用 `packages/*/index.ts` 这类包根文件；公开入口以各 workspace package 的 `package.json#exports` 为准。
 
 ## 4. `sdk-core` 才是 capability SDK
 

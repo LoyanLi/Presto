@@ -21,15 +21,30 @@
 
 但当前结构已经不是一个继续膨胀的单文件 runtime：
 
-- `src-tauri/src/runtime.rs`：根状态、共享 helper、operation dispatch
+- `src-tauri/src/runtime.rs`：根装配、共享 helper、operation dispatch
 - `src-tauri/src/runtime/backend.rs`：backend supervisor、capability HTTP 转发、DAW target 切换
 - `src-tauri/src/runtime/plugins.rs`：插件 catalog、安装/卸载、workflow definition 解析
 - `src-tauri/src/runtime/mobile_progress.rs`：mobile progress session 和 HTTP 视图
+
+领域状态也跟随领域模块放置：
+
+- `BackendSupervisorState` 定义在 `runtime/backend.rs`
+- `PluginCandidate` 和 workflow definition 引用定义在 `runtime/plugins.rs`
+- `MobileProgressState` 定义在 `runtime/mobile_progress.rs`
+
+`runtime.rs` 不再作为这些领域模型的集中定义文件；新增 runtime operation 时应优先落到对应模块，再由根 dispatch 暴露。
 
 其中 DAW target 边界也已经拆出来：
 
 - `src-tauri/src/runtime/backend.rs` 不再内联允许的 target 列表
 - `src-tauri/src/runtime/daw_targets_generated.rs` 由 `packages/contracts-manifest/daw-targets.json` 生成，并提供 `DEFAULT_DAW_TARGET` 与 `SUPPORTED_DAW_TARGETS`
+
+默认配置边界同样是生成产物：
+
+- `packages/contracts-manifest/app-config-defaults.json` 是默认 app config 的唯一手工事实源
+- `src-tauri/src/runtime/app_config_defaults_generated.rs` 提供 Rust runtime 需要的默认 config 和关键字段名
+- `backend/presto/application/app_config_defaults_generated.py` 提供 Python config store 需要的默认 config
+- `packages/contracts/src/generated/appConfigDefaults.ts` 提供 TypeScript 侧共享默认值
 
 它负责装配这些运行时对象：
 
@@ -121,10 +136,12 @@ Renderer 侧的关键入口是：
 
 - 健康检查使用 Rust 侧本地 HTTP 请求直接轮询 `/api/v1/health`。
 - 请求实现不能在写完后提前 `shutdown(Write)`；否则 uvicorn 不返回响应，宿主会误以为后端未就绪并主动清理进程。
-- `backend.daw-target.set` 不再让 Renderer 双写配置；Rust runtime 会先通过 `config.get/config.update` 持久化 `hostPreferences.dawTarget`，再原子执行 `stop -> set target -> start -> wait ready`。
+- `backend.daw-target.set` 不再让 Renderer 双写配置；Rust runtime 会直接更新 `<app data>/config.json` 中的 `hostPreferences.dawTarget`，再原子执行 `stop -> set target -> start -> wait ready`。
+- `backend.daw-target.set` 的持久化链路不依赖后端 `config.get/config.update` capability；目标 DAW 是 backend supervisor 的启动输入，不能反过来依赖正在被管理的 backend 完成写入。
 - `backend.daw-target.set` 对可切换目标的校验来自 `runtime/daw_targets_generated.rs`，而不是 Rust runtime 内部另一份手写常量。
 - `system.health` 和 `daw.connection.getStatus` 的语义现在保持纯查询；Rust runtime 只做状态读取和转发，不允许为了读状态而隐式触发连接。
 - `/api/v1/capabilities/invoke` 的非 `200` 响应现在会被 Rust runtime 重新包装成 capability error envelope，保留 `requestId`、`capability`、结构化 `error`，并补上 `statusCode` / `statusLine`，而不是退化成 transport 层字符串错误。
+- `/api/v1/capabilities` 返回的 snake_case metadata 会在 Rust runtime 中映射为 SDK runtime 使用的 camelCase 结构，包括 `workflowScope`、`portability`、`implementations`、`fieldSupport`、`canonicalSource` 和 `supportedDaws`。这条 list bridge 必须保持完整 metadata，不能只返回 UI 当前用到的字段。
 
 从 `0.3.3` 起，bundled Python runtime 的打包事实还包括：
 
