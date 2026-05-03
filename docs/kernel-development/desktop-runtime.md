@@ -172,6 +172,7 @@ Renderer 侧的关键入口是：
 
 - 插件发现会保留所有已安装插件，不按当前 backend `target_daw` 直接裁剪；当前 DAW 下是否可用是 Host 渲染层的问题，不是安装目录发现的问题。
 - manifest 校验已经前移到 Rust runtime，安装和扫描都会检查 `supportedDaws` 是否属于保留 target 集、各类声明是否重复、workflow definition 文件和 capability 引用是否闭合。
+- tool 插件的本地资源执行链路也在宿主边界内收口：页面通过 `host.runTool(...)` 触发 runner，runner 只能通过已声明的 `toolRuntimePermissions` 和 `bundledResources` 调用 `process.execBundled(...)`。
 
 ## 6. React Host 的职责
 

@@ -3,6 +3,7 @@
 本文档只讲 `automation` 插件标准，当前基准参考是：
 
 - `plugins/official/split-stereo-to-mono-automation`
+- `plugins/official/batch-ara-backup-automation`
 
 ## 1. 适用范围
 
@@ -47,6 +48,7 @@ automation 插件至少需要：
 - `automationItems` 必须存在且非空
 - `itemId` 不能重复
 - `automationType` 必须是字符串
+- `runnerExport` 必须是字符串，并且入口模块必须导出同名 runner
 
 ## 4. `automationItems` 标准
 
@@ -68,6 +70,7 @@ automation 插件至少需要：
 当前宿主自动化界面实际只处理：
 
 - `automationType: "splitStereoToMono"`
+- `automationType: "batchAraBackupRender"`
 
 因此，不应随意发明新的 `automationType`，除非宿主已经明确支持它。
 
@@ -77,6 +80,7 @@ automation 插件至少需要：
 
 - 导出 `manifest`
 - 导出 `activate(context)`
+- 导出每个 `automationItems[].runnerExport` 指向的 runner
 - 可选导出 `deactivate()`
 
 官方最小实现里，`activate(context)` 只做：
@@ -108,9 +112,24 @@ automation 插件至少需要：
 典型模式：
 
 - `automationItems[*].automationType = "splitStereoToMono"`
-- `requiredCapabilities = ["automation.splitStereoToMono.execute"]`
+- `automationItems[*].runnerExport = "runSplitStereoToMono"`
+- `requiredCapabilities = ["daw.automation.splitStereoToMono.execute"]`
 
 不要在 automation 插件里自行搭建本地自动化运行时。
+
+带 options 的 runner 最小形态：
+
+```ts
+export async function runSplitStereoToMono(context, input) {
+  const keepChannel = input.keepChannel === 'right' ? 'right' : 'left'
+  await context.presto.daw.automation.splitStereoToMono.execute({ keepChannel })
+  return {
+    summary: `Kept ${keepChannel} channel`
+  }
+}
+```
+
+automation runner context 在 `PluginContext` 基础上还包含 `macAccessibility`，但它仍然只应服务宿主已定义的 automation 执行路径，不应被当成通用系统自动化出口。
 
 ## 8. 当前标准参考
 
@@ -120,6 +139,12 @@ automation 插件至少需要：
 - automation item 结构参考
 - 单 capability 自动化入口参考
 - 不带页面和 settings 的标准参考
+
+`official.batch-ara-backup-automation` 适合作为：
+
+- 多 capability 但仍然短链路的 automation 参考
+- boolean options schema 参考
+- selection -> duplicate/rename/hide/inactive 这类宿主自动化卡片参考
 
 ## 9. 什么时候不该继续用 automation 插件
 
@@ -135,5 +160,6 @@ automation 插件至少需要：
 
 - `automationItems` 非空
 - `automationType` 是当前宿主已识别的类型
+- `runnerExport` 有实际入口模块导出
 - `requiredCapabilities` 覆盖实际调用
 - 没有补入页面、settings 或 workflow definition 却仍试图做复杂流程

@@ -158,14 +158,20 @@ Rust runtime 暴露给 `sdk-runtime` 时会映射成 camelCase，例如：
 - `fs`
 - `dialog`
 
-但插件页面组件还会收到一个受限 `host`。当前稳定开放的页面宿主能力是：
+但插件页面组件还会收到一个受限 `host`。当前稳定开放的页面宿主能力按页面类型分开：
 
-- `host.pickFolder()`
+- workflow 页面：`host.pickFolder()`
+- tool 页面：
+  - `host.dialog.openFile()` / `host.dialog.openDirectory()`
+  - `host.fs.readFile()` / `host.fs.writeFile()` / `host.fs.exists()` / `host.fs.readdir()` / `host.fs.deleteFile()`
+  - `host.shell.openPath()`
+  - `host.runTool({ toolId, input })`
 
 所以文档必须区分两件事：
 
 1. 插件运行时上下文没有通用 runtime
 2. 插件页面宿主仍然可以拿到少量结构化 UI 宿主能力
+3. tool 页面触发 runner 走 `host.runTool(...)`，runner 才能在 `PluginToolRunnerContext` 中访问 `process.execBundled(...)`
 
 ## 6. 权限是怎么落地的
 

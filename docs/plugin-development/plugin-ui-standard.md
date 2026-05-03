@@ -56,12 +56,25 @@
 - `host.fs.readdir(path)`
 - `host.fs.deleteFile(path)`
 - `host.shell.openPath(path)`
+- `host.runTool({ toolId, input })`
 
 使用规则：
 
 - 这些能力只在页面渲染时可用
 - 不能把它们当成 `activate(context)` 的通用 runtime
 - 只应围绕工具页面输入、预检、结果展示使用
+- 执行本地工具链时，页面调用 `host.runTool(...)`，runner 再调用 `process.execBundled(...)`
+
+`host.runTool(...)` 返回宿主 job 包装：
+
+```ts
+{
+  jobId: string
+  job: JobRecord
+}
+```
+
+因此 tool 页面应展示 job 状态或结果摘要，不应假设能直接拿到 runner 内部 stdout/stderr。
 
 ## 5. 页面层职责
 
@@ -176,3 +189,4 @@ settings page 不负责：
 - settings 结构和导出一致
 - job 型流程有明确进度、终态和错误展示
 - tool 页面仅使用已开放的 `dialog/fs/shell` 子集
+- tool 页面通过 `host.runTool(...)` 触发 runner，没有在页面层执行 bundled process

@@ -62,45 +62,50 @@ my-plugin/
 
 ## 4. 共享 manifest 规则
 
-当前 `WorkflowPluginManifest` 共同核心字段包括：
+当前 `PluginManifest` 共同核心字段包括：
 
-- `pluginId`
-- `extensionType`
-- `version`
-- `hostApiVersion`
-- `supportedDaws`
-- `uiRuntime`
-- `displayName`
-- `entry`
-- `requiredCapabilities`
-
-常见可选字段：
-
-- `description`
-- `styleEntry`
-- `pages`
-- `automationItems`
-- `tools`
-- `settingsPages`
-- `workflowDefinition`
-- `toolRuntimePermissions`
-- `bundledResources`
-- `adapterModuleRequirements`
-- `capabilityRequirements`
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `pluginId` | 是 | 插件唯一 ID。 |
+| `extensionType` | 是 | `workflow`、`automation` 或 `tool`。 |
+| `version` | 是 | 插件自身版本。 |
+| `hostApiVersion` | 是 | 当前 runtime 接受 `0.1.0`、`1`、`1.0.0`。官方插件当前使用 `0.1.0`。 |
+| `supportedDaws` | 是 | workflow/automation 当前写 `["pro_tools"]`；tool 必须写 `[]`。 |
+| `uiRuntime` | 是 | 当前只能是 `react18`。 |
+| `displayName` | 是 | 宿主展示名。 |
+| `description` | 否 | 宿主展示说明。 |
+| `entry` | 是 | 入口模块相对路径。 |
+| `styleEntry` | 否 | 样式文件相对路径。 |
+| `pages` | 是 | 页面声明；没有页面时写 `[]`。 |
+| `automationItems` | 否 | automation 入口声明。 |
+| `tools` | 否 | tool runner 声明。 |
+| `settingsPages` | 否 | workflow settings 结构化声明。 |
+| `workflowDefinition` | workflow 必填 | workflow definition 引用。 |
+| `toolRuntimePermissions` | 否 | tool 页面和 runner 的 host 权限声明。 |
+| `bundledResources` | 否 | tool runner 可执行的内置资源。 |
+| `adapterModuleRequirements` | 否 | 宿主/后端模块最低版本声明。 |
+| `capabilityRequirements` | 否 | capability 最低版本声明。 |
+| `requiredCapabilities` | 是 | 插件实际调用的 capability ID。 |
 
 共通约束：
 
 - `extensionType` 只能是 `workflow`、`automation` 或 `tool`
 - `uiRuntime` 当前必须是 `react18`
 - `requiredCapabilities` 必须覆盖插件实际调用到的 capability
+- `hostApiVersion` 当前接受 `0.1.0`、`1`、`1.0.0`
+- `pages` 是必填数组；无页面插件写 `[]`
+- `entry`、`styleEntry`、`workflowDefinition.definitionEntry`、`bundledResources[].relativePath` 必须是插件根目录内相对路径
+- 插件目录树不能包含 symbolic link
 
 类型相关约束：
 
 - `workflow` / `automation` 插件当前实际 `supportedDaws` 应写 `["pro_tools"]`
 - `tool` 插件 `supportedDaws` 必须是 `[]`
+- `workflow` 插件的 `pages[].mount` 必须是 `workspace`
 - `tool` 插件的 `pages[].mount` 必须是 `tools`
 - `tool` 插件不应把页面挂到 `workspace`，也不应进入 Home workflow 列表
 - `tool` 插件的扩展管理入口在 `Tool Extensions`，与 workflow 扩展管理分离
+- `automationItems[*].runnerExport` 是必填字段，并且必须和入口模块导出一致
 
 ## 5. 入口模块共同规范
 
@@ -121,6 +126,14 @@ export interface WorkflowPluginModule {
 - `manifest.entry` 与实际入口模块路径一致
 
 如果 manifest 声明了 `tools[].runnerExport`，入口模块中必须存在对应 runner 导出。
+
+如果 manifest 声明了 `automationItems[].runnerExport`，入口模块中也必须存在对应 automation runner 导出。
+
+入口模块还可以导出：
+
+- `resolveManifest(locale)`：用于本地化 manifest 展示文本
+- 页面组件导出：由 `pages[].componentExport` 指向
+- settings 加载/保存函数：由 `settingsPages[].loadExport` / `settingsPages[].saveExport` 指向
 
 ## 6. `PluginContext` 与页面 `host`
 
@@ -153,6 +166,7 @@ export interface WorkflowPluginModule {
   - `host.fs.readdir()`，前提是声明 `fs.list`
   - `host.fs.deleteFile()`，前提是声明 `fs.delete`
   - `host.shell.openPath()`，前提是声明 `shell.openPath`
+  - `host.runTool({ toolId, input })`，用于触发 `tools[]` 中声明的 runner
 
 这条边界必须始终保持清楚：页面 host 是页面渲染时的宿主辅助能力，不是插件通用 runtime。
 未声明的 tool host 能力会在运行时被直接拒绝，不再静默返回空结果。
@@ -170,6 +184,8 @@ tool runner 的上下文会在 `PluginContext` 基础上增加：
 `process.execBundled` 只用于执行 manifest 已声明的 `bundledResources`。
 同时还要求 manifest 明确声明 `toolRuntimePermissions: ["process.execBundled"]`。
 未声明权限时会抛出 `PLUGIN_TOOL_PERMISSION_DENIED`；宿主缺少 bundled process runtime 时会抛出 `PLUGIN_TOOL_HOST_UNAVAILABLE`。
+
+tool 页面不直接执行 bundled process。页面通过 `host.runTool(...)` 启动 runner，runner 再通过 `context.process.execBundled(...)` 执行受声明保护的资源。
 
 ## 7. 权限与守卫
 

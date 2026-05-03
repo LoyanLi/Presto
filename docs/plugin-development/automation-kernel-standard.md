@@ -126,7 +126,9 @@ workflow definition 当前通过 `$ref` 引用：
 当前官方参考：
 
 - `splitStereoToMono` automation type
-- `automation.splitStereoToMono.execute` capability
+- `daw.automation.splitStereoToMono.execute` capability
+- `batchAraBackupRender` automation type
+- `daw.track.selection.get`、`daw.track.rename`、`daw.track.hidden.set`、`daw.track.inactive.set` 这类短链路 track capability
 
 这说明当前 automation 插件标准不需要自定义 workflow definition。
 
@@ -148,3 +150,5 @@ workflow definition 当前通过 `$ref` 引用：
   - 单主步骤 job workflow 参考
 - `official.split-stereo-to-mono-automation`
   - 单 capability automation 参考
+- `official.batch-ara-backup-automation`
+  - 带 options schema 的短链路 automation 参考

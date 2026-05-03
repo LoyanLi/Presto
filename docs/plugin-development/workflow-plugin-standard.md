@@ -51,6 +51,13 @@ my-workflow-plugin/
 - `workflowDefinition`
 - `requiredCapabilities`
 
+并且当前必须满足：
+
+- `supportedDaws: ["pro_tools"]`
+- `uiRuntime: "react18"`
+- 所有页面 `mount` 都是 `workspace`
+- workflow definition 中每个 `usesCapability` 都已经写入 `requiredCapabilities`
+
 按现有官方插件的标准，通常还会具备：
 
 - `styleEntry`
@@ -141,6 +148,29 @@ workflow 插件入口模块当前标准形态是：
 - 条件执行
 - 批量迭代
 - 中间结果引用
+
+最小结构示例：
+
+```json
+{
+  "workflowId": "com.example.simple-workflow.run",
+  "version": "1.0.0",
+  "inputSchemaId": "com.example.simple-workflow.run.v1",
+  "steps": [
+    {
+      "stepId": "start-job",
+      "usesCapability": "daw.export.run.start",
+      "input": {
+        "presetId": { "$ref": "input.presetId" }
+      },
+      "saveAs": "exportJob",
+      "awaitJob": true
+    }
+  ]
+}
+```
+
+这里的 `daw.export.run.start` 必须同时出现在 manifest 的 `requiredCapabilities` 中。
 
 ## 8. Settings 标准
 

@@ -9,6 +9,7 @@
 | `official.import-workflow` | `workflow` | 有 | 有 | 有 | 复杂 workflow、批量处理、settings、纯逻辑分层 |
 | `official.export-workflow` | `workflow` | 有 | 有 | 有 | 轻量 workflow、快照管理、导出 job 流程 |
 | `official.split-stereo-to-mono-automation` | `automation` | 无 | 无 | 无 | 最小 automation、单 capability 自动化入口 |
+| `official.batch-ara-backup-automation` | `automation` | 无 | 无 | 无 | 带 options schema 的短链路 automation、多 capability runner |
 | `official.atmos-video-mux-tool` | `tool` | 有（`Tools`） | 扩展管理独立于 workflow | 无 | 独立工具页、bundled process、本地工具链编排 |
 | `official.time-calculator-tool` | `tool` | 有（`Tools`） | 扩展管理独立于 workflow | 无 | 纯前端工具页、本地化、轻量计算逻辑 |
 
@@ -109,7 +110,32 @@
 
 如果新插件是独立工具型能力，应优先参考它。
 
-## 6. 标准映射建议
+## 6. `official.batch-ara-backup-automation`
+
+路径：
+
+- `plugins/official/batch-ara-backup-automation/manifest.json`
+- `plugins/official/batch-ara-backup-automation/dist/entry.mjs`
+
+这个插件展示了比 split stereo 更完整、但仍属于 automation 范围的短链路标准：
+
+- 没有页面
+- 没有 settings
+- 没有 workflow definition
+- `automationItems[*].optionsSchema` 使用 boolean options
+- `runnerExport` 指向入口模块中的 automation runner
+- runner 执行多项 track capability，但链路仍短，不需要工作区页面和 job 追踪
+
+它当前覆盖这些能力：
+
+- `daw.track.selection.get`
+- `daw.track.rename`
+- `daw.track.hidden.set`
+- `daw.track.inactive.set`
+
+如果新插件是宿主自动化卡片，但需要几个简单选项和短链路 capability 调用，应优先参考它。
+
+## 7. 标准映射建议
 
 ### 想写复杂 workflow
 
@@ -130,6 +156,14 @@
 先看：
 
 1. `official.split-stereo-to-mono-automation`
+2. `official.batch-ara-backup-automation`
+
+### 想写带简单选项的 automation
+
+先看：
+
+1. `official.batch-ara-backup-automation`
+2. `official.split-stereo-to-mono-automation`
 
 ### 想写工具型插件（Tool）
 
@@ -138,7 +172,7 @@
 1. `official.atmos-video-mux-tool`
 2. `official.time-calculator-tool`
 
-## 7. `official.time-calculator-tool`
+## 8. `official.time-calculator-tool`
 
 路径：
 
@@ -164,7 +198,7 @@
 - 不依赖 DAW、文件系统、shell 或 bundled process 的 tool 插件
 - 需要插件自带本地化和轻量测试的独立工具页
 
-## 8. 不应该参考什么
+## 9. 不应该参考什么
 
 以下内容不要当成插件正式标准：
 

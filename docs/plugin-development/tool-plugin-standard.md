@@ -57,10 +57,13 @@
 - `fs.readdir(path)`，要求 `toolRuntimePermissions` 包含 `fs.list`
 - `fs.deleteFile(path)`，要求 `toolRuntimePermissions` 包含 `fs.delete`
 - `shell.openPath(path)`，要求 `toolRuntimePermissions` 包含 `shell.openPath`
+- `runTool({ toolId, input })`，用于触发 `tools[]` 中声明的 runner
 
 这些能力只属于页面 host，不是 `activate(context)` 通用 runtime。
 未声明的页面 host 能力会在运行时被直接拒绝。
 如果 manifest 已声明，但当前宿主壳没有提供对应 runtime，则会返回 `PLUGIN_TOOL_HOST_UNAVAILABLE`，而不是伪造空结果。
+
+页面不直接执行 `process.execBundled(...)`。页面应通过 `host.runTool(...)` 把输入交给 runner，由 runner 在受控上下文里执行 bundled process。
 
 ## 4. runner 能力边界
 
@@ -83,6 +86,17 @@ type PluginToolRunner = (
 `process.execBundled` 只能执行 manifest 已声明的 `bundledResources`。
 同时要求 `toolRuntimePermissions` 明确包含 `process.execBundled`。
 未声明权限时错误码是 `PLUGIN_TOOL_PERMISSION_DENIED`；宿主缺少 bundled process runtime 时错误码是 `PLUGIN_TOOL_HOST_UNAVAILABLE`。
+
+runner 返回值当前只表达业务摘要和结果：
+
+```ts
+interface PluginToolRunResult {
+  summary?: string
+  result?: unknown
+}
+```
+
+宿主会把 runner 执行包装成 job。页面从 `host.runTool(...)` 得到的是 `{ jobId, job }`，不是 runner 的原始返回值。
 
 ## 5. Settings 管理边界
 
