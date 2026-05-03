@@ -203,8 +203,9 @@ tell application "System Events"
   end tell
 end tell
 tell application "Finder"
-  set bounds of dmgWindow to {120, 120, ${120 + dmgWindowWidth}, ${120 + dmgWindowHeight}}
-  set iconViewOptions to icon view options of dmgWindow
+  set current view of container window of dmgFolder to icon view
+  set bounds of container window of dmgFolder to {120, 120, ${120 + dmgWindowWidth}, ${120 + dmgWindowHeight}}
+  set iconViewOptions to icon view options of container window of dmgFolder
   set arrangement of iconViewOptions to not arranged
   set icon size of iconViewOptions to 96
   set background picture of iconViewOptions to file ".background:dmg-background.png" of dmgFolder
