@@ -1,0 +1,31 @@
+/* Auto-generated from contracts-manifest/app-config-defaults.json; do not edit by hand. */
+import type { AppConfig } from '../capabilities/responses'
+
+export const DEFAULT_APP_CONFIG = {
+  "categories": [],
+  "silenceProfile": {
+    "thresholdDb": -40,
+    "minStripMs": 50,
+    "minSilenceMs": 250,
+    "startPadMs": 0,
+    "endPadMs": 0
+  },
+  "aiNaming": {
+    "enabled": false,
+    "baseUrl": "",
+    "model": "",
+    "timeoutSeconds": 30,
+    "keychainService": "openai",
+    "keychainAccount": "api_key"
+  },
+  "uiPreferences": {
+    "logsCollapsedByDefault": true,
+    "followSystemTheme": true,
+    "developerModeEnabled": true
+  },
+  "hostPreferences": {
+    "language": "system",
+    "dawTarget": "pro_tools",
+    "includePrereleaseUpdates": false
+  }
+} as const satisfies AppConfig

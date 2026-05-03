@@ -7,39 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..domain.capabilities import DEFAULT_DAW_TARGET
+from ..application.app_config_defaults_generated import create_default_app_config
 from ..domain.ports import ConfigStorePort
-
-
-def create_default_app_config() -> dict[str, Any]:
-    return {
-        "categories": [],
-        "silenceProfile": {
-            "thresholdDb": -40,
-            "minStripMs": 50,
-            "minSilenceMs": 250,
-            "startPadMs": 0,
-            "endPadMs": 0,
-        },
-        "aiNaming": {
-            "enabled": False,
-            "baseUrl": "",
-            "model": "",
-            "timeoutSeconds": 30,
-            "keychainService": "openai",
-            "keychainAccount": "api_key",
-        },
-        "uiPreferences": {
-            "logsCollapsedByDefault": True,
-            "followSystemTheme": True,
-            "developerModeEnabled": True,
-        },
-        "hostPreferences": {
-            "language": "system",
-            "dawTarget": DEFAULT_DAW_TARGET,
-            "includePrereleaseUpdates": False,
-        },
-    }
 
 
 @dataclass

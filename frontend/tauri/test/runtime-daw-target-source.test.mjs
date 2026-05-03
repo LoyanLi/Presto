@@ -25,7 +25,7 @@ test('backend.daw-target.set restarts the backend after switching the target', a
   assert.doesNotMatch(runtimeSource, /const DEFAULT_DAW_TARGET:/)
   assert.doesNotMatch(runtimeSource, /const SUPPORTED_DAW_TARGETS:/)
   assert.match(initializeBlock, /let initial_backend_target_daw = load_initial_backend_target_daw\(&app\)\?;/)
-  assert.match(initializeBlock, /target_daw: initial_backend_target_daw,/)
+  assert.match(initializeBlock, /BackendSupervisorState::new\(\s*DEFAULT_PORT,\s*initial_backend_target_daw,\s*\)/)
   assert.match(targetBlock, /if !SUPPORTED_DAW_TARGETS\.contains\(&next_target\) \{/)
   assert.match(targetBlock, /persist_backend_target_daw_preference\(state, next_target\)\?;/)
   assert.match(source, /let config_path = app_data_dir\(state\)\?\.join\("config\.json"\);/)

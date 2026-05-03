@@ -22,6 +22,6 @@ test('tauri runtime initializes backend target daw from persisted desktop config
   assert.match(source, /hostPreferences/)
   assert.match(source, /dawTarget/)
   assert.match(initializeBlock, /let initial_backend_target_daw = load_initial_backend_target_daw\(&app\)\?/)
-  assert.match(initializeBlock, /target_daw: initial_backend_target_daw/)
+  assert.match(initializeBlock, /BackendSupervisorState::new\(\s*DEFAULT_PORT,\s*initial_backend_target_daw,\s*\)/)
   assert.match(source, /SUPPORTED_DAW_TARGETS\.contains\(&target\)/)
 })

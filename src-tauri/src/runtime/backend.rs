@@ -9,10 +9,13 @@ use std::{
     time::Duration,
 };
 
+use super::app_config_defaults_generated::{
+    default_runtime_config, DAW_TARGET_KEY, HOST_PREFERENCES_KEY,
+};
 use super::{
     app_data_dir, append_execution_log_from_raw_line, append_log, backend_root,
     log_backend_message, resolve_backend_python_bin, resolve_bundled_python_home, unique_suffix,
-    RuntimeState, DEFAULT_DAW_TARGET, DEFAULT_PORT, EXECUTION_LOG_PREFIX, SUPPORTED_DAW_TARGETS,
+    RuntimeState, DEFAULT_PORT, EXECUTION_LOG_PREFIX, SUPPORTED_DAW_TARGETS,
 };
 
 struct HttpJsonResponse {
@@ -182,37 +185,6 @@ fn write_runtime_config(config_path: &Path, config: &Value) -> Result<(), String
     std::fs::write(config_path, format!("{raw}\n")).map_err(|error| error.to_string())
 }
 
-fn default_runtime_config() -> Value {
-    json!({
-        "categories": [],
-        "silenceProfile": {
-            "thresholdDb": -40,
-            "minStripMs": 50,
-            "minSilenceMs": 250,
-            "startPadMs": 0,
-            "endPadMs": 0,
-        },
-        "aiNaming": {
-            "enabled": false,
-            "baseUrl": "",
-            "model": "",
-            "timeoutSeconds": 30,
-            "keychainService": "openai",
-            "keychainAccount": "api_key",
-        },
-        "uiPreferences": {
-            "logsCollapsedByDefault": true,
-            "followSystemTheme": true,
-            "developerModeEnabled": true,
-        },
-        "hostPreferences": {
-            "language": "system",
-            "dawTarget": DEFAULT_DAW_TARGET,
-            "includePrereleaseUpdates": false,
-        },
-    })
-}
-
 fn update_backend_target_daw_preference_config(
     current_config: Value,
     next_target: &str,
@@ -222,17 +194,17 @@ fn update_backend_target_daw_preference_config(
         .cloned()
         .ok_or_else(|| "Invalid config payload.".to_string())?;
     let current_host_preferences = next_config
-        .get("hostPreferences")
+        .get(HOST_PREFERENCES_KEY)
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
     let mut next_host_preferences = current_host_preferences;
     next_host_preferences.insert(
-        "dawTarget".to_string(),
+        DAW_TARGET_KEY.to_string(),
         Value::String(next_target.to_string()),
     );
     next_config.insert(
-        "hostPreferences".to_string(),
+        HOST_PREFERENCES_KEY.to_string(),
         Value::Object(next_host_preferences),
     );
     Ok(Value::Object(next_config))

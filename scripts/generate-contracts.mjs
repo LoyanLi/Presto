@@ -12,6 +12,7 @@ const manifestDir = path.join(repoRoot, 'packages', 'contracts-manifest')
 const capabilityManifestPath = path.join(manifestDir, 'capabilities.json')
 const dawTargetsManifestPath = path.join(manifestDir, 'daw-targets.json')
 const schemasPath = path.join(manifestDir, 'schemas.json')
+const appConfigDefaultsPath = path.join(manifestDir, 'app-config-defaults.json')
 
 const readJson = (targetPath) => JSON.parse(readFileSync(targetPath, 'utf8'))
 const ensureDir = (targetPath) => mkdirSync(targetPath, { recursive: true })
@@ -50,6 +51,7 @@ const ptslSemanticCapabilities = loadPtslSemanticCapabilities()
 const capabilities = [...manifestCapabilities, ...ptslSemanticCapabilities]
 const dawTargets = readJson(dawTargetsManifestPath)
 const schemas = readJson(schemasPath)
+const appConfigDefaults = readJson(appConfigDefaultsPath)
 
 if (!Array.isArray(manifestCapabilities)) {
   throw new Error('contracts-manifest/capabilities.json must be an array')
@@ -59,6 +61,9 @@ if (!dawTargets || typeof dawTargets !== 'object' || Array.isArray(dawTargets)) 
 }
 if (!schemas || typeof schemas !== 'object') {
   throw new Error('contracts-manifest/schemas.json must be an object')
+}
+if (!appConfigDefaults || typeof appConfigDefaults !== 'object' || Array.isArray(appConfigDefaults)) {
+  throw new Error('contracts-manifest/app-config-defaults.json must be an object')
 }
 
 const capabilityIds = capabilities.map((capability) => String(capability.id || '').trim())
@@ -105,6 +110,10 @@ const SUPPORTED_DAW_TARGETS = stringArray(dawTargets.supported, 'contracts-manif
 const RESERVED_DAW_TARGET_SET = new Set(RESERVED_DAW_TARGETS)
 const SUPPORTED_DAW_TARGET_SET = new Set(SUPPORTED_DAW_TARGETS)
 const DEFAULT_DAW_TARGET = SUPPORTED_DAW_TARGETS[0]
+
+if (appConfigDefaults.hostPreferences?.dawTarget !== DEFAULT_DAW_TARGET) {
+  throw new Error('app config default dawTarget must match the generated default DAW target')
+}
 
 for (const supportedTarget of SUPPORTED_DAW_TARGETS) {
   if (!RESERVED_DAW_TARGET_SET.has(supportedTarget)) {
@@ -382,6 +391,19 @@ export const PTSL_SEMANTIC_CAPABILITY_IDS = ${JSON.stringify(ptslSemanticIds)} a
   writeFileSync(path.join(outDir, 'capabilityIds.ts'), content, 'utf8')
 }
 
+function generateTsAppConfigDefaults() {
+  const outDir = path.join(repoRoot, 'packages', 'contracts', 'src', 'generated')
+  ensureDir(outDir)
+
+  const content = `/* Auto-generated from contracts-manifest/app-config-defaults.json; do not edit by hand. */
+import type { AppConfig } from '../capabilities/responses'
+
+export const DEFAULT_APP_CONFIG = ${JSON.stringify(appConfigDefaults, null, 2)} as const satisfies AppConfig
+`
+
+  writeFileSync(path.join(outDir, 'appConfigDefaults.ts'), content, 'utf8')
+}
+
 function generatePyCapabilityCatalog() {
   const outDir = path.join(repoRoot, 'backend', 'presto', 'application', 'capabilities')
   ensureDir(outDir)
@@ -481,6 +503,29 @@ SUPPORTED_DAW_TARGETS: tuple[DawTarget, ...] = ${toPyTuple(SUPPORTED_DAW_TARGETS
   writeFileSync(path.join(outDir, 'daw_targets_generated.py'), content, 'utf8')
 }
 
+function generatePyAppConfigDefaults() {
+  const outDir = path.join(repoRoot, 'backend', 'presto', 'application')
+  ensureDir(outDir)
+
+  const content = `"""Auto-generated from contracts-manifest/app-config-defaults.json; do not edit by hand."""
+from __future__ import annotations
+
+from copy import deepcopy
+import json
+from typing import Any
+
+
+_DEFAULT_APP_CONFIG_JSON = ${JSON.stringify(JSON.stringify(appConfigDefaults, null, 2))}
+DEFAULT_APP_CONFIG: dict[str, Any] = json.loads(_DEFAULT_APP_CONFIG_JSON)
+
+
+def create_default_app_config() -> dict[str, Any]:
+    return deepcopy(DEFAULT_APP_CONFIG)
+`
+
+  writeFileSync(path.join(outDir, 'app_config_defaults_generated.py'), content, 'utf8')
+}
+
 function generateRustDawTargets() {
   const outDir = path.join(repoRoot, 'src-tauri', 'src', 'runtime')
   ensureDir(outDir)
@@ -494,17 +539,42 @@ pub(super) const SUPPORTED_DAW_TARGETS: [&str; ${SUPPORTED_DAW_TARGETS.length}] 
   writeFileSync(path.join(outDir, 'daw_targets_generated.rs'), content, 'utf8')
 }
 
+function generateRustAppConfigDefaults() {
+  const outDir = path.join(repoRoot, 'src-tauri', 'src', 'runtime')
+  ensureDir(outDir)
+
+  const content = `// Auto-generated from contracts-manifest/app-config-defaults.json; do not edit by hand.
+pub(super) const HOST_PREFERENCES_KEY: &str = "hostPreferences";
+pub(super) const DAW_TARGET_KEY: &str = "dawTarget";
+
+pub(super) fn default_runtime_config() -> serde_json::Value {
+    serde_json::from_str(
+        r###"${JSON.stringify(appConfigDefaults, null, 2)}"###,
+    )
+    .expect("generated app config defaults must be valid JSON")
+}
+`
+
+  writeFileSync(path.join(outDir, 'app_config_defaults_generated.rs'), content, 'utf8')
+}
+
 generateTsDawTargets()
 generateTsCapabilityRegistry()
 generateTsCapabilityIds()
+generateTsAppConfigDefaults()
 generatePyDawTargets()
+generatePyAppConfigDefaults()
 generatePyCapabilityCatalog()
 generateRustDawTargets()
+generateRustAppConfigDefaults()
 
 console.log('Generated contracts artifacts from manifest:')
 console.log(' - packages/contracts/src/generated/dawTargets.ts')
 console.log(' - packages/contracts/src/generated/capabilityRegistry.ts')
 console.log(' - packages/contracts/src/generated/capabilityIds.ts')
+console.log(' - packages/contracts/src/generated/appConfigDefaults.ts')
 console.log(' - backend/presto/domain/daw_targets_generated.py')
+console.log(' - backend/presto/application/app_config_defaults_generated.py')
 console.log(' - backend/presto/application/capabilities/catalog_generated.py')
 console.log(' - src-tauri/src/runtime/daw_targets_generated.rs')
+console.log(' - src-tauri/src/runtime/app_config_defaults_generated.rs')

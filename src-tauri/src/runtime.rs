@@ -1,8 +1,10 @@
+mod app_config_defaults_generated;
 mod backend;
 mod daw_targets_generated;
 mod mobile_progress;
 mod plugins;
 
+use app_config_defaults_generated::{DAW_TARGET_KEY, HOST_PREFERENCES_KEY};
 use daw_targets_generated::{DEFAULT_DAW_TARGET, SUPPORTED_DAW_TARGETS};
 use serde_json::{json, Map, Value};
 use std::{
@@ -330,9 +332,9 @@ fn load_initial_backend_target_daw_from_contents(raw: &str) -> String {
         Err(_) => return DEFAULT_DAW_TARGET.to_string(),
     };
     let target = parsed
-        .get("hostPreferences")
+        .get(HOST_PREFERENCES_KEY)
         .and_then(Value::as_object)
-        .and_then(|host_preferences| host_preferences.get("dawTarget"))
+        .and_then(|host_preferences| host_preferences.get(DAW_TARGET_KEY))
         .and_then(Value::as_str)
         .unwrap_or_default();
 
