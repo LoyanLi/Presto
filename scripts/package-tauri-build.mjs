@@ -186,11 +186,14 @@ async function configureDmgFinderWindow(stagingDir) {
 tell application "Finder"
   set dmgFolder to POSIX file "${escapeAppleScriptText(stagingDir)}" as alias
   open dmgFolder
-  set current view of container window of dmgFolder to icon view
-  set toolbar visible of container window of dmgFolder to false
-  set statusbar visible of container window of dmgFolder to false
-  set pathbar visible of container window of dmgFolder to false
+  delay 1
   activate
+  set dmgWindow to front window
+  set target of dmgWindow to dmgFolder
+  set current view of dmgWindow to icon view
+  set toolbar visible of dmgWindow to false
+  set statusbar visible of dmgWindow to false
+  set pathbar visible of dmgWindow to false
 end tell
 tell application "System Events"
   tell process "Finder"
@@ -200,8 +203,8 @@ tell application "System Events"
   end tell
 end tell
 tell application "Finder"
-  set bounds of container window of dmgFolder to {120, 120, ${120 + dmgWindowWidth}, ${120 + dmgWindowHeight}}
-  set iconViewOptions to icon view options of container window of dmgFolder
+  set bounds of dmgWindow to {120, 120, ${120 + dmgWindowWidth}, ${120 + dmgWindowHeight}}
+  set iconViewOptions to icon view options of dmgWindow
   set arrangement of iconViewOptions to not arranged
   set icon size of iconViewOptions to 96
   set background picture of iconViewOptions to file ".background:dmg-background.png" of dmgFolder
@@ -210,7 +213,7 @@ tell application "Finder"
   set position of item "${quarantineBypassCommandName}" of dmgFolder to {300, 455}
   update dmgFolder without registering applications
   delay 1
-  close container window of dmgFolder
+  close dmgWindow
 end tell
 `
 
