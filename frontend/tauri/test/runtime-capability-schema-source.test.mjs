@@ -16,3 +16,11 @@ test('sdk runtime backend capability metadata uses schema ref objects instead of
   assert.doesNotMatch(source, /requestSchema: string/)
   assert.doesNotMatch(source, /responseSchema: string/)
 })
+
+test('tauri runtime preserves full backend capability metadata', async () => {
+  const source = await readFile(path.join(repoRoot, 'src-tauri/src/runtime/backend.rs'), 'utf8')
+
+  assert.match(source, /"workflowScope": raw\.get\("workflow_scope"\)/)
+  assert.match(source, /"portability": raw\.get\("portability"\)/)
+  assert.match(source, /"implementations": raw\.get\("implementations"\)/)
+})

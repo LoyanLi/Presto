@@ -778,9 +778,12 @@ fn normalize_capability_definition(raw: &Value) -> Value {
         "requestSchema": raw.get("request_schema").cloned().unwrap_or(Value::Null),
         "responseSchema": raw.get("response_schema").cloned().unwrap_or(Value::Null),
         "dependsOn": raw.get("depends_on").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
+        "workflowScope": raw.get("workflow_scope").cloned().unwrap_or(Value::Null),
+        "portability": raw.get("portability").cloned().unwrap_or(Value::Null),
         "supportedDaws": raw.get("supported_daws").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
         "canonicalSource": raw.get("canonical_source").cloned().unwrap_or(Value::Null),
         "fieldSupport": field_support,
+        "implementations": raw.get("implementations").cloned().unwrap_or_else(|| Value::Object(Map::new())),
         "handler": raw.get("handler").cloned().unwrap_or(Value::Null),
         "emitsEvents": raw.get("emits_events").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
     })
