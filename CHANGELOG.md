@@ -20,7 +20,7 @@
 - 收口 Rust runtime 根文件职责：backend supervisor state、插件候选 / workflow definition 引用和 mobile progress state 下沉到各自领域模块，`runtime.rs` 保持根装配、共享 helper 和 operation dispatch。
 - 默认 app config 改由 `packages/contracts-manifest/app-config-defaults.json` 生成 TypeScript、Python、Rust 三端产物，避免 `hostPreferences` / `uiPreferences` 默认结构在多处手写漂移。
 - 移除 `packages/contracts` 与 `packages/sdk-runtime` 的包根重复转发入口，workspace package 公开入口统一以 `package.json#exports` 为准。
-- 本次只更新版本号与发布文档，暂不生成新的安装包；`0.3.12` 安装包校验值将在实际打包后补充。
+- `0.3.12` 双架构安装包已重新生成并补齐校验值；DMG 已应用 Finder 安装窗口样式，`arm64` 为 `42ce63ca8062623d056d30afabcc03c8f1ade538b9d33f0eafd145cbf54d7278`，`x64` 为 `c19dd04b6e31634427af7eee448d24e21dfe352e1e90a5c29c73dd4733a7dff3`。
 
 
 ## [0.3.11](docs/releases/v0.3.11-release.md) - 2026-04-30
