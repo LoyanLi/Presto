@@ -1306,6 +1306,82 @@ test('snapshot detail modal renders redesigned modal sections in the live page m
   assert.match(markup, />Status<\/th>/)
 })
 
+test('creating a snapshot refreshes live session tracks before storing track state', async () => {
+  const staleTrack = {
+    id: 'stale-track',
+    name: 'Old cached vocal',
+    isMuted: false,
+    isSoloed: false,
+    type: 'audio',
+  }
+  const liveTrack = {
+    id: 'live-track',
+    name: 'Live muted vocal',
+    isMuted: true,
+    isSoloed: false,
+    type: 'audio',
+  }
+  const savedSnapshots = []
+  const context = createPluginContext()
+  context.presto.daw.connection.getStatus = async () => ({ connected: true })
+  context.presto.session.getInfo = async () => ({
+    session: {
+      sessionName: 'Live Session',
+      sessionPath: '/Sessions/Live Session.ptx',
+      sampleRate: 48000,
+      bitDepth: 24,
+    },
+  })
+  context.presto.track.list = async () => ({ tracks: [liveTrack] })
+  context.storage.get = async () => []
+  context.storage.set = async (_key, value) => {
+    savedSnapshots.push(value)
+  }
+  const { pageModule, stateUpdates, restore } = await loadPageModuleWithHookHarness({
+    1: 2,
+    2: {
+      loading: false,
+      connectionState: 'connected',
+      session: {
+        sessionName: 'Cached Session',
+        sessionPath: '/Sessions/Cached Session.ptx',
+        sampleRate: 48000,
+        bitDepth: 24,
+      },
+      tracks: [staleTrack],
+      error: '',
+    },
+    4: [],
+    7: 'Live Snapshot',
+    18: true,
+  })
+
+  try {
+    const tree = pageModule.ExportWorkflowPage({
+      context,
+      params: {},
+      searchParams: new URLSearchParams(),
+    })
+    const createButton = findElement(
+      tree,
+      (node) => typeof node.type === 'function' && getElementText(node.props?.children) === 'Create',
+    )
+
+    assert.ok(createButton, 'expected create snapshot action')
+    createButton.props.onClick()
+    await new Promise((resolve) => setImmediate(resolve))
+
+    const snapshotUpdate = stateUpdates.filter((update) => update.index === 4 && Array.isArray(update.value)).at(-1)
+    assert.ok(snapshotUpdate, 'expected snapshot creation to update snapshot state')
+    assert.equal(snapshotUpdate.value[0]?.trackStates[0]?.trackName, 'Live muted vocal')
+    assert.equal(snapshotUpdate.value[0]?.trackStates[0]?.is_muted, true)
+    assert.notEqual(snapshotUpdate.value[0]?.trackStates[0]?.trackName, 'Old cached vocal')
+    assert.equal(savedSnapshots[0]?.[0]?.trackStates[0]?.trackName, 'Live muted vocal')
+  } finally {
+    restore()
+  }
+})
+
 test('page source removes preset workflow affordances from the export page', async () => {
   const pageSource = await readFile(new URL('../dist/ExportWorkflowPage.mjs', import.meta.url), 'utf8')
 

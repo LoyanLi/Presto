@@ -1574,24 +1574,67 @@ export function ExportWorkflowPage({ context, host }) {
     [context.storage, sessionModel.session],
   )
 
+  const loadLiveSnapshotSource = useCallback(async () => {
+    const connection = await context.presto.daw.connection.getStatus()
+    const connectionState = resolveWorkflowConnectionState(Boolean(connection.connected))
+    if (!connection.connected) {
+      setSessionModel({
+        loading: false,
+        connectionState,
+        session: null,
+        tracks: [],
+        error: '',
+      })
+      throw new Error('Connect to Pro Tools before creating snapshots.')
+    }
+
+    const sessionInfo = (await context.presto.session.getInfo()).session
+    const tracks = (await context.presto.track.list()).tracks || []
+    const loadedSnapshots = await loadSnapshotsFromStorage(context.storage, sessionInfo)
+    setSessionModel({
+      loading: false,
+      connectionState,
+      session: sessionInfo,
+      tracks,
+      error: '',
+    })
+    setSnapshots(loadedSnapshots.map(normalizeSnapshot))
+    return {
+      sessionInfo,
+      tracks,
+      snapshots: loadedSnapshots.map(normalizeSnapshot),
+    }
+  }, [context.presto.daw.connection, context.presto.session, context.presto.track, context.storage])
+
   const handleCreateSnapshot = useCallback(async () => {
-    const validationMessage = validateSnapshotName(newSnapshotName, snapshots)
+    let liveState
+    try {
+      liveState = await loadLiveSnapshotSource()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, 'Failed to refresh Pro Tools state before creating the snapshot.'))
+      return
+    }
+
+    const validationMessage = validateSnapshotName(newSnapshotName, liveState.snapshots)
     if (validationMessage) {
       setErrorMessage(validationMessage)
       return
     }
-    if (sessionModel.tracks.length === 0) {
+    if (liveState.tracks.length === 0) {
       setErrorMessage('Refresh the track list before creating snapshots.')
       return
     }
-    const nextSnapshot = createSnapshotFromTracks(newSnapshotName, sessionModel.tracks)
-    const nextSnapshots = [...snapshots, nextSnapshot]
+    const nextSnapshot = createSnapshotFromTracks(newSnapshotName, liveState.tracks)
+    const nextSnapshots = [...liveState.snapshots, nextSnapshot]
     setSnapshots(nextSnapshots)
     setNewSnapshotName('')
     setIsCreatingSnapshot(false)
     setErrorMessage('')
-    await persistSnapshots(nextSnapshots)
-  }, [newSnapshotName, persistSnapshots, sessionModel.tracks, snapshots])
+    const saved = await saveSnapshotsToStorage(context.storage, liveState.sessionInfo, nextSnapshots)
+    if (!saved) {
+      setErrorMessage('Failed to save snapshots to the current session.')
+    }
+  }, [context.storage, loadLiveSnapshotSource, newSnapshotName])
 
   const handleDeleteSnapshot = useCallback(
     async (snapshotId) => {
