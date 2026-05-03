@@ -10,9 +10,10 @@ use std::{
 };
 
 use super::{
-    app_data_dir, append_execution_log_from_raw_line, append_log, backend_root, log_backend_message,
-    resolve_backend_python_bin, resolve_bundled_python_home, BackendSupervisorState, RuntimeState,
-    DEFAULT_PORT, EXECUTION_LOG_PREFIX, SUPPORTED_DAW_TARGETS, unique_suffix,
+    app_data_dir, append_execution_log_from_raw_line, append_log, backend_root,
+    log_backend_message, resolve_backend_python_bin, resolve_bundled_python_home, unique_suffix,
+    BackendSupervisorState, RuntimeState, DEFAULT_DAW_TARGET, DEFAULT_PORT, EXECUTION_LOG_PREFIX,
+    SUPPORTED_DAW_TARGETS,
 };
 
 struct HttpJsonResponse {
@@ -132,21 +133,67 @@ fn persist_backend_target_daw_preference(
     state: &Arc<RuntimeState>,
     next_target: &str,
 ) -> Result<(), String> {
-    let request_suffix = unique_suffix();
-    let get_config = invoke_backend_capability(
-        state,
-        json!({
-            "requestId": format!("backend-set-target-daw-get-{request_suffix}"),
-            "capability": "config.get",
-            "payload": {},
-            "meta": runtime_meta("tauri-runtime"),
-        }),
-    )?;
-    let current_config = extract_capability_data(get_config, "Failed to load config.")?
-        .get("config")
-        .cloned()
-        .ok_or_else(|| "Invalid config payload.".to_string())?;
+    let config_path = app_data_dir(state)?.join("config.json");
+    let current_config = read_runtime_config(&config_path)?;
+    let next_config = update_backend_target_daw_preference_config(current_config, next_target)?;
+    write_runtime_config(&config_path, &next_config)
+}
 
+fn read_runtime_config(config_path: &Path) -> Result<Value, String> {
+    if !config_path.exists() {
+        return Ok(default_runtime_config());
+    }
+    let raw = std::fs::read_to_string(config_path).map_err(|error| error.to_string())?;
+    let parsed = serde_json::from_str::<Value>(&raw).map_err(|error| error.to_string())?;
+    if !parsed.is_object() {
+        return Err("config_file_must_contain_json_object".to_string());
+    }
+    Ok(parsed)
+}
+
+fn write_runtime_config(config_path: &Path, config: &Value) -> Result<(), String> {
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
+    std::fs::write(config_path, format!("{raw}\n")).map_err(|error| error.to_string())
+}
+
+fn default_runtime_config() -> Value {
+    json!({
+        "categories": [],
+        "silenceProfile": {
+            "thresholdDb": -40,
+            "minStripMs": 50,
+            "minSilenceMs": 250,
+            "startPadMs": 0,
+            "endPadMs": 0,
+        },
+        "aiNaming": {
+            "enabled": false,
+            "baseUrl": "",
+            "model": "",
+            "timeoutSeconds": 30,
+            "keychainService": "openai",
+            "keychainAccount": "api_key",
+        },
+        "uiPreferences": {
+            "logsCollapsedByDefault": true,
+            "followSystemTheme": true,
+            "developerModeEnabled": true,
+        },
+        "hostPreferences": {
+            "language": "system",
+            "dawTarget": DEFAULT_DAW_TARGET,
+            "includePrereleaseUpdates": false,
+        },
+    })
+}
+
+fn update_backend_target_daw_preference_config(
+    current_config: Value,
+    next_target: &str,
+) -> Result<Value, String> {
     let mut next_config = current_config
         .as_object()
         .cloned()
@@ -157,25 +204,15 @@ fn persist_backend_target_daw_preference(
         .cloned()
         .unwrap_or_default();
     let mut next_host_preferences = current_host_preferences;
-    next_host_preferences.insert("dawTarget".to_string(), Value::String(next_target.to_string()));
+    next_host_preferences.insert(
+        "dawTarget".to_string(),
+        Value::String(next_target.to_string()),
+    );
     next_config.insert(
         "hostPreferences".to_string(),
         Value::Object(next_host_preferences),
     );
-
-    invoke_backend_capability(
-        state,
-        json!({
-            "requestId": format!("backend-set-target-daw-update-{request_suffix}"),
-            "capability": "config.update",
-            "payload": {
-                "config": next_config,
-            },
-            "meta": runtime_meta("tauri-runtime"),
-        }),
-    )?;
-
-    Ok(())
+    Ok(Value::Object(next_config))
 }
 
 pub(super) fn set_backend_developer_mode(
@@ -446,7 +483,8 @@ fn start_backend(state: &Arc<RuntimeState>) -> Result<(), String> {
                 if let Ok(mut backend) = state_clone.backend_state.lock() {
                     backend.logs_count += 1;
                     if level == "error" {
-                        backend.last_error = Some(strip_ansi_escape_sequences(trimmed).trim().to_string());
+                        backend.last_error =
+                            Some(strip_ansi_escape_sequences(trimmed).trim().to_string());
                     }
                 }
                 let _ = append_log(
@@ -841,7 +879,8 @@ fn state_version() -> &'static str {
 mod tests {
     use super::{
         backend_env_vars, backend_error_response_to_capability_response,
-        backend_should_restart_after_healthcheck, classify_backend_stderr_line, HttpJsonResponse,
+        backend_should_restart_after_healthcheck, classify_backend_stderr_line,
+        update_backend_target_daw_preference_config, HttpJsonResponse,
     };
     use serde_json::{json, Value};
     use std::path::Path;
@@ -927,6 +966,51 @@ mod tests {
         assert_eq!(
             message,
             "backend.stderr INFO:     Uvicorn running on http://127.0.0.1:18500"
+        );
+    }
+
+    #[test]
+    fn target_daw_preference_update_preserves_existing_config() {
+        let next_config = update_backend_target_daw_preference_config(
+            json!({
+                "categories": [{"id": "dialog"}],
+                "uiPreferences": {
+                    "developerModeEnabled": false,
+                },
+                "hostPreferences": {
+                    "language": "zh-CN",
+                    "dawTarget": "pro_tools",
+                    "includePrereleaseUpdates": true,
+                },
+            }),
+            "pro_tools",
+        )
+        .expect("config update should succeed");
+
+        assert_eq!(
+            next_config
+                .get("categories")
+                .and_then(Value::as_array)
+                .and_then(|items| items.first())
+                .and_then(|item| item.get("id"))
+                .and_then(Value::as_str),
+            Some("dialog")
+        );
+        assert_eq!(
+            next_config
+                .get("hostPreferences")
+                .and_then(Value::as_object)
+                .and_then(|host_preferences| host_preferences.get("language"))
+                .and_then(Value::as_str),
+            Some("zh-CN")
+        );
+        assert_eq!(
+            next_config
+                .get("hostPreferences")
+                .and_then(Value::as_object)
+                .and_then(|host_preferences| host_preferences.get("dawTarget"))
+                .and_then(Value::as_str),
+            Some("pro_tools")
         );
     }
 
