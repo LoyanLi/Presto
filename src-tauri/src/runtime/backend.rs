@@ -12,14 +12,37 @@ use std::{
 use super::{
     app_data_dir, append_execution_log_from_raw_line, append_log, backend_root,
     log_backend_message, resolve_backend_python_bin, resolve_bundled_python_home, unique_suffix,
-    BackendSupervisorState, RuntimeState, DEFAULT_DAW_TARGET, DEFAULT_PORT, EXECUTION_LOG_PREFIX,
-    SUPPORTED_DAW_TARGETS,
+    RuntimeState, DEFAULT_DAW_TARGET, DEFAULT_PORT, EXECUTION_LOG_PREFIX, SUPPORTED_DAW_TARGETS,
 };
 
 struct HttpJsonResponse {
     status_code: u16,
     status_line: String,
     body: Value,
+}
+
+pub(super) struct BackendSupervisorState {
+    pub(super) phase: String,
+    pub(super) last_error: Option<String>,
+    pub(super) logs_count: u64,
+    pub(super) port: u16,
+    pub(super) pid: Option<u32>,
+    pub(super) child: Option<std::process::Child>,
+    pub(super) target_daw: String,
+}
+
+impl BackendSupervisorState {
+    pub(super) fn new(port: u16, target_daw: String) -> Self {
+        Self {
+            phase: "stopped".to_string(),
+            last_error: None,
+            logs_count: 0,
+            port,
+            pid: None,
+            child: None,
+            target_daw,
+        }
+    }
 }
 
 fn strip_ansi_escape_sequences(input: &str) -> String {

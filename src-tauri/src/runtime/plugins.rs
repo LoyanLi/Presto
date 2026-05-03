@@ -9,8 +9,7 @@ use std::{
 
 use super::daw_targets_generated::RESERVED_DAW_TARGETS;
 use super::{
-    managed_plugins_root, official_plugins_root, unique_suffix, PluginCandidate, RuntimeState,
-    WorkflowDefinitionRef, DEFAULT_DAW_TARGET,
+    managed_plugins_root, official_plugins_root, unique_suffix, RuntimeState, DEFAULT_DAW_TARGET,
 };
 
 const TOOL_RUNTIME_PERMISSIONS: &[&str] = &[
@@ -23,6 +22,26 @@ const TOOL_RUNTIME_PERMISSIONS: &[&str] = &[
     "shell.openPath",
     "process.execBundled",
 ];
+
+#[derive(Clone)]
+pub(super) struct PluginCandidate {
+    pub(super) plugin_root: PathBuf,
+    manifest_path: PathBuf,
+    pub(super) manifest: Value,
+    pub(super) plugin_id: String,
+    display_name: String,
+    version: String,
+    entry: String,
+    settings_pages: Value,
+    pub(super) required_capabilities: Vec<String>,
+    workflow_definition: Option<WorkflowDefinitionRef>,
+}
+
+#[derive(Clone)]
+struct WorkflowDefinitionRef {
+    workflow_id: String,
+    definition_entry: String,
+}
 
 pub(super) fn sync_official_plugins(state: &Arc<RuntimeState>) -> Result<(), String> {
     let source_root = official_plugins_root(state)?;
@@ -48,7 +67,9 @@ pub(super) fn resolve_plugin_candidate(
 ) -> Result<Option<PluginCandidate>, String> {
     let root = managed_plugins_root(state)?;
     let (plugins, _) = discover_plugins(state, &[root], false)?;
-    Ok(plugins.into_iter().find(|plugin| plugin.plugin_id == plugin_id))
+    Ok(plugins
+        .into_iter()
+        .find(|plugin| plugin.plugin_id == plugin_id))
 }
 
 pub(super) fn list_plugins(state: &Arc<RuntimeState>) -> Result<Value, String> {
@@ -348,9 +369,10 @@ fn normalize_plugin_relative_path(path_value: &str) -> Option<PathBuf> {
         return None;
     }
 
-    if path.components().any(|component| {
-        !matches!(component, Component::Normal(_))
-    }) {
+    if path
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
         return None;
     }
 
@@ -366,7 +388,8 @@ pub(super) fn resolve_plugin_relative_path(
     path_value: &str,
     require_existing: bool,
 ) -> Result<PathBuf, &'static str> {
-    let relative_path = normalize_plugin_relative_path(path_value).ok_or("invalid_relative_path")?;
+    let relative_path =
+        normalize_plugin_relative_path(path_value).ok_or("invalid_relative_path")?;
     let resolved_path = plugin_root.join(relative_path);
 
     if require_existing && !resolved_path.exists() {
@@ -374,8 +397,10 @@ pub(super) fn resolve_plugin_relative_path(
     }
 
     if resolved_path.exists() {
-        let canonical_root = fs::canonicalize(plugin_root).map_err(|_| "path_outside_plugin_root")?;
-        let canonical_resolved = fs::canonicalize(&resolved_path).map_err(|_| "path_outside_plugin_root")?;
+        let canonical_root =
+            fs::canonicalize(plugin_root).map_err(|_| "path_outside_plugin_root")?;
+        let canonical_resolved =
+            fs::canonicalize(&resolved_path).map_err(|_| "path_outside_plugin_root")?;
         if !canonical_resolved.starts_with(&canonical_root) {
             return Err("path_outside_plugin_root");
         }
@@ -409,7 +434,8 @@ fn validate_plugin_tree_contains_no_symbolic_links(root: &Path) -> Result<(), St
     for entry in fs::read_dir(root).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let entry_path = entry.path();
-        let entry_metadata = fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
+        let entry_metadata =
+            fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
         if entry_metadata.file_type().is_symlink() {
             return Err(format!(
                 "symbolic_link_not_allowed:{}",
@@ -431,7 +457,8 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
         let entry = entry.map_err(|error| error.to_string())?;
         let entry_path = entry.path();
         let destination_path = destination.join(entry.file_name());
-        let entry_metadata = fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
+        let entry_metadata =
+            fs::symlink_metadata(&entry_path).map_err(|error| error.to_string())?;
         if entry_metadata.file_type().is_symlink() {
             return Err(format!(
                 "symbolic_link_not_allowed:{}",
@@ -568,10 +595,10 @@ fn validate_plugin_manifest(
         manifest_object,
         "toolRuntimePermissions",
     )?)?;
-    validate_bundled_resources(plugin_root, optional_array_field(
-        manifest_object,
-        "bundledResources",
-    )?)?;
+    validate_bundled_resources(
+        plugin_root,
+        optional_array_field(manifest_object, "bundledResources")?,
+    )?;
 
     let workflow_definition = if extension_type == "workflow" {
         let workflow = manifest_object
@@ -744,7 +771,9 @@ fn validate_page_definitions(pages: &[Value], extension_type: &str) -> Result<()
             &format!("{field_prefix}.componentExport"),
         )?;
         if page_object.get("mount").and_then(Value::as_str) != Some(expected_mount) {
-            return Err(format!("manifest_validation:{field_prefix}.mount:{mount_error}"));
+            return Err(format!(
+                "manifest_validation:{field_prefix}.mount:{mount_error}"
+            ));
         }
         if !seen_page_ids.insert(page_id.clone()) {
             return Err(format!(
@@ -1061,8 +1090,7 @@ fn validate_bundled_resources(
                 "manifest_validation:bundledResources:duplicate_resource_id:{resource_id}"
             ));
         }
-        let kind =
-            required_string_field_at(item_object, "kind", &format!("{field_prefix}.kind"))?;
+        let kind = required_string_field_at(item_object, "kind", &format!("{field_prefix}.kind"))?;
         if !matches!(kind.as_str(), "script" | "binary") {
             return Err(format!(
                 "manifest_validation:{field_prefix}.kind:must_be_script_or_binary"
@@ -1479,7 +1507,10 @@ mod tests {
 
         match result {
             Ok(_) => panic!("expected manifest validation failure"),
-            Err(error) => assert_eq!(error, "manifest_validation:entry:must_be_relative_path_inside_plugin_root"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:entry:must_be_relative_path_inside_plugin_root"
+            ),
         }
     }
 
@@ -1494,7 +1525,10 @@ mod tests {
 
         match result {
             Ok(_) => panic!("expected manifest validation failure"),
-            Err(error) => assert_eq!(error, "manifest_validation:styleEntry:must_be_relative_path_inside_plugin_root"),
+            Err(error) => assert_eq!(
+                error,
+                "manifest_validation:styleEntry:must_be_relative_path_inside_plugin_root"
+            ),
         }
     }
 
@@ -1524,7 +1558,8 @@ mod tests {
                 "definitionEntry": "../outside/workflow-definition.json"
             }
         });
-        manifest["workflowDefinition"]["definitionEntry"] = json!("../outside/workflow-definition.json");
+        manifest["workflowDefinition"]["definitionEntry"] =
+            json!("../outside/workflow-definition.json");
 
         let result = validate_plugin_manifest(&manifest, &plugin_root, "pro_tools");
         let _ = fs::remove_dir_all(&plugin_root);

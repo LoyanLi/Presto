@@ -6,11 +6,10 @@ mod plugins;
 use daw_targets_generated::{DEFAULT_DAW_TARGET, SUPPORTED_DAW_TARGETS};
 use serde_json::{json, Map, Value};
 use std::{
-    collections::HashMap,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -28,62 +27,14 @@ const MAX_LOG_DATA_LENGTH: usize = 16 * 1024;
 pub struct RuntimeState {
     app: AppHandle,
     log_state: Mutex<LogState>,
-    backend_state: Mutex<BackendSupervisorState>,
-    mobile_state: Mutex<MobileProgressState>,
+    backend_state: Mutex<backend::BackendSupervisorState>,
+    mobile_state: Mutex<mobile_progress::MobileProgressState>,
 }
 
 struct LogState {
     current_log_path: PathBuf,
     session_id: String,
     next_id: u64,
-}
-
-struct BackendSupervisorState {
-    phase: String,
-    last_error: Option<String>,
-    logs_count: u64,
-    port: u16,
-    pid: Option<u32>,
-    child: Option<Child>,
-    target_daw: String,
-}
-
-#[derive(Clone)]
-struct MobileProgressSessionRecord {
-    session_id: String,
-    token: String,
-    task_id: String,
-    latest_job_view: Option<Value>,
-    created_at: String,
-    updated_at: String,
-    active: bool,
-    closed_at: Option<String>,
-}
-
-struct MobileProgressState {
-    origin: Option<String>,
-    server_started: bool,
-    sessions: HashMap<String, MobileProgressSessionRecord>,
-}
-
-#[derive(Clone)]
-struct PluginCandidate {
-    plugin_root: PathBuf,
-    manifest_path: PathBuf,
-    manifest: Value,
-    plugin_id: String,
-    display_name: String,
-    version: String,
-    entry: String,
-    settings_pages: Value,
-    required_capabilities: Vec<String>,
-    workflow_definition: Option<WorkflowDefinitionRef>,
-}
-
-#[derive(Clone)]
-struct WorkflowDefinitionRef {
-    workflow_id: String,
-    definition_entry: String,
 }
 
 #[derive(Clone)]
@@ -121,20 +72,11 @@ pub fn initialize(app: AppHandle) -> Result<RuntimeState, String> {
             session_id: session_stamp,
             next_id: 1,
         }),
-        backend_state: Mutex::new(BackendSupervisorState {
-            phase: "stopped".to_string(),
-            last_error: None,
-            logs_count: 0,
-            port: DEFAULT_PORT,
-            pid: None,
-            child: None,
-            target_daw: initial_backend_target_daw,
-        }),
-        mobile_state: Mutex::new(MobileProgressState {
-            origin: None,
-            server_started: false,
-            sessions: HashMap::new(),
-        }),
+        backend_state: Mutex::new(backend::BackendSupervisorState::new(
+            DEFAULT_PORT,
+            initial_backend_target_daw,
+        )),
+        mobile_state: Mutex::new(mobile_progress::initial_state()),
     };
 
     let wrapped = Arc::new(state);

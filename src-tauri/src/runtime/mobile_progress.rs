@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     sync::Arc,
@@ -7,9 +8,33 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use super::{
-    backend, run_process_capture, timestamp_now, MobileProgressSessionRecord, RuntimeState,
-};
+use super::{backend, run_process_capture, timestamp_now, RuntimeState};
+
+#[derive(Clone)]
+struct MobileProgressSessionRecord {
+    session_id: String,
+    token: String,
+    task_id: String,
+    latest_job_view: Option<Value>,
+    created_at: String,
+    updated_at: String,
+    active: bool,
+    closed_at: Option<String>,
+}
+
+pub(super) struct MobileProgressState {
+    origin: Option<String>,
+    server_started: bool,
+    sessions: HashMap<String, MobileProgressSessionRecord>,
+}
+
+pub(super) fn initial_state() -> MobileProgressState {
+    MobileProgressState {
+        origin: None,
+        server_started: false,
+        sessions: HashMap::new(),
+    }
+}
 
 pub(super) fn create_mobile_progress_session(
     state: &Arc<RuntimeState>,
@@ -337,7 +362,9 @@ fn handle_mobile_stream(state: &Arc<RuntimeState>, mut stream: TcpStream) -> Res
         .set_read_timeout(Some(Duration::from_secs(2)))
         .map_err(|error| error.to_string())?;
     let mut buffer = [0_u8; 8_192];
-    let read_count = stream.read(&mut buffer).map_err(|error| error.to_string())?;
+    let read_count = stream
+        .read(&mut buffer)
+        .map_err(|error| error.to_string())?;
     if read_count == 0 {
         return Ok(());
     }
@@ -372,11 +399,21 @@ fn handle_mobile_stream(state: &Arc<RuntimeState>, mut stream: TcpStream) -> Res
             mobile.sessions.get(session_id).cloned()
         };
         let Some(session) = session else {
-            write_http_response(&mut stream, 403, "text/html; charset=utf-8", "<h1>Session not found.</h1>")?;
+            write_http_response(
+                &mut stream,
+                403,
+                "text/html; charset=utf-8",
+                "<h1>Session not found.</h1>",
+            )?;
             return Ok(());
         };
         if token != session.token {
-            write_http_response(&mut stream, 403, "text/html; charset=utf-8", "<h1>Session not found.</h1>")?;
+            write_http_response(
+                &mut stream,
+                403,
+                "text/html; charset=utf-8",
+                "<h1>Session not found.</h1>",
+            )?;
             return Ok(());
         }
         write_http_response(
@@ -433,7 +470,12 @@ fn handle_mobile_stream(state: &Arc<RuntimeState>, mut stream: TcpStream) -> Res
         return Ok(());
     }
 
-    write_http_response(&mut stream, 404, "text/html; charset=utf-8", "<h1>Not Found</h1>")
+    write_http_response(
+        &mut stream,
+        404,
+        "text/html; charset=utf-8",
+        "<h1>Not Found</h1>",
+    )
 }
 
 fn write_http_response(
